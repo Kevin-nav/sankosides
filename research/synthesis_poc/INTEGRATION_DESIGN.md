@@ -1,61 +1,70 @@
-# Integration Design: Synthesis Engine with Gemini 3 Flash
+# Integration Design: Synthesis Engine with Dynamic Context Management
 
 ## 1. Architectural Overview
-The Synthesis Engine will be integrated as a pre-processing stage in the `SlideGenerationFlow`. When a user selects `GenerationMode.SYNTHESIS`, the system will trigger the multimodal extraction before entering the Clarification phase.
+The Synthesis Engine will be integrated as a pre-processing stage that transforms raw PDFs into a structured **Knowledge Base**. This allows for scalable context management, ensuring agents (Clarifier, Planner) only consume the data they need.
 
 ### New Component: `SynthesisAgent`
-A new agent located at `app/crew/agents/synthesis.py` will encapsulate the logic developed in the POC.
-
-*   **Responsibility:** Convert raw PDF uploads into high-fidelity Markdown using Gemini 3 Flash.
+*   **Responsibility:** Convert raw PDF uploads into a structured `KnowledgeBase` object.
 *   **Input:** List of PDF file paths or binary data.
-*   **Output:** Structured Markdown string (preserved in FlowState).
+*   **Output:** `KnowledgeBase` (Summary + Sections).
 
-## 2. Data Model Changes
+## 2. Data Model Changes (`app/models/schemas.py`)
 
-### `app/models/schemas.py`
-Update `FlowState` to store the extracted high-fidelity content:
+We will introduce a structured way to hold document content:
 
 ```python
+class DocumentSection(BaseModel):
+    """A specific section of the uploaded document."""
+    title: str = Field(..., description="Section header or topic")
+    content: str = Field(..., description="Full text and latex content")
+    visuals: List[str] = Field(default_factory=list, description="Visual descriptions in this section")
+    page_range: str = Field(default="", description="e.g., '1-3'")
+
+class KnowledgeBase(BaseModel):
+    """Structured knowledge extracted from user documents."""
+    summary: str = Field(..., description="High-level overview of the entire document set")
+    sections: List[DocumentSection] = Field(default_factory=list, description="Detailed content chunks")
+    
+    def get_section_titles(self) -> List[str]:
+        return [s.title for s in self.sections]
+
 class FlowState(BaseModel):
     # ... existing fields ...
-    extracted_content: Optional[str] = Field(
+    knowledge_base: Optional[KnowledgeBase] = Field(
         default=None, 
-        description="High-fidelity Markdown extracted from source documents by SynthesisAgent"
-    )
-    source_visuals: List[Dict[str, str]] = Field(
-        default_factory=list,
-        description="List of [Visual Description: ...] identified during synthesis"
+        description="Structured content extracted from synthesis"
     )
 ```
 
 ## 3. Flow Integration (`slide_generation.py`)
 
-### Modified Execution Path:
-1.  **Start:** User uploads PDFs and starts a session.
-2.  **Synthesis Stage (New):**
-    *   `SynthesisAgent` runs multimodal extraction on all PDFs.
-    *   Results are concatenated and stored in `state.extracted_content`.
-3.  **Clarification Stage (Modified):**
-    *   The `ClarifierAgent` receives `state.extracted_content` in its system prompt.
-    *   Instead of asking generic questions, the Clarifier can now say: *"I've analyzed your 'Calculus 166' notes. I see complex sections on Limits and Derivatives. Which of these should we focus on for the 10 slides?"*
-4.  **Planning & Generation:**
-    *   The `Planner` and `Generator` agents use `state.extracted_content` as the primary source of truth, ensuring zero-hallucination compliance.
+1.  **Start:** User uploads PDFs.
+2.  **Synthesis Stage:** `SynthesisAgent` processes files -> populates `state.knowledge_base`.
+3.  **Clarification Stage:**
+    *   **Context Injection:** The `ClarifierAgent` is *not* given the full text. Instead, it receives:
+        *   File Names
+        *   `knowledge_base.summary`
+        *   List of `section.title`s
+    *   **Tooling:** The Clarifier is given a `read_section(section_title)` tool.
+    *   **Logic:**
+        *   User: "I want slides on Derivatives."
+        *   Clarifier (Thinking): "I see a 'Derivatives' section. I'll read it to check for specific sub-topics."
+        *   Clarifier (Tool): `read_section("Derivatives")`
+        *   Clarifier (Response): "The 'Derivatives' section covers Power Rule and Chain Rule. Should we include both?"
 
-## 4. Prompt Engineering (Production)
+## 4. Prompt Engineering
 
-### `SynthesisAgent` System Prompt:
-Based on the successful POC prompt, refined for production JSON output if needed, or kept as Markdown for human-readability during debugging.
+### `SynthesisAgent`
+*   **Prompt:** Updated to output JSON matching the `KnowledgeBase` schema (Summary + List of Sections) instead of flat Markdown.
 
-### `ClarifierAgent` System Prompt Update:
-Add a instruction: *"You are provided with `extracted_content` from the user's documents. Use this to guide the negotiation. If the user mentions a topic not in the content, flag it as a potential hallucination risk."*
+### `ClarifierAgent`
+*   **System Prompt Update:**
+    > "You have access to the user's uploaded documents.
+    > **Summary:** {summary}
+    > **Available Sections:** {section_titles}
+    > Use the `read_section` tool to inspect specific details if the user asks about them or to verify focus areas. Do not guess."
 
-## 5. Performance & Scalability
-*   **Async Processing:** Synthesis will run asynchronously.
-*   **Caching:** Store extracted Markdown in the database alongside the session to avoid re-processing same files.
-*   **Rate Limiting:** Implement a queue for multimodal requests to handle Gemini API limits.
-
-## 6. Next Steps (Subject to User Approval)
-1.  Implement `app/crew/agents/synthesis.py`.
-2.  Update `app/models/schemas.py` with new `FlowState` fields.
-3.  Integrate the `synthesis` method into `SlideGenerationFlow`.
-4.  Update `Clarifier` prompts to consume the extracted content.
+## 5. Benefits
+*   **Scalability:** Supports large textbooks (100+ pages) without overflowing the token window.
+*   **Precision:** Agents focus on relevant chunks rather than getting lost in noise.
+*   **Cost:** Reduces input tokens for the majority of turns where deep reading isn't needed.
