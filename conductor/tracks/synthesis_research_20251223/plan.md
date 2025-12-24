@@ -6,13 +6,11 @@
 - [x] Task: Conductor - User Manual Verification 'Environment & Setup' (Protocol in workflow.md) (fc6a1f8)
 
 ## Phase 2: Proof of Concept Implementation
-- [ ] Task: Create `research/synthesis_poc/pdf_processor.py`. Implement a function to upload a PDF file to the Gemini API (using the File API if necessary) and prompt Gemini 3 Flash to extract content.
-    *   *Sub-task:* Write prompt engineering for specific extraction (Text, LaTeX, Visual Descriptions).
-    *   *Sub-task:* Implement error handling and rate limiting.
-- [ ] Task: Run the POC script on `pdfs_for_testing/Calculus 166.pdf` and save the output to `research/synthesis_poc/results/calculus_output.md`.
-- [ ] Task: Run the POC script on `pdfs_for_testing/ENGINEERING DRAWING R3.pdf` and save the output to `research/synthesis_poc/results/drawing_output.md`.
-- [ ] Task: Run the POC script on `pdfs_for_testing/Complete Lecture Notes.pdf` and save the output to `research/synthesis_poc/results/notes_output.md`.
-- [ ] Task: Conductor - User Manual Verification 'Proof of Concept Implementation' (Protocol in workflow.md)
+- [x] Task: Create `research/synthesis_poc/pdf_processor.py`. Implement a function to upload a PDF file to the Gemini API (using the File API if necessary) and prompt Gemini 3 Flash to extract content. (cda265e)
+- [x] Task: Run the POC script on `pdfs_for_testing/Calculus 166.pdf` and save the output to `research/synthesis_poc/results/calculus_output.md`. (cda265e)
+- [x] Task: Run the POC script on `pdfs_for_testing/ENGINEERING DRAWING R3.pdf` and save the output to `research/synthesis_poc/results/drawing_output.md`. (cda265e)
+- [x] Task: Run the POC script on `pdfs_for_testing/Complete Lecture Notes.pdf` and save the output to `research/synthesis_poc/results/notes_output.md`. (cda265e)
+- [~] Task: Conductor - User Manual Verification 'Proof of Concept Implementation' (Protocol in workflow.md)
 
 ## Phase 3: Analysis & Design
 - [ ] Task: Analyze the results. Compare the output against the original PDFs manually. Create a findings report `research/synthesis_poc/FINDINGS.md` documenting:
