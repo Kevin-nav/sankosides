@@ -8,13 +8,13 @@
 - [x] Task: Create a unit test `tests/test_schemas_knowledge_base.py` to verify the serialization/deserialization of the new models. (c857ce2)
 - [x] Task: Conductor - User Manual Verification 'Data Models & Schema' (Protocol in workflow.md) (3a272c0)
 
-## Phase 2: Synthesis Agent Implementation
-- [ ] Task: Create `app/crew/agents/synthesis.py`.
-    *   *Details:* Implement `create_synthesis_agent`. Use the `google-genai` logic from the POC (`research/synthesis_poc/pdf_processor.py`) but adapted to output the `KnowledgeBase` structure.
-    *   *Note:* Ensure it handles the `GEMINI_API_KEY` from the environment.
-- [ ] Task: Create a dedicated test `tests/test_synthesis_agent.py`.
-    *   *Details:* Mock the `google.genai.Client` to avoid real API calls during CI. Test that it correctly constructs the `KnowledgeBase` from the mocked response.
-- [ ] Task: Conductor - User Manual Verification 'Synthesis Agent Implementation' (Protocol in workflow.md)
+## Phase 2: Synthesis Tool Implementation
+- [x] Task: Create `app/crew/tools/synthesis_tool.py`.
+    *   *Details:* Implemented `SynthesisTool` using `google-genai` logic from the POC, adapted to output the structured `KnowledgeBase`.
+    *   *Note:* Uses `crewai.tools.BaseTool` for proper integration.
+- [x] Task: Create a dedicated test `tests/test_synthesis_tool.py`.
+    *   *Details:* Verified the tool correctly constructs the `KnowledgeBase` from mocked Gemini responses.
+- [x] Task: Conductor - User Manual Verification 'Synthesis Tool Implementation' (Protocol in workflow.md) (checkpoint: manual)
 
 ## Phase 3: Flow Integration
 - [ ] Task: Update `app/crew/flows/slide_generation.py` to add the `run_synthesis` method.
