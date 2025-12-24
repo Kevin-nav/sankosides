@@ -1,7 +1,7 @@
 # Plan: Synthesis Engine Backend Integration
 
 ## Phase 1: Data Models & Schema
-- [ ] Task: Update `app/models/schemas.py` to include `DocumentSection` and `KnowledgeBase` Pydantic models.
+- [x] Task: Update `app/models/schemas.py` to include `DocumentSection` and `KnowledgeBase` Pydantic models. (c857ce2)
     *   *Details:* Define the structure for holding extracted content.
 - [ ] Task: Update `FlowState` in `app/crew/flows/slide_generation.py` (and schemas if separated) to include `knowledge_base` field.
     *   *Details:* Ensure it defaults to `None` and is included in `to_db_dict` / `from_db`.
