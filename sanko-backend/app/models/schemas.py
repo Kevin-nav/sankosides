@@ -50,6 +50,27 @@ class ColorPalette(BaseModel):
 
 
 # =============================================================================
+# Knowledge Base (Synthesis Engine)
+# =============================================================================
+
+class DocumentSection(BaseModel):
+    """A specific section of the uploaded document."""
+    title: str = Field(..., description="Section header or topic")
+    content: str = Field(..., description="Full text and latex content")
+    visuals: List[str] = Field(default_factory=list, description="Visual descriptions in this section")
+    page_range: str = Field(default="", description="e.g., '1-3'")
+
+
+class KnowledgeBase(BaseModel):
+    """Structured knowledge extracted from user documents."""
+    summary: str = Field(..., description="High-level overview of the entire document set")
+    sections: List[DocumentSection] = Field(default_factory=list, description="Detailed content chunks")
+    
+    def get_section_titles(self) -> List[str]:
+        return [s.title for s in self.sections]
+
+
+# =============================================================================
 # Clarification Conversation Tracking
 # =============================================================================
 
