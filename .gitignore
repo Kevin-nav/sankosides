@@ -24,29 +24,55 @@
 .DS_Store
 *.pem
 
-#environment variables
+# environment variables
 .env.local
 .env
+.env*
+.env.development.local
+.env.test.local
+.env.production.local
+.env.local
 
-#University papaers
-./university_guidelines_draft
-./screenshots
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+.env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
-#other codebaserealted stuff
-/.agent
+# Next.js
+.next/
+out/
 
-# debug
+# Node
+node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
+# misc
+.DS_Store
+*.pem
+.agent/
 
-# vercel
-.vercel
-
-# typescript
-*.tsbuildinfo
-next-env.d.ts
+# University papers
+university_guidelines_draft/
+screenshots/
