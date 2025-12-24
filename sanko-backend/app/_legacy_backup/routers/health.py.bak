@@ -1,0 +1,61 @@
+"""
+Health Check Router
+
+Provides endpoints for monitoring server health and readiness.
+"""
+
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel
+from datetime import datetime
+
+from app.config import Settings, get_settings
+
+router = APIRouter()
+
+
+class HealthResponse(BaseModel):
+    """Health check response model."""
+    status: str
+    timestamp: str
+    version: str
+    gemini_configured: bool
+
+
+@router.get("/health", response_model=HealthResponse)
+async def health_check(settings: Settings = Depends(get_settings)) -> HealthResponse:
+    """
+    Check server health and configuration status.
+    
+    Returns:
+        HealthResponse with current server status
+    """
+    return HealthResponse(
+        status="healthy",
+        timestamp=datetime.utcnow().isoformat(),
+        version="0.1.0",
+        gemini_configured=bool(settings.gemini_api_key),
+    )
+
+
+@router.get("/ready")
+async def readiness_check(settings: Settings = Depends(get_settings)):
+    """
+    Check if the server is ready to accept requests.
+    
+    This checks that all required dependencies are configured.
+    """
+    issues = []
+    
+    if not settings.gemini_api_key:
+        issues.append("GEMINI_API_KEY not configured")
+    
+    if issues:
+        return {
+            "ready": False,
+            "issues": issues,
+        }
+    
+    return {
+        "ready": True,
+        "message": "All systems operational",
+    }

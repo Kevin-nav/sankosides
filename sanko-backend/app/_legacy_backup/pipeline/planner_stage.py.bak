@@ -1,0 +1,427 @@
+"""
+Planner Stage (Stage 4)
+
+Enriches the skeleton with verified citations and images.
+Uses Gemini Flash with HIGH thinking + tool calls.
+
+Extracted from crew.py for better modularity.
+"""
+
+import asyncio
+from typing import Optional, TYPE_CHECKING
+
+from app.logging_config import get_logger
+from app.config import settings
+from app.agents.planner import PLANNER_SYSTEM_PROMPT, EnrichedContent, EnrichedSlide
+from app.pipeline.formatters import format_skeleton_for_prompt
+from app.pipeline.parsers import parse_enriched_content, skeleton_to_enriched_fallback
+
+if TYPE_CHECKING:
+    from app.agents.clarifier import OrderForm
+    from app.agents.synthesizer import Skeleton
+    from app.services.gemini import GeminiInteractionsClient
+    from app.tools.vision_tool import VisionTool
+    from app.tools.academic_search_tool import AcademicSearchTool
+    from app.tools.image_generation_tool import NanoBananaImageTool
+    from app.tools.image_search_tool import ImageSearchTool
+
+logger = get_logger(__name__)
+
+
+class PlannerStage:
+    """
+    Stage 4: Planner - Enrich skeleton with verified content.
+    
+    This stage:
+    - Finds real citations using AcademicSearchTool
+    - Acquires images using ImageSearchTool or generates with NanoBananaImageTool
+    - Verifies images using VisionTool
+    - Applies Negative Constraint (remove unverified claims)
+    """
+    
+    def __init__(
+        self,
+        gemini_client: "GeminiInteractionsClient",
+        search_tool: "AcademicSearchTool",
+        vision_tool: "VisionTool",
+        image_gen_tool: "NanoBananaImageTool",
+        image_search_tool: "ImageSearchTool",
+    ):
+        self.gemini_client = gemini_client
+        self.search_tool = search_tool
+        self.vision_tool = vision_tool
+        self.image_gen_tool = image_gen_tool
+        self.image_search_tool = image_search_tool
+    
+    async def execute(
+        self,
+        skeleton: "Skeleton",
+        order_form: "OrderForm",
+        event_queue: Optional[asyncio.Queue] = None,
+    ) -> EnrichedContent:
+        """
+        Run the Planner stage to enrich skeleton with verified content.
+        
+        Args:
+            skeleton: The approved slide skeleton
+            order_form: User preferences and settings
+            event_queue: Optional queue for streaming events
+            
+        Returns:
+            EnrichedContent with verified citations and images
+        """
+        from app.services.metrics import get_metrics_tracker
+        tracker = get_metrics_tracker()
+        
+        # Emit start event
+        if event_queue:
+            await event_queue.put({
+                "type": "start",
+                "agent": "planner",
+                "model": settings.model_flash,
+                "thinking_level": settings.thinking_level_high
+            })
+        
+        # Build prompt
+        prompt = f"""{PLANNER_SYSTEM_PROMPT}
+
+        Here is the slide skeleton to enrich:
+
+        PRESENTATION: {skeleton.presentation_title}
+        TARGET AUDIENCE: {skeleton.target_audience}
+        CITATION STYLE: {order_form.citation_style}
+
+        SLIDES TO ENRICH:
+        {format_skeleton_for_prompt(skeleton)}
+
+        For each slide, identify:
+        1. Key claims that need academic citations
+        2. Topics that would benefit from images/diagrams
+        
+        Output as JSON matching the EnrichedContent schema.
+        Mark slides that need_citation=True or need_image=True for verification."""
+
+        # Start metrics
+        metric = tracker.start(
+            agent_name="planner",
+            model=settings.model_flash,
+            thinking_level=settings.thinking_level_high,
+            raw_input=prompt,
+        )
+
+        try:
+            # Step 1: Get initial enriched content from LLM
+            response_text = ""
+            thinking_text = ""
+            token_usage = {}
+            thinking_chunk_count = 0
+            
+            if event_queue:
+                logger.info("Planner: Starting streaming generation with event_queue")
+                async for chunk in self.gemini_client.generate_with_thinking_stream(
+                    prompt=prompt,
+                    model=settings.model_flash,
+                    thinking_level=settings.thinking_level_high,
+                ):
+                    if chunk["type"] == "thinking":
+                        thinking_text += chunk["text"]
+                        thinking_chunk_count += 1
+                        # Debug: Log every 10th thinking chunk
+                        if thinking_chunk_count <= 3 or thinking_chunk_count % 10 == 0:
+                            logger.info(f"Planner: Thinking chunk #{thinking_chunk_count} ({len(chunk['text'])} chars)")
+                        await event_queue.put({
+                            "type": "thinking",
+                            "agent": "planner",
+                            "text": chunk["text"]
+                        })
+                    elif chunk["type"] == "content":
+                        response_text += chunk["text"]
+                    elif chunk["type"] == "done":
+                        # Capture final token counts
+                        token_usage = chunk.get("tokens", {})
+                        logger.info(f"Planner: Stream done. Total thinking chunks: {thinking_chunk_count}")
+            else:
+                result = await self.gemini_client.generate_with_thinking(
+                    prompt=prompt,
+                    model=settings.model_flash,
+                    thinking_level=settings.thinking_level_high,
+                )
+                response_text = result["response"]
+                thinking_text = result["thinking"]
+                # Non-streaming mode has tokens in result
+                token_usage = result.get("tokens", {})
+            
+            # Record output and token counts
+            tracker.record_output(
+                metric, 
+                raw_output=response_text, 
+                raw_thinking=thinking_text,
+                input_tokens=token_usage.get("input_tokens", 0),
+                output_tokens=token_usage.get("output_tokens", 0),
+                thinking_tokens=token_usage.get("thinking_tokens", 0),
+                cached_tokens=token_usage.get("cached_tokens", 0),
+            )
+            
+            # Parse initial response
+            enriched = parse_enriched_content(response_text, skeleton, order_form)
+            
+            # Step 2: Execute tool calls for citations
+            await self._acquire_citations(enriched, skeleton, event_queue)
+            
+            # Step 3: Acquire images
+            await self._acquire_images(enriched, event_queue)
+            
+            # Step 4: Verify images
+            await self._verify_images(enriched, event_queue)
+            
+            # Update metrics
+            enriched.update_metrics()
+            tracker.complete(metric, success=True)
+            
+            if event_queue:
+                await event_queue.put({
+                    "type": "complete",
+                    "agent": "planner",
+                    "stats": {
+                        "duration_ms": metric.duration_ms,
+                        "cost": metric.estimated_cost_usd,
+                        "citations_found": enriched.total_citations,
+                        "images_verified": enriched.verified_images
+                    }
+                })
+            
+            return enriched
+            
+        except Exception as e:
+            tracker.complete(metric, success=False, error=str(e))
+            logger.warning(f"Planner stage failed: {e}")
+            
+            if event_queue:
+                await event_queue.put({
+                    "type": "error",
+                    "agent": "planner",
+                    "message": str(e)
+                })
+            
+            return skeleton_to_enriched_fallback(skeleton, order_form)
+    
+    async def _acquire_citations(
+        self,
+        enriched: EnrichedContent,
+        skeleton: "Skeleton",
+        event_queue: Optional[asyncio.Queue],
+    ) -> None:
+        """Search for academic citations for each content slide."""
+        if event_queue:
+            await event_queue.put({
+                "type": "tool_phase",
+                "agent": "planner",
+                "phase": "citations"
+            })
+        
+        for slide in enriched.slides:
+            if slide.content_type in ["content", "analysis", "conclusion"] and not slide.citations:
+                search_query = f"{skeleton.presentation_title} {slide.title}"
+                
+                if event_queue:
+                    await event_queue.put({
+                        "type": "tool_call",
+                        "agent": "planner",
+                        "tool": "AcademicSearchTool",
+                        "action": "search",
+                        "input": {"query": search_query, "max_results": 2}
+                    })
+                
+                try:
+                    citations = await self.search_tool.search(
+                        query=search_query,
+                        max_results=2,
+                        source="crossref"
+                    )
+                    slide.citations = citations
+                    
+                    if event_queue:
+                        await event_queue.put({
+                            "type": "tool_result",
+                            "agent": "planner",
+                            "tool": "AcademicSearchTool",
+                            "success": True,
+                            "result": f"Found {len(citations)} citations"
+                        })
+                except Exception as e:
+                    if event_queue:
+                        await event_queue.put({
+                            "type": "tool_result",
+                            "agent": "planner",
+                            "tool": "AcademicSearchTool",
+                            "success": False,
+                            "result": str(e)
+                        })
+    
+    async def _acquire_images(
+        self,
+        enriched: EnrichedContent,
+        event_queue: Optional[asyncio.Queue],
+    ) -> None:
+        """Search for or generate images for slides that need them."""
+        if event_queue:
+            await event_queue.put({
+                "type": "tool_phase",
+                "agent": "planner",
+                "phase": "image_acquisition"
+            })
+        
+        for slide in enriched.slides:
+            if slide.image_url:
+                continue
+            
+            needs_image = slide.content_type in ["content", "overview", "case_study"]
+            if not needs_image:
+                continue
+            
+            search_query = f"{slide.title} {' '.join(slide.bullet_points[:2]) if slide.bullet_points else ''}"
+            
+            if event_queue:
+                await event_queue.put({
+                    "type": "tool_call",
+                    "agent": "planner",
+                    "tool": "ImageSearchTool",
+                    "action": "search",
+                    "input": {"query": search_query[:50]}
+                })
+            
+            try:
+                search_results = await self.image_search_tool.search(
+                    query=search_query,
+                    max_results=3
+                )
+                
+                if search_results:
+                    slide.image_url = search_results[0].url
+                    slide.image_alt = search_results[0].description or slide.title
+                    
+                    if event_queue:
+                        await event_queue.put({
+                            "type": "tool_result",
+                            "agent": "planner",
+                            "tool": "ImageSearchTool",
+                            "success": True,
+                            "result": f"Found image: {search_results[0].source}"
+                        })
+                else:
+                    # Fallback to AI generation
+                    await self._generate_image_fallback(slide, event_queue)
+                    
+            except Exception as e:
+                if event_queue:
+                    await event_queue.put({
+                        "type": "tool_result",
+                        "agent": "planner",
+                        "tool": "ImageSearchTool",
+                        "success": False,
+                        "result": str(e)
+                    })
+    
+    async def _generate_image_fallback(
+        self,
+        slide: EnrichedSlide,
+        event_queue: Optional[asyncio.Queue],
+    ) -> None:
+        """Generate image using AI when search fails."""
+        if event_queue:
+            await event_queue.put({
+                "type": "tool_call",
+                "agent": "planner",
+                "tool": "NanoBananaImageTool",
+                "action": "generate",
+                "input": {"prompt": slide.title[:50]}
+            })
+        
+        try:
+            generated = await self.image_gen_tool.generate_asset(
+                prompt=f"Professional presentation visual for: {slide.title}. {slide.bullet_points[0] if slide.bullet_points else ''}",
+                style="clean, modern, professional presentation graphic"
+            )
+            
+            if generated and generated.file_path:
+                slide.image_url = f"file://{generated.file_path}"
+                slide.image_alt = f"AI-generated: {slide.title}"
+                
+                if event_queue:
+                    await event_queue.put({
+                        "type": "tool_result",
+                        "agent": "planner",
+                        "tool": "NanoBananaImageTool",
+                        "success": True,
+                        "result": "Generated image"
+                    })
+        except Exception as gen_e:
+            if event_queue:
+                await event_queue.put({
+                    "type": "tool_result",
+                    "agent": "planner",
+                    "tool": "NanoBananaImageTool",
+                    "success": False,
+                    "result": str(gen_e)
+                })
+    
+    async def _verify_images(
+        self,
+        enriched: EnrichedContent,
+        event_queue: Optional[asyncio.Queue],
+    ) -> None:
+        """Verify images match their descriptions using VisionTool."""
+        if event_queue:
+            await event_queue.put({
+                "type": "tool_phase",
+                "agent": "planner",
+                "phase": "image_verification"
+            })
+        
+        for slide in enriched.slides:
+            if not slide.image_url:
+                continue
+            
+            if event_queue:
+                await event_queue.put({
+                    "type": "tool_call",
+                    "agent": "planner",
+                    "tool": "VisionTool",
+                    "action": "verify_image",
+                    "input": {
+                        "url": slide.image_url[:50] + "...",
+                        "description": slide.image_alt or slide.title
+                    }
+                })
+            
+            try:
+                verification = await self.vision_tool.verify_image(
+                    image_url=slide.image_url,
+                    expected_description=slide.image_alt or slide.title
+                )
+                
+                if not verification.is_match:
+                    # Apply negative constraint - remove unverified image
+                    slide.image_url = None
+                    slide.image_alt = None
+                
+                if event_queue:
+                    await event_queue.put({
+                        "type": "tool_result",
+                        "agent": "planner",
+                        "tool": "VisionTool",
+                        "success": verification.is_match,
+                        "result": f"Match score: {verification.match_score:.2f}"
+                    })
+            except Exception as e:
+                # Remove image on error
+                slide.image_url = None
+                slide.image_alt = None
+                if event_queue:
+                    await event_queue.put({
+                        "type": "tool_result",
+                        "agent": "planner",
+                        "tool": "VisionTool",
+                        "success": False,
+                        "result": str(e)
+                    })

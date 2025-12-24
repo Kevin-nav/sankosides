@@ -1,0 +1,220 @@
+"""
+Response Parsing Utilities
+
+Contains helper functions for parsing LLM responses into structured data.
+Extracted from crew.py for better modularity and testability.
+"""
+
+import json
+import re
+from typing import List, TYPE_CHECKING
+
+from app.logging_config import get_logger
+
+if TYPE_CHECKING:
+    from app.agents.clarifier import OrderForm
+    from app.agents.synthesizer import Skeleton
+    from app.agents.planner import EnrichedContent, EnrichedSlide
+    from app.agents.layout import GeneratedSlide
+    from app.themes import SlideTheme, ColorPalette
+
+logger = get_logger(__name__)
+
+
+def parse_enriched_content(
+    response: str,
+    skeleton: "Skeleton",
+    order_form: "OrderForm",
+) -> "EnrichedContent":
+    """
+    Parse LLM response into EnrichedContent model.
+    
+    Handles various response formats from the LLM and normalizes
+    them into the expected EnrichedContent structure.
+    
+    Args:
+        response: Raw LLM response text
+        skeleton: Original skeleton for fallback values
+        order_form: Order form for theme/citation settings
+        
+    Returns:
+        Parsed EnrichedContent, or fallback if parsing fails
+    """
+    from app.agents.planner import EnrichedContent, EnrichedSlide
+    
+    # Try to extract JSON from response
+    json_match = re.search(r'\{.*\}', response, re.DOTALL)
+    if json_match:
+        try:
+            data = json.loads(json_match.group())
+            # Normalize field names: LLM sometimes returns different names
+            slides_data = []
+            for i, slide_data in enumerate(data.get("slides", [])):
+                # Map slide_number to order if needed
+                if "slide_number" in slide_data and "order" not in slide_data:
+                    slide_data["order"] = slide_data.pop("slide_number")
+                elif "order" not in slide_data:
+                    slide_data["order"] = i + 1  # Default to index-based order
+                
+                # Map 'type' to 'content_type' if needed
+                if "type" in slide_data and "content_type" not in slide_data:
+                    slide_data["content_type"] = slide_data.pop("type")
+                
+                # Ensure title is present (use content_type as fallback)
+                if "title" not in slide_data:
+                    slide_data["title"] = slide_data.get(
+                        "content_type", f"Slide {slide_data.get('order', i+1)}"
+                    ).capitalize()
+                
+                # Handle content field -> bullet_points
+                if "content" in slide_data and "bullet_points" not in slide_data:
+                    content = slide_data.pop("content")
+                    if isinstance(content, list):
+                        slide_data["bullet_points"] = content
+                    elif isinstance(content, str):
+                        slide_data["bullet_points"] = [content]
+                
+                slides_data.append(slide_data)
+            
+            fallback = skeleton_to_enriched_fallback(skeleton, order_form)
+            
+            # Normalize citations for each slide
+            for slide_data in slides_data:
+                if "citations" in slide_data:
+                    normalized_citations = []
+                    for cit in slide_data["citations"]:
+                        if isinstance(cit, str):
+                            # LLM returned a citation key string, convert to minimal CitationMetadata
+                            from app.tools.academic_search_tool import CitationMetadata
+                            normalized_citations.append(CitationMetadata(title=cit))
+                        elif isinstance(cit, dict):
+                            # Proper dict, use as-is
+                            normalized_citations.append(cit)
+                        # Skip other types
+                    slide_data["citations"] = normalized_citations
+            
+            return EnrichedContent(
+                presentation_title=data.get("presentation_title", skeleton.presentation_title),
+                target_audience=data.get("target_audience", skeleton.target_audience),
+                theme_id=order_form.theme_id,
+                citation_style=order_form.citation_style,
+                slides=[
+                    EnrichedSlide(**slide_data)
+                    for slide_data in slides_data
+                ] if slides_data else fallback.slides
+            )
+        except (json.JSONDecodeError, Exception) as e:
+            logger.warning(f"Failed to parse Planner response: {e}")
+    
+    # Fallback if parsing fails
+    return skeleton_to_enriched_fallback(skeleton, order_form)
+
+
+def skeleton_to_enriched_fallback(
+    skeleton: "Skeleton",
+    order_form: "OrderForm",
+) -> "EnrichedContent":
+    """
+    Convert skeleton to enriched content without LLM (fallback).
+    
+    Used when LLM parsing fails or for testing.
+    
+    Args:
+        skeleton: Source skeleton
+        order_form: Order form settings
+        
+    Returns:
+        Basic EnrichedContent with skeleton data
+    """
+    from app.agents.planner import EnrichedContent, EnrichedSlide
+    
+    return EnrichedContent(
+        presentation_title=skeleton.presentation_title,
+        target_audience=skeleton.target_audience,
+        theme_id=order_form.theme_id,
+        citation_style=order_form.citation_style,
+        slides=[
+            EnrichedSlide(
+                order=s.order,
+                title=s.title,
+                bullet_points=s.bullet_points,
+                content_type=s.content_type,
+                equation_latex=s.equation_latex,
+                speaker_notes=s.speaker_notes_hint,
+            )
+            for s in skeleton.slides
+        ]
+    )
+
+
+def parse_generated_slides(
+    response: str,
+    enriched: "EnrichedContent",
+    theme: "SlideTheme",
+    color_palette: "ColorPalette",
+) -> List["GeneratedSlide"]:
+    """
+    Parse Generator response into slides with HTML.
+    
+    Args:
+        response: Raw LLM response containing HTML
+        enriched: Enriched content for fallback
+        theme: Theme for styling
+        color_palette: Colors for styling
+        
+    Returns:
+        List of GeneratedSlide with HTML content
+    """
+    from app.agents.layout import GeneratedSlide
+    from app.pipeline.html_generator import generate_slide_html_sync
+    
+    slides = []
+    
+    # Try to extract HTML blocks from response
+    # Pattern 1: Full HTML documents
+    html_pattern = r'(?:Slide\s*\d+[:\s]*)?(<(?:!DOCTYPE\s+)?html[\s\S]*?</html>)'
+    matches = re.findall(html_pattern, response, re.IGNORECASE)
+    
+    # Pattern 2: Slide divs (fallback if no full HTML found)
+    if not matches:
+        div_pattern = r'(<div\s+class\s*=\s*["\']slide["\'][\s\S]*?</div>(?:\s*</div>)*)'
+        matches = re.findall(div_pattern, response, re.IGNORECASE)
+    
+    # Pattern 3: Any substantial HTML block
+    if not matches:
+        any_html_pattern = r'```(?:html)?\s*([\s\S]*?)```'
+        code_blocks = re.findall(any_html_pattern, response, re.IGNORECASE)
+        # Filter for blocks that look like slide content
+        matches = [block for block in code_blocks if '<' in block and '>' in block]
+    
+    logger.debug(f"Parsed {len(matches)} HTML blocks from generator response")
+    
+    for i, (enriched_slide, html) in enumerate(zip(enriched.slides, matches)):
+        slides.append(GeneratedSlide(
+            order=enriched_slide.order,
+            title=enriched_slide.title,
+            theme_id=theme.id,
+            color_palette=color_palette,
+            rendered_html=html.strip(),
+            speaker_notes=enriched_slide.speaker_notes,
+        ))
+    
+    # If we didn't get enough slides from parsing, fill with fallback
+    if len(slides) < len(enriched.slides):
+        logger.warning(
+            f"Only parsed {len(slides)}/{len(enriched.slides)} slides, "
+            "using fallback for rest"
+        )
+        # Use fallback for remaining slides
+        for enriched_slide in enriched.slides[len(slides):]:
+            html = generate_slide_html_sync(enriched_slide, theme, color_palette)
+            slides.append(GeneratedSlide(
+                order=enriched_slide.order,
+                title=enriched_slide.title,
+                theme_id=theme.id,
+                color_palette=color_palette,
+                rendered_html=html,
+                speaker_notes=enriched_slide.speaker_notes,
+            ))
+    
+    return slides

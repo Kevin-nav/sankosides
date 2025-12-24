@@ -1,0 +1,294 @@
+"""
+Pipeline Orchestrator
+
+Main SlideGenerationPipeline class that coordinates all stages.
+This is the slim replacement for the monolithic crew.py.
+"""
+
+import asyncio
+from typing import Optional, List
+
+from app.logging_config import get_logger
+from app.config import settings
+from app.themes import get_theme, SlideTheme, DEFAULT_THEMES
+
+# Stage imports
+from app.pipeline.base import PipelineResult, SlideResult
+from app.pipeline.planner_stage import PlannerStage
+from app.pipeline.render_stage import RenderStage
+from app.pipeline.generator_stage import GeneratorStage
+from app.pipeline.qa_stage import VisualQAStage
+
+# Agent/Model imports
+from app.agents.clarifier import OrderForm
+from app.agents.synthesizer import Skeleton
+from app.agents.planner import EnrichedContent
+from app.agents.layout import GeneratedPresentation
+
+# Service imports
+from app.services.gemini import GeminiInteractionsClient
+from app.services.visual_qa import VisualQAService
+from app.services.render_client import RenderServiceClient
+
+# Tool imports
+from app.tools.vision_tool import VisionTool
+from app.tools.academic_search_tool import AcademicSearchTool
+from app.tools.image_generation_tool import NanoBananaImageTool
+from app.tools.image_search_tool import ImageSearchTool
+
+logger = get_logger(__name__)
+
+
+class SlideGenerationPipeline:
+    """
+    Complete pipeline for slide generation.
+    
+    Model Allocation:
+    - Clarifier: Flash + Low thinking (fast Q&A)
+    - Outliner: Flash + Medium thinking (document parsing)
+    - Planner: Flash + HIGH thinking (verification, tools)
+    - Generator: PRO + High thinking (critical generation)
+    - Visual QA: Flash + High thinking (vision analysis)
+    """
+    
+    def __init__(self, api_key: Optional[str] = None):
+        self.api_key = api_key or settings.gemini_api_key
+        
+        # Initialize clients
+        self.gemini_client = GeminiInteractionsClient(api_key=self.api_key)
+        self.render_client = RenderServiceClient(base_url=settings.render_service_url)
+        
+        # Initialize tools
+        self.vision_tool = VisionTool(api_key=self.api_key)
+        self.search_tool = AcademicSearchTool()
+        self.image_gen_tool = NanoBananaImageTool(api_key=self.api_key)
+        self.image_search_tool = ImageSearchTool(api_key=self.api_key)
+        
+        # Initialize Visual QA service
+        self.visual_qa_service = VisualQAService(api_key=self.api_key)
+        
+        # Initialize stages
+        self.planner_stage = PlannerStage(
+            gemini_client=self.gemini_client,
+            search_tool=self.search_tool,
+            vision_tool=self.vision_tool,
+            image_gen_tool=self.image_gen_tool,
+            image_search_tool=self.image_search_tool,
+        )
+        self.render_stage = RenderStage(render_client=self.render_client)
+        self.generator_stage = GeneratorStage(gemini_client=self.gemini_client)
+        self.qa_stage = VisualQAStage(visual_qa_service=self.visual_qa_service)
+    
+    async def generate_from_skeleton(
+        self,
+        skeleton: Skeleton,
+        order_form: OrderForm,
+        event_queue: Optional[asyncio.Queue] = None,
+    ) -> PipelineResult:
+        """
+        Generate slides from an approved skeleton.
+        
+        This is called after user approves the skeleton.
+        Runs stages 4-7 of the pipeline:
+        - Stage 4: Planner (enrich with citations/images)
+        - Stage 5: Pre-render assets (LaTeX/Mermaid -> SVG)
+        - Stage 6: Generator (create HTML slides)
+        - Stage 7: Visual QA (screenshot, critique, fix)
+        
+        Args:
+            skeleton: The approved slide skeleton
+            order_form: User preferences and settings
+            event_queue: Optional queue for streaming events
+            
+        Returns:
+            PipelineResult with generated slides and metrics
+        """
+        result = PipelineResult(success=False)
+        result.order_form = order_form
+        result.skeleton = skeleton
+        
+        try:
+            # Stage 4: Planner - Enrich with verified content
+            logger.info("Stage 4: Enriching content with verified citations")
+            if event_queue:
+                await event_queue.put({
+                    "type": "stage_change",
+                    "stage": "planner",
+                    "stage_number": 1,
+                    "total_stages": 4,
+                    "status": "started",
+                    "description": "Enriching content with citations and images"
+                })
+            
+            enriched = await self.planner_stage.execute(
+                skeleton, order_form, event_queue=event_queue
+            )
+            result.enriched_content = enriched
+            logger.info(f"Enriched {len(enriched.slides)} slides")
+            
+            if event_queue:
+                await event_queue.put({
+                    "type": "stage_change",
+                    "stage": "planner",
+                    "status": "completed",
+                    "stats": {"slides": len(enriched.slides), "citations": enriched.total_citations}
+                })
+            
+            # Stage 5: Pre-render assets (LaTeX, Mermaid, Citations -> SVG)
+            logger.info("Stage 5: Pre-rendering equations and diagrams")
+            if event_queue:
+                await event_queue.put({
+                    "type": "stage_change",
+                    "stage": "render",
+                    "stage_number": 2,
+                    "total_stages": 4,
+                    "status": "started",
+                    "description": "Rendering LaTeX equations and Mermaid diagrams"
+                })
+            
+            enriched = await self.render_stage.execute(enriched)
+            
+            if event_queue:
+                await event_queue.put({
+                    "type": "stage_change",
+                    "stage": "render",
+                    "status": "completed"
+                })
+            
+            # Stage 6: Generator - Create HTML slides using Gemini PRO
+            logger.info("Stage 6: Generating slide HTML")
+            if event_queue:
+                await event_queue.put({
+                    "type": "stage_change",
+                    "stage": "generator",
+                    "stage_number": 3,
+                    "total_stages": 4,
+                    "status": "started",
+                    "description": "Generating HTML slides with Gemini PRO"
+                })
+            
+            theme = get_theme(order_form.theme_id) or get_theme("modern")
+            color_palette = order_form.color_overrides or theme.colors
+            
+            generated = await self.generator_stage.execute(
+                enriched, theme, color_palette, event_queue=event_queue
+            )
+            result.generated_presentation = generated
+            logger.info(f"Generated {len(generated.slides)} HTML slides")
+            
+            if event_queue:
+                await event_queue.put({
+                    "type": "stage_change",
+                    "stage": "generator",
+                    "status": "completed",
+                    "stats": {"slides": len(generated.slides)}
+                })
+            
+            # Stage 7: Visual QA loop (skip if Playwright unavailable)
+            logger.info("Stage 7: Running Visual QA")
+            if event_queue:
+                await event_queue.put({
+                    "type": "stage_change",
+                    "stage": "qa",
+                    "stage_number": 4,
+                    "total_stages": 4,
+                    "status": "started",
+                    "description": "Running visual quality assurance"
+                })
+            
+            try:
+                generated, slide_results = await self.qa_stage.execute(generated, event_queue)
+                result.slides = slide_results
+                result.average_visual_score = (
+                    sum(s.visual_score for s in slide_results) / len(slide_results)
+                    if slide_results else 0.0
+                )
+                result.total_qa_iterations = sum(s.iterations for s in slide_results)
+                
+                if event_queue:
+                    await event_queue.put({
+                        "type": "stage_change",
+                        "stage": "qa",
+                        "status": "completed",
+                        "stats": {"score": result.average_visual_score, "iterations": result.total_qa_iterations}
+                    })
+            except NotImplementedError:
+                logger.warning("Skipping Visual QA: Playwright subprocess not available")
+                result.slides = []
+                result.average_visual_score = 0.0
+                result.total_qa_iterations = 0
+                if event_queue:
+                    await event_queue.put({
+                        "type": "stage_change",
+                        "stage": "qa",
+                        "status": "skipped",
+                        "reason": "Playwright not available"
+                    })
+            except Exception as qa_error:
+                logger.warning(f"Skipping Visual QA due to error: {qa_error}")
+                result.slides = []
+                result.average_visual_score = 0.0
+                result.total_qa_iterations = 0
+                if event_queue:
+                    await event_queue.put({
+                        "type": "stage_change",
+                        "stage": "qa",
+                        "status": "error",
+                        "error": str(qa_error)
+                    })
+            
+            result.success = True
+            logger.info(f"Generation complete. Average Visual Score: {result.average_visual_score:.0%}")
+            
+            # Final complete event
+            if event_queue:
+                await event_queue.put({
+                    "type": "pipeline_complete",
+                    "success": True,
+                    "total_slides": len(result.generated_presentation.slides) if result.generated_presentation else 0
+                })
+            
+        except Exception as e:
+            result.error = str(e)
+            result.stage_failed = "generation"
+            logger.error(f"Pipeline failed: {e}")
+            import traceback
+            traceback.print_exc()
+            
+            if event_queue:
+                await event_queue.put({
+                    "type": "pipeline_complete",
+                    "success": False,
+                    "error": str(e)
+                })
+        
+        return result
+
+
+# =============================================================================
+# Convenience Functions
+# =============================================================================
+
+async def generate_slides(
+    skeleton: Skeleton,
+    order_form: OrderForm,
+    api_key: Optional[str] = None,
+) -> PipelineResult:
+    """
+    Generate slides from an approved skeleton.
+    
+    Args:
+        skeleton: The approved skeleton
+        order_form: The clarification order form
+        api_key: Gemini API key
+        
+    Returns:
+        PipelineResult with slides and scores
+    """
+    pipeline = SlideGenerationPipeline(api_key=api_key)
+    return await pipeline.generate_from_skeleton(skeleton, order_form)
+
+
+def get_available_themes() -> List[SlideTheme]:
+    """Get list of available themes."""
+    return list(DEFAULT_THEMES.values())

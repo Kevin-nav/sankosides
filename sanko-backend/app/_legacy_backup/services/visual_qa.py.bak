@@ -1,0 +1,543 @@
+"""
+Visual QA Service
+
+This service implements the per-slide Visual QA loop:
+1. Render HTML to screenshot using Playwright
+2. Send screenshot to Vision model for critique
+3. Get visual score and CSS fix suggestions
+4. Apply fixes if needed, repeat until score >= 95%
+
+Reference: alignment_docs/agent_architecture_and_test_center.md
+"""
+
+import asyncio
+import base64
+from typing import Optional, Dict, Any, Tuple, List, Callable
+from pydantic import BaseModel, Field
+
+from playwright.async_api import async_playwright, Browser, Page
+
+from app.services.gemini import GeminiInteractionsClient
+from app.config import settings
+from app.logging_config import get_logger
+
+logger = get_logger(__name__)
+
+
+class VisualCritique(BaseModel):
+    """Result of visual analysis."""
+    score: float = Field(default=0.0, description="Visual quality score 0.0-1.0")
+    issues: List[str] = Field(default_factory=list, description="Visual issues found")
+    css_fixes: List[str] = Field(default_factory=list, description="Suggested CSS fixes")
+    approved: bool = Field(default=False, description="Whether slide passes QA")
+
+
+class VisualQAService:
+    """
+    Service for Visual QA loop using Playwright + Gemini Vision.
+    
+    Usage:
+        service = VisualQAService(api_key="...")
+        await service.start()
+        result = await service.qa_slide(html_content, slide_index=1)
+        await service.stop()
+    """
+    
+    SLIDE_WIDTH = 1280
+    SLIDE_HEIGHT = 720
+    QUALITY_THRESHOLD = 0.95
+    MAX_ITERATIONS = 3
+    
+    def __init__(self, api_key: Optional[str] = None):
+        self.api_key = api_key or settings.gemini_api_key
+        self.gemini_client = GeminiInteractionsClient(api_key=self.api_key)
+        self._playwright = None
+        self._browser: Optional[Browser] = None
+        self._sync_playwright = None
+        self._sync_browser = None
+        self._use_sync_api = False  # Will be set to True on Windows if async fails
+    
+    async def start(self):
+        """Initialize Playwright browser.
+        
+        On Windows with uvicorn --reload, the async API may not work due to
+        event loop issues. In that case, we fall back to the sync API run
+        in a thread pool.
+        """
+        import sys
+        
+        if sys.platform == 'win32':
+            import asyncio
+            loop = asyncio.get_running_loop()
+            loop_name = type(loop).__name__
+            
+            # If we don't have ProactorEventLoop, use sync API in thread
+            if 'Proactor' not in loop_name:
+                from concurrent.futures import ThreadPoolExecutor
+                from playwright.sync_api import sync_playwright
+                
+                def _start_sync():
+                    pw = sync_playwright().start()
+                    browser = pw.chromium.launch(headless=True)
+                    return pw, browser
+                
+                # Run sync Playwright in thread pool
+                executor = ThreadPoolExecutor(max_workers=1)
+                self._sync_playwright, self._sync_browser = await loop.run_in_executor(
+                    executor, _start_sync
+                )
+                self._use_sync_api = True
+                self._executor = executor
+                return
+        
+        # Default: use async API
+        try:
+            self._playwright = await async_playwright().start()
+            self._browser = await self._playwright.chromium.launch(headless=True)
+        except Exception as e:
+            if "NotImplementedError" in str(type(e).__name__) or "subprocess" in str(e).lower():
+                raise RuntimeError(
+                    f"Failed to start Playwright browser (subprocess issue): {e}. "
+                    "On Windows, ensure WindowsProactorEventLoopPolicy is set."
+                ) from e
+            raise
+    
+    async def stop(self):
+        """Close browser and cleanup."""
+        if self._use_sync_api:
+            import asyncio
+            loop = asyncio.get_running_loop()
+            
+            def _stop_sync():
+                if self._sync_browser:
+                    self._sync_browser.close()
+                if self._sync_playwright:
+                    self._sync_playwright.stop()
+            
+            await loop.run_in_executor(self._executor, _stop_sync)
+            self._executor.shutdown(wait=False)
+        else:
+            if self._browser:
+                await self._browser.close()
+            if self._playwright:
+                await self._playwright.stop()
+    
+    async def capture_screenshot(self, html_content: str) -> bytes:
+        """
+        Render HTML content and capture screenshot.
+        
+        Args:
+            html_content: The slide HTML to render
+            
+        Returns:
+            PNG image bytes
+        """
+        # Build the full HTML
+        full_html = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <style>
+                * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+                body {{
+                    width: {self.SLIDE_WIDTH}px;
+                    height: {self.SLIDE_HEIGHT}px;
+                    overflow: hidden;
+                }}
+            </style>
+        </head>
+        <body>
+            {html_content}
+        </body>
+        </html>
+        """
+        
+        if self._use_sync_api:
+            # Use sync API in thread pool
+            import asyncio
+            loop = asyncio.get_running_loop()
+            
+            def _capture_sync():
+                if not self._sync_browser:
+                    raise RuntimeError("Browser not started. Call start() first.")
+                page = self._sync_browser.new_page()
+                try:
+                    page.set_viewport_size({
+                        "width": self.SLIDE_WIDTH,
+                        "height": self.SLIDE_HEIGHT
+                    })
+                    page.set_content(full_html, wait_until="networkidle")
+                    return page.screenshot(type="png")
+                finally:
+                    page.close()
+            
+            return await loop.run_in_executor(self._executor, _capture_sync)
+        else:
+            # Use async API
+            if not self._browser:
+                raise RuntimeError("Browser not started. Call start() first.")
+            
+            page = await self._browser.new_page()
+            
+            try:
+                await page.set_viewport_size({
+                    "width": self.SLIDE_WIDTH,
+                    "height": self.SLIDE_HEIGHT
+                })
+                await page.set_content(full_html, wait_until="networkidle")
+                screenshot = await page.screenshot(type="png")
+                return screenshot
+            finally:
+                await page.close()
+    
+    def _parse_json_response(self, response_text: str) -> Optional[Dict[str, Any]]:
+        """
+        Parse JSON from LLM response with robust handling for common issues.
+        
+        Handles:
+        - Markdown code blocks (```json ... ```)
+        - JavaScript-style comments (// and /* */)
+        - Single quotes instead of double quotes
+        - Trailing commas
+        - Nested JSON objects
+        
+        Returns:
+            Parsed dict or None if parsing fails
+        """
+        import json
+        import re
+        
+        if not response_text:
+            return None
+        
+        text = response_text.strip()
+        
+        # Remove markdown code blocks
+        text = re.sub(r'```json\s*', '', text)
+        text = re.sub(r'```\s*', '', text)
+        
+        # Try to find JSON object with proper brace matching
+        start_idx = text.find('{')
+        if start_idx == -1:
+            return None
+        
+        # Find matching closing brace
+        brace_count = 0
+        end_idx = start_idx
+        for i, char in enumerate(text[start_idx:], start_idx):
+            if char == '{':
+                brace_count += 1
+            elif char == '}':
+                brace_count -= 1
+                if brace_count == 0:
+                    end_idx = i
+                    break
+        
+        if brace_count != 0:
+            return None
+        
+        json_str = text[start_idx:end_idx + 1]
+        
+        # Remove JavaScript-style comments
+        # Remove single-line comments (// ...)
+        json_str = re.sub(r'//[^\n]*', '', json_str)
+        # Remove multi-line comments (/* ... */)
+        json_str = re.sub(r'/\*.*?\*/', '', json_str, flags=re.DOTALL)
+        
+        # Try parsing as-is first
+        try:
+            return json.loads(json_str)
+        except json.JSONDecodeError:
+            pass
+        
+        # Fix common issues
+        # Replace single quotes with double quotes (but not in strings)
+        # This is a simple heuristic - replace 'key': with "key":
+        json_str = re.sub(r"'(\w+)'(\s*:)", r'"\1"\2', json_str)
+        
+        # Replace single-quoted string values with double quotes
+        # Pattern: : 'value' or : 'value',
+        json_str = re.sub(r":\s*'([^']*)'(\s*[,}])", r': "\1"\2', json_str)
+        
+        # Remove trailing commas (before ] or })
+        json_str = re.sub(r',\s*([}\]])', r'\1', json_str)
+        
+        try:
+            return json.loads(json_str)
+        except json.JSONDecodeError:
+            pass
+        
+        # Last resort: try to extract key values manually
+        try:
+            result = {}
+            
+            # Extract score
+            score_match = re.search(r'"?score"?\s*:\s*([\d.]+)', json_str)
+            if score_match:
+                result['score'] = float(score_match.group(1))
+            
+            # Extract approved
+            approved_match = re.search(r'"?approved"?\s*:\s*(true|false)', json_str, re.IGNORECASE)
+            if approved_match:
+                result['approved'] = approved_match.group(1).lower() == 'true'
+            
+            # Extract issues array (simple extraction)
+            issues_match = re.search(r'"?issues"?\s*:\s*\[([^\]]*)\]', json_str)
+            if issues_match:
+                issues_str = issues_match.group(1)
+                # Extract quoted strings
+                issues = re.findall(r'"([^"]*)"', issues_str)
+                result['issues'] = issues
+            else:
+                result['issues'] = []
+            
+            # Extract css_fixes array
+            fixes_match = re.search(r'"?css_fixes"?\s*:\s*\[([^\]]*)\]', json_str)
+            if fixes_match:
+                fixes_str = fixes_match.group(1)
+                fixes = re.findall(r'"([^"]*)"', fixes_str)
+                result['css_fixes'] = fixes
+            else:
+                result['css_fixes'] = []
+            
+            if 'score' in result:
+                return result
+        except Exception:
+            pass
+        
+        return None
+    
+    async def critique_screenshot(
+        self,
+        screenshot: bytes,
+        slide_index: int,
+    ) -> VisualCritique:
+        """
+        Use Gemini Vision to critique a slide screenshot.
+        
+        Args:
+            screenshot: PNG image bytes
+            slide_index: Which slide number (for context)
+            
+        Returns:
+            VisualCritique with score and suggestions
+        """
+        # Encode screenshot for Gemini
+        screenshot_b64 = base64.standard_b64encode(screenshot).decode("utf-8")
+        
+        critique_prompt = f"""Analyze this screenshot of Slide {slide_index} and grade its visual quality.
+
+Check for these issues:
+1. Text overflow - is any text clipped or overflowing its container?
+2. Layout issues - are elements misaligned or overlapping incorrectly?
+3. Contrast problems - is text readable against its background?
+4. Empty space - are there large awkward empty areas?
+5. Consistency - do fonts, colors, and spacing look consistent?
+
+Respond in this EXACT JSON format:
+{{
+    "score": 0.95,  // 0.0 to 1.0 quality score
+    "issues": ["Text overflows on bullet 3", "Image too close to edge"],
+    "css_fixes": ["overflow: hidden on .content", "padding: 20px on .image-container"],
+    "approved": true  // true if score >= 0.95
+}}
+
+Be strict but fair. A perfect slide scores 1.0. Common issues reduce score by 0.05-0.15 each."""
+
+        try:
+            # Use generate_with_thinking (not create_interaction) for multimodal content
+            # The Interactions API has issues with image input
+            result = await self.gemini_client.generate_with_thinking(
+                prompt=[
+                    {"text": critique_prompt},
+                    {"inline_data": {"mime_type": "image/png", "data": screenshot_b64}}
+                ],
+                model=settings.model_flash,
+                thinking_level="medium",  # Fast response for QA
+            )
+            
+            response_text = result.get("response", "")
+            
+            # Debug: Log response
+            logger.debug(f"Slide {slide_index} critique response: {response_text[:500] if response_text else 'EMPTY'}")
+            
+            # Parse JSON from response with robust handling
+            critique_data = self._parse_json_response(response_text)
+            
+            if critique_data:
+                return VisualCritique(
+                    score=float(critique_data.get("score", 0.5)),
+                    issues=critique_data.get("issues", []),
+                    css_fixes=critique_data.get("css_fixes", []),
+                    approved=critique_data.get("approved", False),
+                )
+            
+            # Fallback if parsing fails
+            logger.warning(f"Slide {slide_index}: Could not parse critique JSON from: {response_text[:200]}")
+            return VisualCritique(score=0.5, issues=["Could not parse critique"], approved=False)
+            
+        except Exception as e:
+            logger.error(f"Slide {slide_index}: Critique failed with error: {e}")
+            return VisualCritique(
+                score=0.0,
+                issues=[f"Critique failed: {str(e)}"],
+                approved=False,
+            )
+    
+    async def qa_slide(
+        self,
+        html_content: str,
+        slide_index: int,
+        max_iterations: int = 3,
+        on_iteration: Optional[Callable] = None,
+    ) -> Tuple[str, VisualCritique, int]:
+        """
+        Run the full Visual QA loop on a slide.
+        
+        Args:
+            html_content: The slide HTML
+            slide_index: Which slide number
+            max_iterations: Maximum fix attempts
+            on_iteration: Optional async callback for each iteration (slide, iteration, score, issues)
+            
+        Returns:
+            Tuple of (final_html, final_critique, iterations_used)
+        """
+        current_html = html_content
+        iterations_used = 0
+        best_html = html_content
+        best_critique = None
+        best_score = -1.0
+        
+        for iteration in range(max_iterations):
+            iterations_used = iteration + 1
+            
+            # Capture screenshot
+            screenshot = await self.capture_screenshot(current_html)
+            
+            # Get critique
+            critique = await self.critique_screenshot(screenshot, slide_index)
+            
+            # Track best result
+            if critique.score > best_score:
+                best_score = critique.score
+                best_html = current_html
+                best_critique = critique
+            
+            print(f"  Slide {slide_index} iteration {iteration + 1}: "
+                  f"Score = {critique.score:.0%}")
+            
+            # Call iteration callback if provided
+            if on_iteration:
+                await on_iteration(slide_index, iteration + 1, critique.score, critique.issues)
+            
+            # Check if approved
+            if critique.approved or critique.score >= self.QUALITY_THRESHOLD:
+                return current_html, critique, iterations_used
+            
+            # Apply CSS fixes if provided
+            if critique.css_fixes:
+                current_html = self._apply_css_fixes(current_html, critique.css_fixes)
+            else:
+                # No fixes suggested, can't improve
+                break
+        
+        # Return best result instead of last
+        if best_critique is None:
+            best_critique = critique
+            best_html = current_html
+        
+        return best_html, best_critique, iterations_used
+    
+    def _apply_css_fixes(self, html: str, fixes: List[str]) -> str:
+        """
+        Apply CSS fixes to HTML content.
+        
+        The Vision model returns suggested CSS fixes as strings like:
+        - ".slide-title { font-size: 42px; }"
+        - ".content { padding: 24px; }"
+        - "Increase heading size for readability"
+        
+        This method:
+        1. Extracts valid CSS rule strings
+        2. Injects them into a style block
+        3. Handles both structured CSS and natural language hints
+        """
+        import re
+        
+        # Parse CSS rules from fixes
+        css_rules = []
+        for fix in fixes:
+            # Check if it looks like a CSS rule (contains { and })
+            if '{' in fix and '}' in fix:
+                # Extract the CSS rule
+                css_rules.append(fix.strip())
+            else:
+                # Natural language suggestion - convert to comment
+                # In production, could use LLM to convert to CSS
+                css_rules.append(f"/* Suggestion: {fix} */")
+        
+        if not css_rules:
+            return html
+        
+        # Build the CSS block
+        css_block = "\n        ".join(css_rules)
+        css_injection = f"""
+    <style data-qa-fixes="true">
+        /* Visual QA Applied Fixes */
+        {css_block}
+    </style>"""
+        
+        # Smart injection - find best location
+        # Priority: before </head>, after existing <style>, or at top of <body>
+        
+        # Option 1: Before closing </head>
+        if "</head>" in html:
+            return html.replace("</head>", f"{css_injection}\n</head>")
+        
+        # Option 2: After last <style> block in head
+        style_end_match = re.search(r'(</style>)(?!.*</style>.*</head>)', html, re.IGNORECASE)
+        if style_end_match:
+            pos = style_end_match.end()
+            return html[:pos] + css_injection + html[pos:]
+        
+        # Option 3: After <body> opening tag
+        body_match = re.search(r'(<body[^>]*>)', html, re.IGNORECASE)
+        if body_match:
+            pos = body_match.end()
+            return html[:pos] + css_injection + html[pos:]
+        
+        # Fallback: Prepend to HTML
+        return css_injection + html
+
+
+async def qa_all_slides(
+    slides_html: List[str],
+    api_key: Optional[str] = None,
+) -> List[Tuple[str, VisualCritique]]:
+    """
+    Run Visual QA on all slides in parallel.
+    
+    Args:
+        slides_html: List of HTML strings for each slide
+        api_key: Gemini API key
+        
+    Returns:
+        List of (final_html, critique) tuples
+    """
+    service = VisualQAService(api_key=api_key)
+    await service.start()
+    
+    try:
+        # Process all slides concurrently
+        tasks = [
+            service.qa_slide(html, index + 1)
+            for index, html in enumerate(slides_html)
+        ]
+        results = await asyncio.gather(*tasks)
+        
+        return results
+        
+    finally:
+        await service.stop()

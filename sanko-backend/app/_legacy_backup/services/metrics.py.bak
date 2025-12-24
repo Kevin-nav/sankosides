@@ -1,0 +1,450 @@
+"""
+Agent Metrics Tracking
+
+Tracks per-agent performance metrics:
+- Token usage (input, output, thinking - separated)
+- Time taken
+- Estimated cost
+- Quality scores
+
+Usage:
+    tracker = AgentMetricsTracker()
+    
+    with tracker.track("clarifier", model="flash"):
+        # Run agent
+        result = await agent.run()
+    
+    print(tracker.summary())
+"""
+
+import time
+from typing import Optional, Dict, Any, List
+from dataclasses import dataclass, field
+from datetime import datetime
+from contextlib import contextmanager
+from pydantic import BaseModel, Field
+
+
+# =============================================================================
+# Token Pricing (December 2025 - Gemini API)
+# Source: ai.google.dev/pricing
+# =============================================================================
+
+# Pricing per 1M tokens (USD)
+PRICING = {
+    # Gemini 3 Flash - Fast, cost-efficient
+    "gemini-3-flash-preview": {
+        "input": 0.50,        # $0.50 per 1M input tokens
+        "output": 3.00,       # $3.00 per 1M output tokens
+        "thinking": 0.50,     # Thinking tokens priced as input
+        "audio_input": 1.00,  # $1.00 per 1M audio tokens
+    },
+    # Gemini 3 Pro - Deep reasoning (context <= 200K)
+    "gemini-3-pro-preview": {
+        "input": 2.00,        # $2.00 per 1M input tokens
+        "output": 12.00,      # $12.00 per 1M output tokens
+        "thinking": 2.00,     # Thinking tokens priced as input
+    },
+    # Gemini 3 Pro - Long context (context > 200K)
+    "gemini-3-pro-preview-long": {
+        "input": 4.00,        # $4.00 per 1M input tokens
+        "output": 18.00,      # $18.00 per 1M output tokens
+        "thinking": 4.00,
+    },
+    # Gemini 3 Pro Image (Nano Banana Pro)
+    "gemini-3-pro-image-preview": {
+        "per_image": 0.04,    # ~$0.04 per image (estimate)
+        "input": 2.00,        # Uses Pro pricing for text input
+        "output": 12.00,
+    },
+}
+
+
+# =============================================================================
+# Data Models
+# =============================================================================
+
+@dataclass
+class TokenUsage:
+    """Token counts for a single operation."""
+    input_tokens: int = 0
+    output_tokens: int = 0
+    thinking_tokens: int = 0
+    cached_tokens: int = 0
+    
+    @property
+    def total_tokens(self) -> int:
+        return self.input_tokens + self.output_tokens + self.thinking_tokens
+    
+    def __add__(self, other: "TokenUsage") -> "TokenUsage":
+        return TokenUsage(
+            input_tokens=self.input_tokens + other.input_tokens,
+            output_tokens=self.output_tokens + other.output_tokens,
+            thinking_tokens=self.thinking_tokens + other.thinking_tokens,
+            cached_tokens=self.cached_tokens + other.cached_tokens,
+        )
+
+
+@dataclass
+class AgentMetric:
+    """Metrics for a single agent execution."""
+    agent_name: str
+    model: str
+    thinking_level: str = "low"
+    
+    # Timing
+    start_time: datetime = field(default_factory=datetime.now)
+    end_time: Optional[datetime] = None
+    duration_ms: float = 0.0
+    
+    # Tokens
+    tokens: TokenUsage = field(default_factory=TokenUsage)
+    
+    # Cost
+    estimated_cost_usd: float = 0.0
+    
+    # Quality
+    success: bool = False
+    error: Optional[str] = None
+    output_validated: bool = False
+    validation_score: float = 0.0
+    
+    # Raw outputs (for debugging)
+    raw_input: Optional[str] = None
+    raw_output: Optional[str] = None
+    raw_thinking: Optional[str] = None
+    
+    def calculate_cost(self) -> float:
+        """Calculate estimated cost based on token usage."""
+        pricing = PRICING.get(self.model, PRICING["gemini-3-flash-preview"])
+        
+        if "per_image" in pricing:
+            # Image generation model
+            return pricing["per_image"]
+        
+        cost = 0.0
+        cost += (self.tokens.input_tokens / 1_000_000) * pricing["input"]
+        cost += (self.tokens.output_tokens / 1_000_000) * pricing["output"]
+        cost += (self.tokens.thinking_tokens / 1_000_000) * pricing["thinking"]
+        
+        self.estimated_cost_usd = cost
+        return cost
+
+
+class AgentMetricsSummary(BaseModel):
+    """Summary of all agent metrics."""
+    total_agents: int = 0
+    successful_agents: int = 0
+    failed_agents: int = 0
+    
+    # Aggregate tokens
+    total_input_tokens: int = 0
+    total_output_tokens: int = 0
+    total_thinking_tokens: int = 0
+    total_tokens: int = 0
+    
+    # Timing
+    total_duration_ms: float = 0.0
+    average_duration_ms: float = 0.0
+    
+    # Cost
+    total_cost_usd: float = 0.0
+    
+    # Per-agent breakdown
+    agents: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
+
+
+# =============================================================================
+# Metrics Tracker
+# =============================================================================
+
+class AgentMetricsTracker:
+    """
+    Tracks metrics for all agent executions.
+    
+    Features:
+    - Per-agent token tracking (input/output/thinking separated)
+    - Time measurement
+    - Cost estimation
+    - Quality validation hooks
+    
+    Usage:
+        tracker = AgentMetricsTracker()
+        
+        # Track an agent execution
+        metric = tracker.start("clarifier", model="gemini-3-flash-preview")
+        try:
+            result = await run_clarifier()
+            tracker.record_tokens(metric, input=100, output=50, thinking=200)
+            tracker.complete(metric, success=True)
+        except Exception as e:
+            tracker.complete(metric, success=False, error=str(e))
+        
+        # Get summary
+        print(tracker.summary())
+    """
+    
+    def __init__(self):
+        self.metrics: List[AgentMetric] = []
+        self._current: Optional[AgentMetric] = None
+    
+    def start(
+        self,
+        agent_name: str,
+        model: str,
+        thinking_level: str = "low",
+        raw_input: Optional[str] = None,
+    ) -> AgentMetric:
+        """Start tracking a new agent execution."""
+        metric = AgentMetric(
+            agent_name=agent_name,
+            model=model,
+            thinking_level=thinking_level,
+            start_time=datetime.now(),
+            raw_input=raw_input,
+        )
+        self._current = metric
+        return metric
+    
+    def record_tokens(
+        self,
+        metric: AgentMetric,
+        input_tokens: int = 0,
+        output_tokens: int = 0,
+        thinking_tokens: int = 0,
+        cached_tokens: int = 0,
+    ):
+        """Record token usage from API response."""
+        metric.tokens = TokenUsage(
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            thinking_tokens=thinking_tokens,
+            cached_tokens=cached_tokens,
+        )
+    
+    def record_output(
+        self,
+        metric: AgentMetric,
+        raw_output: str,
+        raw_thinking: Optional[str] = None,
+        input_tokens: int = 0,
+        output_tokens: int = 0,
+        thinking_tokens: int = 0,
+        cached_tokens: int = 0,
+    ):
+        """
+        Record raw outputs and optionally token counts.
+        
+        Token counts are optional - useful for streaming where tokens
+        come from the final chunk rather than a single response.
+        """
+        metric.raw_output = raw_output
+        metric.raw_thinking = raw_thinking
+        
+        # Update token counts if provided
+        if input_tokens or output_tokens or thinking_tokens:
+            metric.tokens = TokenUsage(
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                thinking_tokens=thinking_tokens,
+                cached_tokens=cached_tokens,
+            )
+    
+    def complete(
+        self,
+        metric: AgentMetric,
+        success: bool = True,
+        error: Optional[str] = None,
+        validation_score: float = 1.0,
+    ):
+        """Complete tracking for an agent."""
+        metric.end_time = datetime.now()
+        metric.duration_ms = (metric.end_time - metric.start_time).total_seconds() * 1000
+        metric.success = success
+        metric.error = error
+        metric.validation_score = validation_score
+        metric.output_validated = validation_score >= 0.8
+        metric.calculate_cost()
+        
+        self.metrics.append(metric)
+        self._current = None
+    
+    @contextmanager
+    def track(
+        self,
+        agent_name: str,
+        model: str,
+        thinking_level: str = "low",
+    ):
+        """Context manager for tracking agent execution."""
+        metric = self.start(agent_name, model, thinking_level)
+        try:
+            yield metric
+            if not metric.end_time:  # Not manually completed
+                self.complete(metric, success=True)
+        except Exception as e:
+            self.complete(metric, success=False, error=str(e))
+            raise
+    
+    def summary(self) -> AgentMetricsSummary:
+        """Generate summary of all metrics."""
+        if not self.metrics:
+            return AgentMetricsSummary()
+        
+        total_tokens = TokenUsage()
+        total_duration = 0.0
+        total_cost = 0.0
+        successful = 0
+        agents_breakdown = {}
+        
+        for m in self.metrics:
+            total_tokens += m.tokens
+            total_duration += m.duration_ms
+            total_cost += m.estimated_cost_usd
+            
+            if m.success:
+                successful += 1
+            
+            # Per-agent breakdown
+            if m.agent_name not in agents_breakdown:
+                agents_breakdown[m.agent_name] = {
+                    "model": m.model,
+                    "thinking_level": m.thinking_level,
+                    "executions": 0,
+                    "total_tokens": 0,
+                    "total_thinking_tokens": 0,
+                    "total_duration_ms": 0.0,
+                    "total_cost_usd": 0.0,
+                    "success_rate": 0.0,
+                }
+            
+            agents_breakdown[m.agent_name]["executions"] += 1
+            agents_breakdown[m.agent_name]["total_tokens"] += m.tokens.total_tokens
+            agents_breakdown[m.agent_name]["total_thinking_tokens"] += m.tokens.thinking_tokens
+            agents_breakdown[m.agent_name]["total_duration_ms"] += m.duration_ms
+            agents_breakdown[m.agent_name]["total_cost_usd"] += m.estimated_cost_usd
+        
+        # Calculate success rates
+        for name, data in agents_breakdown.items():
+            agent_metrics = [m for m in self.metrics if m.agent_name == name]
+            data["success_rate"] = sum(1 for m in agent_metrics if m.success) / len(agent_metrics)
+        
+        return AgentMetricsSummary(
+            total_agents=len(self.metrics),
+            successful_agents=successful,
+            failed_agents=len(self.metrics) - successful,
+            total_input_tokens=total_tokens.input_tokens,
+            total_output_tokens=total_tokens.output_tokens,
+            total_thinking_tokens=total_tokens.thinking_tokens,
+            total_tokens=total_tokens.total_tokens,
+            total_duration_ms=total_duration,
+            average_duration_ms=total_duration / len(self.metrics),
+            total_cost_usd=total_cost,
+            agents=agents_breakdown,
+        )
+    
+    def to_dict(self, include_raw: bool = True) -> Dict[str, Any]:
+        """
+        Export all metrics as dict for logging/storage.
+        
+        Args:
+            include_raw: If True, includes full prompts, outputs, and thinking 
+                        content for debugging and testing environment.
+        """
+        metrics_list = []
+        for m in self.metrics:
+            metric_data = {
+                "agent_name": m.agent_name,
+                "model": m.model,
+                "thinking_level": m.thinking_level,
+                "timestamp": m.start_time.isoformat() if m.start_time else None,
+                "duration_ms": m.duration_ms,
+                "tokens": {
+                    "input": m.tokens.input_tokens,
+                    "output": m.tokens.output_tokens,
+                    "thinking": m.tokens.thinking_tokens,
+                    "cached": m.tokens.cached_tokens,
+                    "total": m.tokens.total_tokens,
+                },
+                "cost_usd": m.estimated_cost_usd,
+                "success": m.success,
+                "error": m.error,
+                "validation_score": m.validation_score,
+                "output_validated": m.output_validated,
+            }
+            
+            # Include raw data for testing environment
+            if include_raw:
+                metric_data["raw"] = {
+                    "prompt": m.raw_input,  # The full prompt sent to the model
+                    "output": m.raw_output,  # The full response text
+                    "thinking": m.raw_thinking,  # The model's thinking/reasoning
+                }
+            
+            metrics_list.append(metric_data)
+        
+        return {
+            "summary": self.summary().model_dump(),
+            "calls": metrics_list,  # Renamed from "metrics" to "calls" for clarity
+            "call_count": len(metrics_list),
+            "current_activity": {
+                "agent_name": self._current.agent_name,
+                "model": self._current.model,
+                "thinking_level": self._current.thinking_level,
+                "start_time": self._current.start_time.isoformat(),
+                "duration_ms": (datetime.now() - self._current.start_time).total_seconds() * 1000
+            } if self._current else None
+        }
+    
+    def print_report(self):
+        """Print a formatted report to console."""
+        summary = self.summary()
+        
+        print("\n" + "=" * 60)
+        print("AGENT METRICS REPORT")
+        print("=" * 60)
+        
+        print(f"\n📊 SUMMARY")
+        print(f"  Total Executions: {summary.total_agents}")
+        print(f"  Successful: {summary.successful_agents} | Failed: {summary.failed_agents}")
+        print(f"  Total Duration: {summary.total_duration_ms:.0f}ms")
+        print(f"  Total Cost: ${summary.total_cost_usd:.4f}")
+        
+        print(f"\n🔢 TOKEN USAGE")
+        print(f"  Input Tokens:    {summary.total_input_tokens:,}")
+        print(f"  Output Tokens:   {summary.total_output_tokens:,}")
+        print(f"  Thinking Tokens: {summary.total_thinking_tokens:,}")
+        print(f"  Total Tokens:    {summary.total_tokens:,}")
+        
+        print(f"\n🤖 PER-AGENT BREAKDOWN")
+        for name, data in summary.agents.items():
+            print(f"\n  [{name}] ({data['model']} @ {data['thinking_level']})")
+            print(f"    Executions: {data['executions']}")
+            print(f"    Tokens: {data['total_tokens']:,} (thinking: {data['total_thinking_tokens']:,})")
+            print(f"    Duration: {data['total_duration_ms']:.0f}ms")
+            print(f"    Cost: ${data['total_cost_usd']:.4f}")
+            print(f"    Success Rate: {data['success_rate']:.0%}")
+        
+        print("\n" + "=" * 60)
+
+
+# =============================================================================
+# Global Tracker Instance
+# =============================================================================
+
+# Singleton for easy access across modules
+_global_tracker: Optional[AgentMetricsTracker] = None
+
+
+def get_metrics_tracker() -> AgentMetricsTracker:
+    """Get or create the global metrics tracker."""
+    global _global_tracker
+    if _global_tracker is None:
+        _global_tracker = AgentMetricsTracker()
+    return _global_tracker
+
+
+def reset_metrics_tracker():
+    """Reset the global metrics tracker."""
+    global _global_tracker
+    _global_tracker = AgentMetricsTracker()

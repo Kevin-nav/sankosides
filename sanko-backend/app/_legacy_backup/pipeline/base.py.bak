@@ -1,0 +1,48 @@
+"""
+Pipeline Base Models
+
+Contains the result models and base classes for pipeline stages.
+Extracted from crew.py for better modularity.
+"""
+
+from typing import Optional, List
+from pydantic import BaseModel, Field
+
+from app.agents.clarifier import OrderForm
+from app.agents.synthesizer import Skeleton
+from app.agents.planner import EnrichedContent
+from app.agents.layout import GeneratedPresentation
+
+
+class SlideResult(BaseModel):
+    """Result from generating and QA-ing a single slide."""
+    
+    order: int
+    html_content: str
+    visual_score: float
+    visual_issues: List[str] = Field(default_factory=list)
+    iterations: int = Field(default=1, description="Number of QA iterations")
+
+
+class PipelineResult(BaseModel):
+    """Complete result from the generation pipeline."""
+    
+    success: bool
+    
+    # Stage outputs
+    order_form: Optional[OrderForm] = None
+    skeleton: Optional[Skeleton] = None
+    enriched_content: Optional[EnrichedContent] = None
+    generated_presentation: Optional[GeneratedPresentation] = None
+    
+    # Final slides with QA scores
+    slides: List[SlideResult] = Field(default_factory=list)
+    
+    # Metrics
+    average_visual_score: float = 0.0
+    total_citations: int = 0
+    total_qa_iterations: int = 0
+    
+    # Error handling
+    error: Optional[str] = None
+    stage_failed: Optional[str] = None

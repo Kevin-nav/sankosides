@@ -1,0 +1,167 @@
+"""
+Generator Stage (Stage 6)
+
+Generates HTML slides using deterministic templates.
+Maps enriched content to semantic HTML at 1280x720px.
+
+Extracted from crew.py for better modularity.
+"""
+
+import asyncio
+from typing import Optional, List, TYPE_CHECKING
+
+from app.logging_config import get_logger
+from app.agents.layout import GeneratedSlide, GeneratedPresentation
+
+if TYPE_CHECKING:
+    from app.agents.planner import EnrichedContent
+    from app.themes import SlideTheme, ColorPalette
+    from app.services.gemini import GeminiInteractionsClient
+
+logger = get_logger(__name__)
+
+
+class GeneratorStage:
+    """
+    Stage 6: Generator - Create HTML slides.
+    
+    Uses Gemini PRO with HIGH thinking to:
+    - Map enriched content to Component JSON
+    - Generate semantic HTML at exactly 1280x720px
+    - Apply theme and color palette consistently
+    """
+    
+    def __init__(self, gemini_client: "GeminiInteractionsClient"):
+        self.gemini_client = gemini_client
+    
+    async def execute(
+        self,
+        enriched: "EnrichedContent",
+        theme: "SlideTheme",
+        color_palette: "ColorPalette",
+        event_queue: Optional[asyncio.Queue] = None,
+    ) -> GeneratedPresentation:
+        """
+        Run the Generator stage to create HTML slides.
+        
+        Uses deterministic HTML generation from enriched content for reliability.
+        The enriched content already has all the semantic data needed.
+        
+        Args:
+            enriched: Enriched content with verified data
+            theme: Theme configuration
+            color_palette: Color settings
+            event_queue: Optional queue for streaming events
+            
+        Returns:
+            GeneratedPresentation with HTML for each slide
+        """
+        from app.services.metrics import get_metrics_tracker
+        tracker = get_metrics_tracker()
+        
+        if event_queue:
+            await event_queue.put({
+                "type": "start",
+                "agent": "generator",
+                "model": "deterministic",
+                "thinking_level": "none"
+            })
+        
+        metric = tracker.start(
+            agent_name="generator",
+            model="deterministic-html",
+            thinking_level="none",
+            raw_input=f"Generating {len(enriched.slides)} slides",
+        )
+        
+        try:
+            # Import from templates module (moved to avoid circular dependency)
+            from app.templates.html_generator import generate_slide_html_sync
+            
+            # Generate HTML for all slides using deterministic templates
+            # This is more reliable than LLM-generated HTML
+            slides = []
+            for enriched_slide in enriched.slides:
+                html = generate_slide_html_sync(enriched_slide, theme, color_palette)
+                slides.append(GeneratedSlide(
+                    order=enriched_slide.order,
+                    title=enriched_slide.title,
+                    theme_id=theme.id,
+                    color_palette=color_palette,
+                    rendered_html=html,
+                    speaker_notes=enriched_slide.speaker_notes,
+                    has_equation=bool(enriched_slide.equation_latex),
+                    has_diagram=bool(enriched_slide.diagram_mermaid),
+                    has_image=bool(enriched_slide.image_url),
+                    citation_count=len(enriched_slide.citations),
+                ))
+                
+                if event_queue:
+                    await event_queue.put({
+                        "type": "thinking",
+                        "agent": "generator",
+                        "text": f"Generated slide {enriched_slide.order}: {enriched_slide.title}"
+                    })
+            
+            tracker.record_output(metric, raw_output=f"Generated {len(slides)} slides")
+            tracker.complete(metric, success=True)
+            
+            if event_queue:
+                await event_queue.put({
+                    "type": "complete",
+                    "agent": "generator",
+                    "stats": {
+                        "slides": len(slides),
+                        "duration_ms": metric.duration_ms,
+                    }
+                })
+            
+            return GeneratedPresentation(
+                title=enriched.presentation_title,
+                total_slides=len(slides),
+                theme_id=enriched.theme_id,
+                color_palette=color_palette,
+                slides=slides,
+                css_variables=theme.to_css_variables(),
+            )
+            
+        except Exception as e:
+            tracker.complete(metric, success=False, error=str(e))
+            logger.warning(f"Generator stage failed: {e}")
+            
+            if event_queue:
+                await event_queue.put({
+                    "type": "error",
+                    "agent": "generator",
+                    "message": str(e)
+                })
+            
+            return await self._generate_fallback(enriched, theme, color_palette)
+    
+    async def _generate_fallback(
+        self,
+        enriched: "EnrichedContent",
+        theme: "SlideTheme",
+        color_palette: "ColorPalette",
+    ) -> GeneratedPresentation:
+        """Generate slides using template (fallback when LLM fails)."""
+        slides = []
+        for enriched_slide in enriched.slides:
+            html = generate_slide_html_sync(enriched_slide, theme, color_palette)
+            slides.append(GeneratedSlide(
+                order=enriched_slide.order,
+                title=enriched_slide.title,
+                theme_id=theme.id,
+                color_palette=color_palette,
+                rendered_html=html,
+                speaker_notes=enriched_slide.speaker_notes,
+            ))
+        
+        return GeneratedPresentation(
+            title=enriched.presentation_title,
+            total_slides=len(slides),
+            theme_id=enriched.theme_id,
+            color_palette=color_palette,
+            slides=slides,
+            css_variables=theme.to_css_variables(),
+        )

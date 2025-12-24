@@ -1,0 +1,62 @@
+"""
+Prompt Formatting Utilities
+
+Contains helper functions for formatting skeleton and enriched content
+into prompts for LLM consumption.
+
+Extracted from crew.py for better modularity and testability.
+"""
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.agents.synthesizer import Skeleton
+    from app.agents.planner import EnrichedContent
+
+
+def format_skeleton_for_prompt(skeleton: "Skeleton") -> str:
+    """
+    Format skeleton slides for LLM prompt.
+    
+    Args:
+        skeleton: The slide skeleton to format
+        
+    Returns:
+        Formatted string representation
+    """
+    lines = []
+    for slide in skeleton.slides:
+        lines.append(f"\nSlide {slide.order}: {slide.title}")
+        lines.append(f"  Type: {slide.content_type}")
+        lines.append(f"  Points: {', '.join(slide.bullet_points)}")
+        if slide.needs_citation:
+            lines.append(f"  NEEDS CITATION: {slide.citation_topic}")
+        if slide.needs_diagram:
+            lines.append(f"  NEEDS DIAGRAM: {slide.diagram_description}")
+        if slide.needs_equation:
+            lines.append(f"  NEEDS EQUATION: {slide.equation_description}")
+    return "\n".join(lines)
+
+
+def format_enriched_for_prompt(enriched: "EnrichedContent") -> str:
+    """
+    Format enriched content for Generator prompt.
+    
+    Args:
+        enriched: The enriched content to format
+        
+    Returns:
+        Formatted string representation
+    """
+    lines = []
+    for slide in enriched.slides:
+        lines.append(f"\nSlide {slide.order}: {slide.title}")
+        lines.append(f"  Type: {slide.content_type}")
+        lines.append(f"  Points: {', '.join(slide.bullet_points)}")
+        if slide.equation_latex:
+            lines.append(f"  EQUATION SVG: [embedded]")
+        if slide.image_url:
+            lines.append(f"  IMAGE: {slide.image_url}")
+        if slide.citations:
+            lines.append(f"  CITATIONS: {len(slide.citations)} sources")
+    return "\n".join(lines)

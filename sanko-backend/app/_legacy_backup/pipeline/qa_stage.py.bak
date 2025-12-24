@@ -1,0 +1,109 @@
+"""
+Visual QA Stage (Stage 7)
+
+Runs visual quality assurance on generated slides.
+Takes screenshots, gets critique from Vision model, applies CSS fixes.
+
+Extracted from crew.py for better modularity.
+"""
+
+import asyncio
+from typing import Tuple, List, Optional, TYPE_CHECKING
+
+from app.logging_config import get_logger
+from app.pipeline.base import SlideResult
+
+if TYPE_CHECKING:
+    from app.agents.layout import GeneratedPresentation
+    from app.services.visual_qa import VisualQAService
+
+logger = get_logger(__name__)
+
+
+class VisualQAStage:
+    """
+    Stage 7: Visual QA - Screenshot, critique, and fix slides.
+    
+    For each slide:
+    1. Capture screenshot
+    2. Get critique from Vision model
+    3. Apply CSS fixes if needed
+    4. Repeat until score >= 95% or max iterations
+    """
+    
+    def __init__(self, visual_qa_service: "VisualQAService"):
+        self.visual_qa_service = visual_qa_service
+    
+    async def execute(
+        self,
+        presentation: "GeneratedPresentation",
+        event_queue: Optional[asyncio.Queue] = None,
+    ) -> Tuple["GeneratedPresentation", List[SlideResult]]:
+        """
+        Run Visual QA loop on all slides.
+        
+        Args:
+            presentation: Generated presentation to QA
+            event_queue: Optional queue for SSE events
+            
+        Returns:
+            Tuple of (updated presentation, slide results with scores)
+        """
+        await self.visual_qa_service.start()
+        
+        try:
+            slide_results = []
+            total_iterations = 0
+            total_slides = len(presentation.slides)
+            
+            for slide in presentation.slides:
+                # Debug: Log HTML content length
+                html_len = len(slide.rendered_html) if slide.rendered_html else 0
+                logger.debug(f"Slide {slide.order}: HTML length = {html_len}")
+                
+                if html_len < 100:
+                    logger.warning(f"Slide {slide.order}: HTML content too short ({html_len} chars): {slide.rendered_html[:200] if slide.rendered_html else 'EMPTY'}")
+                
+                # Create callback for iteration events
+                async def on_iteration(slide_num: int, iteration: int, score: float, issues: List[str]):
+                    if event_queue:
+                        await event_queue.put({
+                            "type": "qa_iteration",
+                            "slide": slide_num,
+                            "total_slides": total_slides,
+                            "iteration": iteration,
+                            "max_iterations": 3,
+                            "score": score,
+                            "issues": issues[:3],  # Limit to first 3 issues
+                        })
+                
+                final_html, critique, iterations_used = await self.visual_qa_service.qa_slide(
+                    html_content=slide.rendered_html,
+                    slide_index=slide.order,
+                    max_iterations=3,
+                    on_iteration=on_iteration,
+                )
+                
+                # Debug: Log critique details
+                if critique.score == 0.0:
+                    logger.warning(f"Slide {slide.order}: Score=0%, Issues: {critique.issues}")
+                
+                slide.rendered_html = final_html
+                
+                result = SlideResult(
+                    order=slide.order,
+                    html_content=final_html,
+                    visual_score=critique.score,
+                    visual_issues=critique.issues,
+                    iterations=iterations_used,
+                )
+                slide_results.append(result)
+                total_iterations += result.iterations
+                
+                logger.info(f"Slide {slide.order}: Visual Score = {critique.score:.0%}")
+            
+            return presentation, slide_results
+            
+        finally:
+            await self.visual_qa_service.stop()
+

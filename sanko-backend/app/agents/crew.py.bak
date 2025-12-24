@@ -1,0 +1,1251 @@
+"""
+Slide Generation Crew (Pipeline Orchestrator)
+
+Orchestrates the complete multi-agent workflow for slide generation.
+
+Pipeline:
+1. Clarifier (Flash/Low) → OrderForm
+2. Outliner (Flash/Medium) → Skeleton
+3. [User Approval Checkpoint]
+4. Planner (Flash/HIGH) → EnrichedContent (with tools)
+5. Render Service → Pre-render LaTeX/Mermaid → SVGs
+6. Generator (PRO/High) → Component JSON + HTML
+7. Visual QA (Flash/High) → Screenshot → Critique → CSS Fixes
+
+Reference: alignment_docs/agent_architecture_and_test_center.md
+"""
+
+import asyncio
+from typing import Dict, Any, Optional, List, Tuple
+from pydantic import BaseModel, Field
+
+from app.config import settings
+from app.themes import get_theme, SlideTheme, ColorPalette, DEFAULT_THEMES
+
+# Agent imports
+from app.agents.clarifier import create_clarifier_agent, OrderForm
+from app.agents.synthesizer import create_outliner_agent, Skeleton, SkeletonSlide
+from app.agents.planner import create_planner_agent, EnrichedContent, EnrichedSlide
+from app.agents.layout import create_generator_agent, GeneratedSlide, GeneratedPresentation
+from app.agents.visual_qa import create_visual_qa_agent
+
+# Service imports
+from app.services.interactions import GeminiInteractionsLLM, GeminiInteractionsClient
+from app.services.visual_qa import VisualQAService, VisualCritique
+from app.services.render_client import RenderServiceClient
+
+# Tool imports
+from app.tools.vision_tool import VisionTool
+from app.tools.academic_search_tool import AcademicSearchTool
+from app.tools.image_generation_tool import NanoBananaImageTool
+from app.tools.image_search_tool import ImageSearchTool
+
+
+# =============================================================================
+# Pipeline Result Models
+# =============================================================================
+
+class SlideResult(BaseModel):
+    """Result from generating and QA-ing a single slide."""
+    order: int
+    html_content: str
+    visual_score: float
+    visual_issues: List[str] = Field(default_factory=list)
+    iterations: int = Field(default=1, description="Number of QA iterations")
+
+
+class PipelineResult(BaseModel):
+    """Complete result from the generation pipeline."""
+    success: bool
+    
+    # Stage outputs
+    order_form: Optional[OrderForm] = None
+    skeleton: Optional[Skeleton] = None
+    enriched_content: Optional[EnrichedContent] = None
+    generated_presentation: Optional[GeneratedPresentation] = None
+    
+    # Final slides with QA scores
+    slides: List[SlideResult] = Field(default_factory=list)
+    
+    # Metrics
+    average_visual_score: float = 0.0
+    total_citations: int = 0
+    total_qa_iterations: int = 0
+    
+    # Error handling
+    error: Optional[str] = None
+    stage_failed: Optional[str] = None
+
+
+# =============================================================================
+# Slide Generation Pipeline
+# =============================================================================
+
+class SlideGenerationPipeline:
+    """
+    Complete pipeline for slide generation.
+    
+    Model Allocation:
+    - Clarifier: Flash + Low thinking (fast Q&A)
+    - Outliner: Flash + Medium thinking (document parsing)
+    - Planner: Flash + HIGH thinking (verification, tools)
+    - Generator: PRO + High thinking (critical generation)
+    - Visual QA: Flash + High thinking (vision analysis)
+    """
+    
+    def __init__(self, api_key: Optional[str] = None):
+        self.api_key = api_key or settings.gemini_api_key
+        
+        # Initialize clients
+        self.gemini_client = GeminiInteractionsClient(api_key=self.api_key)
+        self.render_client = RenderServiceClient(base_url=settings.render_service_url)
+        
+        # Initialize tools
+        self.vision_tool = VisionTool(api_key=self.api_key)
+        self.search_tool = AcademicSearchTool()
+        self.image_gen_tool = NanoBananaImageTool(api_key=self.api_key)
+        self.image_search_tool = ImageSearchTool(api_key=self.api_key)
+        
+        # Initialize LLMs with appropriate thinking levels
+        self.llm_flash_low = GeminiInteractionsLLM(
+            api_key=self.api_key,
+            model=settings.model_flash,
+            thinking_level=settings.thinking_level_low,
+        )
+        self.llm_flash_medium = GeminiInteractionsLLM(
+            api_key=self.api_key,
+            model=settings.model_flash,
+            thinking_level=settings.thinking_level_medium,
+        )
+        self.llm_flash_high = GeminiInteractionsLLM(
+            api_key=self.api_key,
+            model=settings.model_flash,
+            thinking_level=settings.thinking_level_high,
+        )
+        self.llm_pro_high = GeminiInteractionsLLM(
+            api_key=self.api_key,
+            model=settings.model_pro,
+            thinking_level=settings.thinking_level_high,
+        )
+        
+        # Initialize Visual QA service
+        self.visual_qa_service = VisualQAService(api_key=self.api_key)
+        
+        # Create agents (tools used directly in run methods, not via CrewAI)
+        self.clarifier = create_clarifier_agent(llm=self.llm_flash_low)
+        self.outliner = create_outliner_agent(llm=self.llm_flash_medium)
+        self.planner = create_planner_agent(llm=self.llm_flash_high)  # Tools used directly
+        self.generator = create_generator_agent(llm=self.llm_pro_high)
+        self.visual_qa_agent = create_visual_qa_agent(llm=self.llm_flash_high)
+    
+    # =========================================================================
+    # Stage 4: Planner Agent Execution
+    # =========================================================================
+    
+    async def run_planner_agent(
+        self,
+        skeleton: Skeleton,
+        order_form: OrderForm,
+        event_queue: Optional[asyncio.Queue] = None,
+    ) -> EnrichedContent:
+        """
+        Run the Planner agent to enrich skeleton with verified content.
+        
+        Uses Gemini Flash with HIGH thinking + actual tool calls to:
+        - Find real citations using AcademicSearchTool
+        - Verify images using VisionTool
+        - Apply Negative Constraint (remove unverified claims)
+        
+        Tool calls are emitted as events for observability.
+        """
+        from app.agents.planner import PLANNER_SYSTEM_PROMPT
+        
+        # Emit start event
+        if event_queue:
+            await event_queue.put({
+                "type": "start",
+                "agent": "planner",
+                "model": settings.model_flash,
+                "thinking_level": settings.thinking_level_high
+            })
+        
+        # Build prompt with skeleton data
+        prompt = f"""{PLANNER_SYSTEM_PROMPT}
+
+        Here is the slide skeleton to enrich:
+
+        PRESENTATION: {skeleton.presentation_title}
+        TARGET AUDIENCE: {skeleton.target_audience}
+        CITATION STYLE: {order_form.citation_style}
+
+        SLIDES TO ENRICH:
+        {self._format_skeleton_for_prompt(skeleton)}
+
+        For each slide, identify:
+        1. Key claims that need academic citations
+        2. Topics that would benefit from images/diagrams
+        
+        Output as JSON matching the EnrichedContent schema.
+        Mark slides that need_citation=True or need_image=True for verification."""
+
+        # Import metrics tracker for recording call data
+        from app.services.metrics import get_metrics_tracker
+        tracker = get_metrics_tracker()
+        
+        # Start metrics tracking
+        metric = tracker.start(
+            agent_name="planner",
+            model=settings.model_flash,
+            thinking_level=settings.thinking_level_high,
+            raw_input=prompt,
+        )
+
+        try:
+            # Step 1: Get initial enriched content from LLM
+            response_text = ""
+            thinking_text = ""
+            token_usage = {}
+            
+            if event_queue:
+                # Streaming mode - emit thinking chunks
+                async for chunk in self.gemini_client.generate_with_thinking_stream(
+                    prompt=prompt,
+                    model=settings.model_flash,
+                    thinking_level=settings.thinking_level_high,
+                ):
+                    if chunk["type"] == "thinking":
+                        thinking_text += chunk["text"]
+                        await event_queue.put({
+                            "type": "thinking",
+                            "agent": "planner",
+                            "text": chunk["text"]
+                        })
+                    elif chunk["type"] == "content":
+                        response_text += chunk["text"]
+                    elif chunk["type"] == "done":
+                        token_usage = chunk.get("tokens", {})
+            else:
+                # Standard mode (fallback)
+                result = await self.gemini_client.generate_with_thinking(
+                    prompt=prompt,
+                    model=settings.model_flash,
+                    thinking_level=settings.thinking_level_high,
+                )
+                response_text = result["response"]
+                thinking_text = result["thinking"]
+                token_usage = result.get("tokens", {})
+
+            
+            # Record initial output with token counts
+            tracker.record_output(
+                metric,
+                raw_output=response_text,
+                raw_thinking=thinking_text,
+                input_tokens=token_usage.get("input_tokens", 0),
+                output_tokens=token_usage.get("output_tokens", 0),
+                thinking_tokens=token_usage.get("thinking_tokens", 0),
+                cached_tokens=token_usage.get("cached_tokens", 0),
+            )
+            
+            # Parse initial response into EnrichedContent
+            enriched = self._parse_enriched_content(
+                response_text,
+                skeleton,
+                order_form,
+            )
+            
+            # Step 2: Execute tool calls for citations
+            if event_queue:
+                await event_queue.put({
+                    "type": "tool_phase",
+                    "agent": "planner",
+                    "phase": "citations"
+                })
+            
+            for slide in enriched.slides:
+                # Search for citations for each slide with content
+                if slide.content_type in ["content", "analysis", "conclusion"] and not slide.citations:
+                    search_query = f"{skeleton.presentation_title} {slide.title}"
+                    
+                    # Emit tool call event
+                    if event_queue:
+                        await event_queue.put({
+                            "type": "tool_call",
+                            "agent": "planner",
+                            "tool": "AcademicSearchTool",
+                            "action": "search",
+                            "input": {"query": search_query, "max_results": 2}
+                        })
+                    
+                    try:
+                        citations = await self.search_tool.search(
+                            query=search_query,
+                            max_results=2,
+                            source="crossref"
+                        )
+                        slide.citations = citations
+                        
+                        # Emit tool result event
+                        if event_queue:
+                            await event_queue.put({
+                                "type": "tool_result",
+                                "agent": "planner",
+                                "tool": "AcademicSearchTool",
+                                "success": True,
+                                "result": f"Found {len(citations)} citations"
+                            })
+                    except Exception as e:
+                        if event_queue:
+                            await event_queue.put({
+                                "type": "tool_result",
+                                "agent": "planner",
+                                "tool": "AcademicSearchTool",
+                                "success": False,
+                                "result": str(e)
+                            })
+            
+            # Step 3: Acquire images for slides that need them
+            if event_queue:
+                await event_queue.put({
+                    "type": "tool_phase",
+                    "agent": "planner",
+                    "phase": "image_acquisition"
+                })
+            
+            for slide in enriched.slides:
+                # Skip if slide already has an image or doesn't need one
+                if slide.image_url:
+                    continue
+                
+                # Determine if this slide type typically benefits from images
+                needs_image = slide.content_type in ["content", "overview", "case_study"]
+                if not needs_image:
+                    continue
+                
+                # Search query based on slide content
+                search_query = f"{slide.title} {' '.join(slide.bullet_points[:2]) if slide.bullet_points else ''}"
+                
+                # Try image search first
+                if event_queue:
+                    await event_queue.put({
+                        "type": "tool_call",
+                        "agent": "planner",
+                        "tool": "ImageSearchTool",
+                        "action": "search",
+                        "input": {"query": search_query[:50]}
+                    })
+                
+                try:
+                    search_results = await self.image_search_tool.search(
+                        query=search_query,
+                        max_results=3
+                    )
+                    
+                    if search_results:
+                        # Use the first result
+                        slide.image_url = search_results[0].url
+                        slide.image_alt = search_results[0].description or slide.title
+                        
+                        if event_queue:
+                            await event_queue.put({
+                                "type": "tool_result",
+                                "agent": "planner",
+                                "tool": "ImageSearchTool",
+                                "success": True,
+                                "result": f"Found image: {search_results[0].source}"
+                            })
+                    else:
+                        # Fallback to AI generation
+                        if event_queue:
+                            await event_queue.put({
+                                "type": "tool_call",
+                                "agent": "planner",
+                                "tool": "NanoBananaImageTool",
+                                "action": "generate",
+                                "input": {"prompt": search_query[:50]}
+                            })
+                        
+                        try:
+                            generated = await self.image_gen_tool.generate_asset(
+                                prompt=f"Professional presentation visual for: {slide.title}. {slide.bullet_points[0] if slide.bullet_points else ''}",
+                                style="clean, modern, professional presentation graphic"
+                            )
+                            
+                            if generated and generated.file_path:
+                                slide.image_url = f"file://{generated.file_path}"
+                                slide.image_alt = f"AI-generated: {slide.title}"
+                                
+                                if event_queue:
+                                    await event_queue.put({
+                                        "type": "tool_result",
+                                        "agent": "planner",
+                                        "tool": "NanoBananaImageTool",
+                                        "success": True,
+                                        "result": "Generated image"
+                                    })
+                        except Exception as gen_e:
+                            if event_queue:
+                                await event_queue.put({
+                                    "type": "tool_result",
+                                    "agent": "planner",
+                                    "tool": "NanoBananaImageTool",
+                                    "success": False,
+                                    "result": str(gen_e)
+                                })
+                            
+                except Exception as e:
+                    if event_queue:
+                        await event_queue.put({
+                            "type": "tool_result",
+                            "agent": "planner",
+                            "tool": "ImageSearchTool",
+                            "success": False,
+                            "result": str(e)
+                        })
+            
+            # Step 4: Verify images if any were suggested
+            if event_queue:
+                await event_queue.put({
+                    "type": "tool_phase",
+                    "agent": "planner",
+                    "phase": "image_verification"
+                })
+            
+            for slide in enriched.slides:
+                if slide.image_url:
+                    # Emit tool call event
+                    if event_queue:
+                        await event_queue.put({
+                            "type": "tool_call",
+                            "agent": "planner",
+                            "tool": "VisionTool",
+                            "action": "verify_image",
+                            "input": {"url": slide.image_url[:50] + "...", "description": slide.image_alt or slide.title}
+                        })
+                    
+                    try:
+                        verification = await self.vision_tool.verify_image(
+                            image_url=slide.image_url,
+                            expected_description=slide.image_alt or slide.title
+                        )
+                        
+                        if not verification.is_match:
+                            # Apply negative constraint - remove unverified image
+                            slide.image_url = None
+                            slide.image_alt = None
+                        
+                        # Emit tool result event
+                        if event_queue:
+                            await event_queue.put({
+                                "type": "tool_result",
+                                "agent": "planner",
+                                "tool": "VisionTool",
+                                "success": verification.is_match,
+                                "result": f"Match score: {verification.match_score:.2f}"
+                            })
+                    except Exception as e:
+                        # Remove image on error
+                        slide.image_url = None
+                        slide.image_alt = None
+                        if event_queue:
+                            await event_queue.put({
+                                "type": "tool_result",
+                                "agent": "planner",
+                                "tool": "VisionTool",
+                                "success": False,
+                                "result": str(e)
+                            })
+            
+            # Update enriched content metrics
+            enriched.update_metrics()
+            
+            # Complete tracking with success
+            tracker.complete(metric, success=True)
+            
+            # Emit complete event
+            if event_queue:
+                await event_queue.put({
+                    "type": "complete",
+                    "agent": "planner",
+                    "stats": {
+                        "duration_ms": metric.duration_ms,
+                        "cost": metric.estimated_cost_usd,
+                        "citations_found": enriched.total_citations,
+                        "images_verified": enriched.verified_images
+                    }
+                })
+            
+            return enriched
+            
+        except Exception as e:
+            # Record failure for diagnostics
+            tracker.complete(metric, success=False, error=str(e))
+            print(f"⚠️ Planner agent failed: {e}")
+            
+            if event_queue:
+                await event_queue.put({
+                    "type": "error",
+                    "agent": "planner",
+                    "message": str(e)
+                })
+            
+            # Fallback: convert skeleton directly without enrichment
+            return self._skeleton_to_enriched_fallback(skeleton, order_form)
+
+    
+    def _format_skeleton_for_prompt(self, skeleton: Skeleton) -> str:
+        """Format skeleton slides for LLM prompt."""
+        lines = []
+        for slide in skeleton.slides:
+            lines.append(f"\nSlide {slide.order}: {slide.title}")
+            lines.append(f"  Type: {slide.content_type}")
+            lines.append(f"  Points: {', '.join(slide.bullet_points)}")
+            if slide.needs_citation:
+                lines.append(f"  NEEDS CITATION: {slide.citation_topic}")
+            if slide.needs_diagram:
+                lines.append(f"  NEEDS DIAGRAM: {slide.diagram_description}")
+            if slide.needs_equation:
+                lines.append(f"  NEEDS EQUATION: {slide.equation_description}")
+        return "\n".join(lines)
+    
+    def _parse_enriched_content(
+        self,
+        response: str,
+        skeleton: Skeleton,
+        order_form: OrderForm,
+    ) -> EnrichedContent:
+        """Parse LLM response into EnrichedContent model."""
+        import json
+        import re
+        
+        # Try to extract JSON from response
+        json_match = re.search(r'\{.*\}', response, re.DOTALL)
+        if json_match:
+            try:
+                data = json.loads(json_match.group())
+                # Attempt to construct EnrichedContent from parsed data
+                # Normalize field names: LLM sometimes returns different names
+                slides_data = []
+                for i, slide_data in enumerate(data.get("slides", [])):
+                    # Map slide_number to order if needed
+                    if "slide_number" in slide_data and "order" not in slide_data:
+                        slide_data["order"] = slide_data.pop("slide_number")
+                    elif "order" not in slide_data:
+                        slide_data["order"] = i + 1  # Default to index-based order
+                    
+                    # Map 'type' to 'content_type' if needed
+                    if "type" in slide_data and "content_type" not in slide_data:
+                        slide_data["content_type"] = slide_data.pop("type")
+                    
+                    # Ensure title is present (use content_type as fallback)
+                    if "title" not in slide_data:
+                        slide_data["title"] = slide_data.get("content_type", f"Slide {slide_data.get('order', i+1)}").capitalize()
+                    
+                    # Handle content field -> bullet_points
+                    if "content" in slide_data and "bullet_points" not in slide_data:
+                        content = slide_data.pop("content")
+                        if isinstance(content, list):
+                            slide_data["bullet_points"] = content
+                        elif isinstance(content, str):
+                            slide_data["bullet_points"] = [content]
+                    
+                    slides_data.append(slide_data)
+                
+                return EnrichedContent(
+                    presentation_title=data.get("presentation_title", skeleton.presentation_title),
+                    target_audience=data.get("target_audience", skeleton.target_audience),
+                    theme_id=order_form.theme_id,
+                    citation_style=order_form.citation_style,
+                    slides=[
+                        EnrichedSlide(**slide_data)
+                        for slide_data in slides_data
+                    ] if slides_data else self._skeleton_to_enriched_fallback(skeleton, order_form).slides
+                )
+            except (json.JSONDecodeError, Exception) as e:
+                print(f"⚠️ Failed to parse Planner response: {e}")        
+        # Fallback if parsing fails
+        return self._skeleton_to_enriched_fallback(skeleton, order_form)
+    
+    def _skeleton_to_enriched_fallback(
+        self,
+        skeleton: Skeleton,
+        order_form: OrderForm,
+    ) -> EnrichedContent:
+        """Convert skeleton to enriched content without LLM (fallback)."""
+        return EnrichedContent(
+            presentation_title=skeleton.presentation_title,
+            target_audience=skeleton.target_audience,
+            theme_id=order_form.theme_id,
+            citation_style=order_form.citation_style,
+            slides=[
+                EnrichedSlide(
+                    order=s.order,
+                    title=s.title,
+                    bullet_points=s.bullet_points,
+                    content_type=s.content_type,
+                    equation_latex=s.equation_latex,
+                    speaker_notes=s.speaker_notes_hint,
+                )
+                for s in skeleton.slides
+            ]
+        )
+    
+    # =========================================================================
+    # Stage 6: Generator Agent Execution
+    # =========================================================================
+    
+    async def run_generator_agent(
+        self,
+        enriched: EnrichedContent,
+        theme: SlideTheme,
+        color_palette: ColorPalette,
+        event_queue: Optional[asyncio.Queue] = None,
+    ) -> GeneratedPresentation:
+        """
+        Run the Generator agent to create HTML slides.
+        
+        Uses Gemini PRO with HIGH thinking to:
+        - Map enriched content to Component JSON
+        - Generate semantic HTML at exactly 1280x720px
+        - Apply theme and color palette consistently
+        """
+        from app.agents.layout import GENERATOR_SYSTEM_PROMPT
+        
+        # Emit start event
+        if event_queue:
+            await event_queue.put({
+                "type": "start",
+                "agent": "generator",
+                "model": settings.model_pro,
+                "thinking_level": settings.thinking_level_high
+            })
+        
+        # Build prompt with enriched content
+        prompt = f"""{GENERATOR_SYSTEM_PROMPT}
+
+        THEME: {theme.id}
+        CSS VARIABLES:
+        {theme.to_css_variables()}
+
+        COLOR PALETTE:
+        - Primary: {color_palette.primary}
+        - Secondary: {color_palette.secondary}
+        - Background: {color_palette.background}
+        - Text: {color_palette.text_primary}
+
+        SLIDES TO GENERATE:
+        {self._format_enriched_for_prompt(enriched)}
+
+        Generate complete HTML for each slide at exactly 1280x720px.
+        Every element must have a unique data-id attribute.
+        Use CSS variables for colors and fonts.
+        Output the HTML for each slide."""
+
+        # Import metrics tracker for recording call data
+        from app.services.metrics import get_metrics_tracker
+        tracker = get_metrics_tracker()
+        
+        # Start metrics tracking
+        metric = tracker.start(
+            agent_name="generator",
+            model=settings.model_pro,
+            thinking_level=settings.thinking_level_high,
+            raw_input=prompt,  # Store full prompt for testing environment
+        )
+
+        try:
+            # Call Gemini PRO with HIGH thinking
+            response_text = ""
+            thinking_text = ""
+            token_usage = {}
+            
+            if event_queue:
+                # Streaming mode
+                async for chunk in self.gemini_client.generate_with_thinking_stream(
+                    prompt=prompt,
+                    model=settings.model_pro,
+                    thinking_level=settings.thinking_level_high,
+                ):
+                    if chunk["type"] == "thinking":
+                        thinking_text += chunk["text"]
+                        await event_queue.put({
+                            "type": "thinking",
+                            "agent": "generator",
+                            "text": chunk["text"]
+                        })
+                    elif chunk["type"] == "content":
+                        response_text += chunk["text"]
+                    elif chunk["type"] == "done":
+                        token_usage = chunk.get("tokens", {})
+            else:
+                # Standard mode
+                result = await self.gemini_client.generate_with_thinking(
+                    prompt=prompt,
+                    model=settings.model_pro,
+                    thinking_level=settings.thinking_level_high,
+                )
+                response_text = result["response"]
+                thinking_text = result["thinking"]
+                token_usage = result.get("tokens", {})
+            
+            # Record tokens and outputs with token counts
+            tracker.record_output(
+                metric,
+                raw_output=response_text,
+                raw_thinking=thinking_text,
+                input_tokens=token_usage.get("input_tokens", 0),
+                output_tokens=token_usage.get("output_tokens", 0),
+                thinking_tokens=token_usage.get("thinking_tokens", 0),
+                cached_tokens=token_usage.get("cached_tokens", 0),
+            )
+            
+            # Parse output
+            generated = self._parse_generated_slides(
+                response_text,
+                enriched,
+                theme,
+                color_palette,
+            )
+            
+            # Complete tracking with success
+            tracker.complete(metric, success=True)
+            
+            # Emit complete event
+            if event_queue:
+                await event_queue.put({
+                    "type": "complete",
+                    "agent": "generator",
+                    "stats": {
+                        "duration_ms": metric.duration_ms,
+                        "cost": metric.estimated_cost_usd
+                    }
+                })
+            
+            # Wrap in GeneratedPresentation
+            return GeneratedPresentation(
+                title=enriched.presentation_title,
+                total_slides=len(generated),
+                theme_id=enriched.theme_id,
+                color_palette=color_palette,
+                slides=generated,
+                css_variables=theme.to_css_variables(),
+            )
+            
+        except Exception as e:
+            # Record failure for diagnostics
+            tracker.complete(metric, success=False, error=str(e))
+            print(f"⚠️ Generator agent failed: {e}")
+            
+            if event_queue:
+                await event_queue.put({
+                    "type": "error",
+                    "agent": "generator",
+                    "message": str(e)
+                })
+            
+            # Fallback: generate basic HTML ourselves
+            return await self._generate_slides_fallback(enriched, theme, color_palette)
+
+    
+    def _format_enriched_for_prompt(self, enriched: EnrichedContent) -> str:
+        """Format enriched content for Generator prompt."""
+        lines = []
+        for slide in enriched.slides:
+            lines.append(f"\nSlide {slide.order}: {slide.title}")
+            lines.append(f"  Type: {slide.content_type}")
+            lines.append(f"  Points: {', '.join(slide.bullet_points)}")
+            if slide.equation_latex:
+                lines.append(f"  EQUATION SVG: [embedded]")
+            if slide.image_url:
+                lines.append(f"  IMAGE: {slide.image_url}")
+            if slide.citations:
+                lines.append(f"  CITATIONS: {len(slide.citations)} sources")
+        return "\n".join(lines)
+    
+    def _parse_generated_slides(
+        self,
+        response: str,
+        enriched: EnrichedContent,
+        theme: SlideTheme,
+        color_palette: ColorPalette,
+    ) -> List[GeneratedSlide]:
+        """Parse Generator response into slides with HTML."""
+        import re
+        
+        slides = []
+        
+        # Try to extract HTML blocks from response
+        # Look for patterns like "Slide 1:" followed by HTML
+        html_pattern = r'(?:Slide\s*\d+[:\s]*)?(<(?:!DOCTYPE\s+)?html[\s\S]*?</html>)'
+        matches = re.findall(html_pattern, response, re.IGNORECASE)
+        
+        for i, (enriched_slide, html) in enumerate(zip(enriched.slides, matches)):
+            slides.append(GeneratedSlide(
+                order=enriched_slide.order,
+                title=enriched_slide.title,
+                theme_id=theme.id,
+                color_palette=color_palette,
+                rendered_html=html.strip(),
+                speaker_notes=enriched_slide.speaker_notes,
+            ))
+        
+        # If we didn't get enough slides from parsing, fill with fallback
+        if len(slides) < len(enriched.slides):
+            print(f"⚠️ Only parsed {len(slides)}/{len(enriched.slides)} slides, using fallback for rest")
+            # Use fallback for remaining slides
+            for enriched_slide in enriched.slides[len(slides):]:
+                html = self._generate_slide_html_sync(enriched_slide, theme, color_palette)
+                slides.append(GeneratedSlide(
+                    order=enriched_slide.order,
+                    title=enriched_slide.title,
+                    theme_id=theme.id,
+                    color_palette=color_palette,
+                    rendered_html=html,
+                    speaker_notes=enriched_slide.speaker_notes,
+                ))
+        
+        return slides
+    
+    async def _generate_slides_fallback(
+        self,
+        enriched: EnrichedContent,
+        theme: SlideTheme,
+        color_palette: ColorPalette,
+    ) -> GeneratedPresentation:
+        """Generate slides using template (fallback when LLM fails)."""
+        slides = []
+        for enriched_slide in enriched.slides:
+            html = self._generate_slide_html_sync(enriched_slide, theme, color_palette)
+            slides.append(GeneratedSlide(
+                order=enriched_slide.order,
+                title=enriched_slide.title,
+                theme_id=theme.id,
+                color_palette=color_palette,
+                rendered_html=html,
+                speaker_notes=enriched_slide.speaker_notes,
+            ))
+        
+        return GeneratedPresentation(
+            title=enriched.presentation_title,
+            total_slides=len(slides),
+            theme_id=enriched.theme_id,
+            color_palette=color_palette,
+            slides=slides,
+            css_variables=theme.to_css_variables(),
+        )
+    
+    def _generate_slide_html_sync(
+        self,
+        slide: EnrichedSlide,
+        theme: SlideTheme,
+        colors: ColorPalette,
+    ) -> str:
+        """Generate HTML for a single slide (sync version for fallback)."""
+        from app.config import SLIDE_WIDTH, SLIDE_HEIGHT
+        
+        # Build bullet points HTML
+        bullets_html = ""
+        if slide.bullet_points:
+            bullets_html = "<ul class='bullet-list'>\n"
+            for point in slide.bullet_points:
+                bullets_html += f"  <li data-id='bullet-{slide.order}-{point[:20].replace(' ', '-')}'>{point}</li>\n"
+            bullets_html += "</ul>"
+        
+        # Build equation HTML if present
+        equation_html = ""
+        if slide.equation_latex:
+            # If already rendered to SVG, embed directly
+            if slide.equation_latex.startswith("<svg"):
+                equation_html = f"<div class='equation-container' data-id='eq-{slide.order}'>{slide.equation_latex}</div>"
+            else:
+                equation_html = f"<div class='equation-container' data-id='eq-{slide.order}'><code>{slide.equation_latex}</code></div>"
+        
+        # Build image HTML if present
+        image_html = ""
+        if slide.image_url:
+            image_html = f"<img src='{slide.image_url}' alt='{slide.title}' class='slide-image' data-id='img-{slide.order}'/>"
+        
+        # Build diagram HTML if present
+        diagram_html = ""
+        if slide.diagram_mermaid:
+            if slide.diagram_mermaid.startswith("<svg"):
+                diagram_html = f"<div class='diagram-container' data-id='diag-{slide.order}'>{slide.diagram_mermaid}</div>"
+            else:
+                diagram_html = f"<pre class='mermaid' data-id='diag-{slide.order}'>{slide.diagram_mermaid}</pre>"
+        
+        # Generate slide HTML
+        html = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        .slide {{
+            width: {SLIDE_WIDTH}px;
+            height: {SLIDE_HEIGHT}px;
+            padding: {theme.spacing_lg};
+            background: {colors.background};
+            color: {colors.text_primary};
+            font-family: '{theme.font_body}', sans-serif;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }}
+        .slide-title {{
+            font-family: '{theme.font_heading}', sans-serif;
+            font-size: {theme.font_size_title};
+            font-weight: {theme.font_weight_heading};
+            color: {colors.primary};
+            margin-bottom: 24px;
+        }}
+        .slide-content {{
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }}
+        .bullet-list {{
+            list-style: none;
+            padding-left: 0;
+        }}
+        .bullet-list li {{
+            font-size: {theme.font_size_body};
+            line-height: 1.6;
+            margin-bottom: 12px;
+            padding-left: 24px;
+            position: relative;
+        }}
+        .bullet-list li::before {{
+            content: '•';
+            color: {colors.primary};
+            font-weight: bold;
+            position: absolute;
+            left: 0;
+        }}
+        .equation-container {{
+            background: {colors.secondary}15;
+            padding: 16px;
+            border-radius: {theme.border_radius_md};
+            text-align: center;
+        }}
+        .diagram-container {{
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex: 1;
+        }}
+        .slide-image {{
+            max-width: 100%;
+            max-height: 300px;
+            object-fit: contain;
+            border-radius: {theme.border_radius_md};
+        }}
+    </style>
+</head>
+<body>
+    <div class="slide" data-id="slide-{slide.order}">
+        <h1 class="slide-title" data-id="title-{slide.order}">{slide.title}</h1>
+        <div class="slide-content" data-id="content-{slide.order}">
+            {bullets_html}
+            {equation_html}
+            {diagram_html}
+            {image_html}
+        </div>
+    </div>
+</body>
+</html>"""
+        
+        return html
+    
+    # =========================================================================
+    # Stage 5: Pre-Render Assets
+    # =========================================================================
+    
+    async def pre_render_assets(
+        self,
+        enriched: EnrichedContent
+    ) -> EnrichedContent:
+        """
+        Pre-render all equations and diagrams to SVG.
+        
+        This happens BEFORE the Generator stage so that
+        the HTML includes actual SVGs, not placeholders.
+        """
+        for slide in enriched.slides:
+            # Render LaTeX equations
+            if slide.equation_latex:
+                try:
+                    result = await self.render_client.render_latex(slide.equation_latex)
+                    if result.get("success") and result.get("svg"):
+                        # Store SVG for Generator to embed
+                        slide.equation_latex = result["svg"]
+                except Exception as e:
+                    print(f"Failed to render equation on slide {slide.order}: {e}")
+            
+            # Render Mermaid diagrams
+            if slide.diagram_mermaid:
+                try:
+                    result = await self.render_client.render_mermaid(slide.diagram_mermaid)
+                    if result.get("success") and result.get("svg"):
+                        slide.diagram_mermaid = result["svg"]
+                except Exception as e:
+                    print(f"Failed to render diagram on slide {slide.order}: {e}")
+            
+            # Format citations
+            if slide.citations:
+                try:
+                    citation_dicts = [c.model_dump() for c in slide.citations]
+                    result = await self.render_client.format_citations(
+                        citation_dicts,
+                        style=enriched.citation_style
+                    )
+                    if result.get("success") and result.get("citations"):
+                        # Store formatted citation strings for the Generator to use
+                        slide.formatted_citations = result["citations"]
+                except Exception as e:
+                    print(f"Failed to format citations on slide {slide.order}: {e}")
+        
+        return enriched
+    
+    # =========================================================================
+    # Stage 7: Visual QA with CSS Fixes
+    # =========================================================================
+    
+    async def run_visual_qa(
+        self,
+        presentation: GeneratedPresentation
+    ) -> Tuple[GeneratedPresentation, List[SlideResult]]:
+        """
+        Run Visual QA loop on all slides.
+        
+        For each slide:
+        1. Capture screenshot
+        2. Get critique from Vision model
+        3. Apply CSS fixes if needed
+        4. Repeat until score >= 95% or max iterations
+        """
+        await self.visual_qa_service.start()
+        
+        try:
+            slide_results = []
+            total_iterations = 0
+            
+            for slide in presentation.slides:
+                # Run QA loop on this slide
+                final_html, critique = await self.visual_qa_service.qa_slide(
+                    html_content=slide.rendered_html,
+                    slide_index=slide.order,
+                    max_iterations=3,
+                )
+                
+                # Update slide with final HTML
+                slide.rendered_html = final_html
+                
+                # Track result
+                result = SlideResult(
+                    order=slide.order,
+                    html_content=final_html,
+                    visual_score=critique.score,
+                    visual_issues=critique.issues,
+                    iterations=1,  # TODO: Track actual iterations
+                )
+                slide_results.append(result)
+                total_iterations += result.iterations
+                
+                print(f"  Slide {slide.order}: Visual Score = {critique.score:.0%}")
+            
+            return presentation, slide_results
+            
+        finally:
+            await self.visual_qa_service.stop()
+    
+    # =========================================================================
+    # Full Pipeline Execution
+    # =========================================================================
+    
+    async def generate_from_skeleton(
+        self,
+        skeleton: Skeleton,
+        order_form: OrderForm,
+        event_queue: Optional[asyncio.Queue] = None,
+    ) -> PipelineResult:
+        """
+        Generate slides from an approved skeleton.
+        
+        This is called after user approves the skeleton.
+        Runs stages 4-7 of the pipeline:
+        - Stage 4: Planner (enrich with citations/images)
+        - Stage 5: Pre-render assets (LaTeX/Mermaid → SVG)
+        - Stage 6: Generator (create HTML slides)
+        - Stage 7: Visual QA (screenshot, critique, fix)
+        """
+        result = PipelineResult(success=False)
+        result.order_form = order_form
+        result.skeleton = skeleton
+        
+        try:
+            # Stage 4: Planner - Enrich with verified content
+            print("📚 Stage 4: Enriching content with verified citations...")
+            enriched = await self.run_planner_agent(skeleton, order_form, event_queue=event_queue)
+            result.enriched_content = enriched
+            print(f"   → Enriched {len(enriched.slides)} slides")
+            
+            # Stage 5: Pre-render assets (LaTeX, Mermaid, Citations → SVG)
+            print("🎨 Stage 5: Pre-rendering equations and diagrams...")
+            enriched = await self.pre_render_assets(enriched)
+            
+            # Stage 6: Generator - Create HTML slides using Gemini PRO
+            print("🏗️ Stage 6: Generating slide HTML...")
+            theme = get_theme(order_form.theme_id) or get_theme("modern")
+            color_palette = order_form.color_overrides or theme.colors
+            
+            generated = await self.run_generator_agent(enriched, theme, color_palette, event_queue=event_queue)
+            result.generated_presentation = generated
+            print(f"   → Generated {len(generated.slides)} HTML slides")
+            
+            # Stage 7: Visual QA loop (skip if Playwright unavailable on Windows)
+            print("👁️ Stage 7: Running Visual QA...")
+            try:
+                generated, slide_results = await self.run_visual_qa(generated)
+                result.slides = slide_results
+                result.average_visual_score = (
+                    sum(s.visual_score for s in slide_results) / len(slide_results)
+                    if slide_results else 0.0
+                )
+                result.total_qa_iterations = sum(s.iterations for s in slide_results)
+            except NotImplementedError:
+                # Playwright subprocess not supported on this platform (Windows asyncio issue)
+                print("⚠️ Skipping Visual QA: Playwright subprocess not available on this platform")
+                result.slides = []
+                result.average_visual_score = 0.0
+                result.total_qa_iterations = 0
+            except Exception as qa_error:
+                print(f"⚠️ Skipping Visual QA due to error: {qa_error}")
+                result.slides = []
+                result.average_visual_score = 0.0
+                result.total_qa_iterations = 0
+            result.success = True
+            
+            print(f"✅ Generation complete! Average Visual Score: {result.average_visual_score:.0%}")
+            
+        except Exception as e:
+            result.error = str(e)
+            result.stage_failed = "generation"
+            print(f"❌ Pipeline failed: {e}")
+            import traceback
+            traceback.print_exc()
+        
+        return result
+    
+    async def _generate_slide_html(
+        self,
+        slide: EnrichedSlide,
+        theme: SlideTheme,
+        colors: ColorPalette,
+    ) -> str:
+        """Generate HTML for a single slide."""
+        
+        # Build HTML with exact dimensions
+        bullets_html = "\n".join(
+            f'<li data-id="slide-{slide.order}-bullet-{i+1}">{point}</li>'
+            for i, point in enumerate(slide.bullet_points)
+        )
+        
+        html = f'''<!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <style>
+                {theme.to_css_variables()}
+                
+                * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+                
+                .slide {{
+                    width: {settings.SLIDE_WIDTH}px;
+                    height: {settings.SLIDE_HEIGHT}px;
+                    background: var(--color-background);
+                    font-family: var(--font-body);
+                    padding: var(--spacing-xl);
+                    display: flex;
+                    flex-direction: column;
+                    overflow: hidden;
+                }}
+                
+                .slide-title {{
+                    font-family: var(--font-heading);
+                    font-size: var(--font-size-heading);
+                    font-weight: var(--font-weight-heading);
+                    color: var(--color-primary);
+                    margin-bottom: var(--spacing-lg);
+                }}
+                
+                .content {{
+                    flex: 1;
+                    display: flex;
+                    flex-direction: column;
+                    gap: var(--spacing-md);
+                }}
+                
+                .bullet-list {{
+                    list-style: disc;
+                    padding-left: var(--spacing-lg);
+                    font-size: var(--font-size-body);
+                    color: var(--color-text-primary);
+                    line-height: var(--line-height);
+                }}
+                
+                .bullet-list li {{
+                    margin-bottom: var(--spacing-sm);
+                }}
+                
+                .equation-container {{
+                    display: flex;
+                    justify-content: center;
+                    padding: var(--spacing-md);
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="slide" data-id="slide-{slide.order}">
+                <h1 class="slide-title" data-id="slide-{slide.order}-title">{slide.title}</h1>
+                <div class="content" data-id="slide-{slide.order}-content">
+                    <ul class="bullet-list" data-id="slide-{slide.order}-bullets">
+                        {bullets_html}
+                    </ul>
+                    {f'<div class="equation-container" data-id="slide-{slide.order}-equation">{slide.equation_latex}</div>' if slide.equation_latex else ''}
+                </div>
+            </div>
+        </body>
+        </html>'''
+        
+        return html
+
+
+# =============================================================================
+# Convenience Functions
+# =============================================================================
+
+async def generate_slides(
+    skeleton: Skeleton,
+    order_form: OrderForm,
+    api_key: Optional[str] = None,
+) -> PipelineResult:
+    """
+    Generate slides from an approved skeleton.
+    
+    Args:
+        skeleton: The approved skeleton
+        order_form: The clarification order form
+        api_key: Gemini API key
+        
+    Returns:
+        PipelineResult with slides and scores
+    """
+    pipeline = SlideGenerationPipeline(api_key=api_key)
+    return await pipeline.generate_from_skeleton(skeleton, order_form)
+
+
+def get_available_themes() -> List[SlideTheme]:
+    """Get list of available themes."""
+    return list(DEFAULT_THEMES.values())
+

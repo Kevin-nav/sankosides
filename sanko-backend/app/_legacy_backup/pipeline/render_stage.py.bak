@@ -1,0 +1,100 @@
+"""
+Render Stage (Stage 5)
+
+Pre-renders LaTeX equations and Mermaid diagrams to SVG.
+This happens before the Generator stage so HTML includes actual SVGs.
+
+Extracted from crew.py for better modularity.
+"""
+
+from typing import TYPE_CHECKING
+
+from app.logging_config import get_logger
+
+if TYPE_CHECKING:
+    from app.agents.planner import EnrichedContent
+    from app.services.render_client import RenderServiceClient
+
+logger = get_logger(__name__)
+
+
+class RenderStage:
+    """
+    Stage 5: Pre-render assets (LaTeX/Mermaid to SVG).
+    
+    This stage processes all equations and diagrams in the enriched
+    content and converts them to SVG format for embedding in HTML.
+    """
+    
+    def __init__(self, render_client: "RenderServiceClient"):
+        self.render_client = render_client
+    
+    async def execute(self, enriched: "EnrichedContent") -> "EnrichedContent":
+        """
+        Pre-render all equations and diagrams to SVG.
+        
+        Args:
+            enriched: EnrichedContent with LaTeX/Mermaid markup
+            
+        Returns:
+            EnrichedContent with SVG strings replacing markup
+        """
+        for slide in enriched.slides:
+            # Render LaTeX equations
+            if slide.equation_latex:
+                await self._render_latex(slide)
+            
+            # Render Mermaid diagrams
+            if slide.diagram_mermaid:
+                await self._render_mermaid(slide)
+            
+            # Format citations
+            if slide.citations:
+                await self._format_citations(slide, enriched.citation_style)
+        
+        return enriched
+    
+    async def _render_latex(self, slide) -> None:
+        """Render LaTeX equation to SVG."""
+        try:
+            result = await self.render_client.render_latex(slide.equation_latex)
+            if result.get("success") and result.get("svg"):
+                slide.equation_latex = result["svg"]
+        except Exception as e:
+            logger.warning(f"Failed to render equation on slide {slide.order}: {e}")
+    
+    async def _render_mermaid(self, slide) -> None:
+        """Render Mermaid diagram to SVG."""
+        try:
+            result = await self.render_client.render_mermaid(slide.diagram_mermaid)
+            if result.get("success") and result.get("svg"):
+                slide.diagram_mermaid = result["svg"]
+        except Exception as e:
+            logger.warning(f"Failed to render diagram on slide {slide.order}: {e}")
+    
+    async def _format_citations(self, slide, citation_style: str) -> None:
+        """Format citations using the render service."""
+        try:
+            # Filter out incomplete citations that would cause render errors
+            valid_citations = []
+            for c in slide.citations:
+                cit_dict = c.model_dump() if hasattr(c, 'model_dump') else c
+                # Only include citations with at least authors or title
+                if cit_dict.get("authors") or (cit_dict.get("title") and cit_dict.get("year")):
+                    # Ensure authors is a list with at least one entry for the render service
+                    if not cit_dict.get("authors"):
+                        cit_dict["authors"] = ["Unknown"]
+                    valid_citations.append(cit_dict)
+            
+            if not valid_citations:
+                logger.debug(f"No valid citations to format on slide {slide.order}")
+                return
+            
+            result = await self.render_client.format_citations(
+                valid_citations,
+                style=citation_style
+            )
+            if result.get("success") and result.get("citations"):
+                slide.formatted_citations = result["citations"]
+        except Exception as e:
+            logger.warning(f"Failed to format citations on slide {slide.order}: {e}")

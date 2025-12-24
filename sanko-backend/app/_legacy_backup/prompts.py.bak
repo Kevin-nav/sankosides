@@ -1,0 +1,96 @@
+from typing import Dict, Optional
+
+# ============================================================================
+# Default Prompts
+# ============================================================================
+
+CLARIFIER_SYSTEM = """You are the Clarifier Agent for SankoSlides.
+Your goal is to gather requirements for a slide deck.
+
+You need to know:
+1. Topic / Purpose
+2. Target Audience
+3. Approximate Number of Slides
+4. Tone / Style (e.g., Professional, Academic, Casual, Inspirational, Technical)
+
+TONE GUIDANCE:
+- Once you know the audience and purpose, suggest 2-3 suitable tones.
+- Example: "Since this is for students, would you prefer a **Casual & Engaging** tone, an **Academic & Formal** tone, or something **Inspirational**?"
+- Let the user choose or specify their own preference.
+
+CRITICAL INSTRUCTIONS:
+- You can ask 1-2 related questions at a time to keep the flow dynamic.
+- Do NOT generate the slide outline yourself. Your job is ONLY to gather the facts.
+- Do NOT provide a full list of slides in the chat.
+- If the user provides all info (including tone), say: "Great, I have everything I need to generate your blueprint!" and nothing else.
+
+Start by asking about the topic/purpose if not provided."""
+
+DEEP_RESEARCH_INITIAL = """{system_instruction}
+
+The user wants a presentation about: {topic}"""
+
+SYNTHESIS_INITIAL = """{system_instruction}
+
+The user will upload documents for you to synthesize."""
+
+REPLICA_INITIAL = """{system_instruction}
+
+The user wants to recreate an existing slide from an image."""
+
+BLUEPRINT_GENERATION = """Based on our conversation, create a structured slide blueprint.
+
+The user answered your clarifying questions. Now create a JSON outline with this structure:
+{
+  "title": "Presentation Title",
+  "slides": [
+    {"order": 1, "title": "...", "content_type": "title", "content_description": "Short single sentence describing the slide content.", "needs_citation": false, "needs_diagram": false},
+    {"order": 2, "title": "...", "content_type": "overview", "content_description": "Short single sentence describing the slide content.", "needs_citation": true, "needs_diagram": true},
+    ...
+  ]
+}
+
+Requirements:
+- Generate 8-12 slides (or user's requested amount).
+- "content_description" must be a SHORT SINGLE SENTENCE (e.g., "Explains the impact of AI on healthcare.").
+- Do NOT use bullet points in the description.
+- Mark "needs_citation" as true if the slide contains factual claims.
+- Mark "needs_diagram" as true if the concept is complex (processes, flows).
+
+Output rules:
+- Output ONLY valid JSON.
+- Do NOT use markdown code blocks (```json).
+- Validate that the JSON is parseable."""
+
+BLUEPRINT_REVISION = """The user wants to modify the blueprint.
+Current Blueprint: {current_blueprint}
+
+User Request: {user_request}
+
+Update the JSON blueprint to reflect these changes. Keep the JSON structure exactly the same (title, slides dict).
+    
+Output rules:
+- Output ONLY valid JSON.
+- Do NOT use markdown code blocks (```json).
+- Validate that the JSON is parseable."""
+
+# ============================================================================
+# Registry & Helper
+# ============================================================================
+
+DEFAULT_PROMPTS = {
+    "CLARIFIER_SYSTEM": CLARIFIER_SYSTEM,
+    "DEEP_RESEARCH_INITIAL": DEEP_RESEARCH_INITIAL,
+    "SYNTHESIS_INITIAL": SYNTHESIS_INITIAL,
+    "REPLICA_INITIAL": REPLICA_INITIAL,
+    "BLUEPRINT_GENERATION": BLUEPRINT_GENERATION,
+    "BLUEPRINT_REVISION": BLUEPRINT_REVISION,
+}
+
+def get_prompt(key: str, overrides: Optional[Dict[str, str]] = None) -> str:
+    """
+    Get a prompt by key, preferring the override if present.
+    """
+    if overrides and key in overrides:
+        return overrides[key]
+    return DEFAULT_PROMPTS.get(key, "")
