@@ -19,7 +19,7 @@
 ## Phase 3: Flow Integration
 - [x] Task: Update `app/crew/flows/slide_generation.py` to add the `run_synthesis` method. (09f196b)
     *   *Details:* This method should accept file inputs (simulated paths for now), run the agent, and update `self.state.knowledge_base`.
-- [ ] Task: Update `app/crew/agents/clarifier.py` to accept context.
+- [x] Task: Update `app/crew/agents/clarifier.py` to accept context. (2e07943)
     *   *Details:* Modify `create_clarification_task` to inject `summary` and `section_titles` into the prompt if `knowledge_base` exists.
 - [ ] Task: Conductor - User Manual Verification 'Flow Integration' (Protocol in workflow.md)
 
