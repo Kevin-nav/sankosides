@@ -43,6 +43,7 @@ class PlaygroundSession(Base):
     
     # Flow state (stored as JSON for flexibility)
     flow_state = Column(JSONB, nullable=True)
+    knowledge_base = Column(JSONB, nullable=True)   # Synthesis output (NEW)
     order_form = Column(JSONB, nullable=True)       # Clarifier output
     skeleton = Column(JSONB, nullable=True)          # Outliner output  
     planned_content = Column(JSONB, nullable=True)   # Planner output
