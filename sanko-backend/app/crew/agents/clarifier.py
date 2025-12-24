@@ -15,7 +15,7 @@ Key Feature: NOT limited to 3 questions - continues until satisfied.
 from crewai import Agent, Task
 from typing import Optional
 
-from app.models.schemas import OrderForm
+from app.models.schemas import OrderForm, KnowledgeBase
 from app.clients.gemini.llm import CLARIFIER_LLM
 
 
@@ -124,22 +124,40 @@ def create_clarifier_agent(llm=None) -> Agent:
     )
 
 
-def create_clarification_task(agent: Agent, user_input: str) -> Task:
+def create_clarification_task(
+    agent: Agent, 
+    user_input: str,
+    knowledge_base: Optional[KnowledgeBase] = None
+) -> Task:
     """
     Create a task for the Clarifier to process user input.
     
     Args:
         agent: The Clarifier agent
         user_input: The user's message
+        knowledge_base: Optional extracted content from user documents
         
     Returns:
         CrewAI Task configured for clarification
     """
+    context_injection = ""
+    if knowledge_base:
+        section_list = "\n".join([f"- {s.title}" for s in knowledge_base.sections])
+        context_injection = f"""
+## CONTEXT FROM USER DOCUMENTS
+The user has uploaded documents which have been synthesized:
+**Summary:** {knowledge_base.summary}
+**Available Sections:**
+{section_list}
+
+**INSTRUCTION:** Use this context to ask specific, grounded questions. If the user's request aligns with these sections, acknowledge it. If they ask for something not in the documents, clarify if they want to add external info.
+"""
+
     return Task(
         description=f"""Process this user message and continue gathering requirements:
 
 USER MESSAGE: {user_input}
-
+{context_injection}
 Your job is to:
 1. Extract any information provided in this message
 2. Identify what information is still missing
