@@ -1,0 +1,16 @@
+import { config } from "dotenv";
+import { defineConfig } from "drizzle-kit";
+
+// Load .env.local for local development
+config({ path: ".env.local" });
+
+export default defineConfig({
+    schema: "./lib/db/schema.ts",
+    out: "./drizzle",
+    dialect: "postgresql",
+    dbCredentials: {
+        url: process.env.DATABASE_URL!,
+    },
+    // Only manage these tables - ignore Alembic/backend tables
+    tablesFilter: ["users", "projects"],
+});
