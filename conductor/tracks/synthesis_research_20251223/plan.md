@@ -1,7 +1,7 @@
 # Plan: Synthesis Engine Research & POC
 
 ## Phase 1: Environment & Setup
-- [ ] Task: Create a dedicated research directory `research/synthesis_poc` and initialize a separate virtual environment or requirements file for the POC script to avoid polluting the main backend yet.
+- [x] Task: Create a dedicated research directory `research/synthesis_poc` and initialize a separate virtual environment or requirements file for the POC script to avoid polluting the main backend yet. (1fb5eca)
 - [ ] Task: Verify API access to Gemini 3 Flash. Create a simple "Hello World" script `research/synthesis_poc/test_access.py` to confirm the model is accessible and accepts multimodal input.
 - [ ] Task: Conductor - User Manual Verification 'Environment & Setup' (Protocol in workflow.md)
 
