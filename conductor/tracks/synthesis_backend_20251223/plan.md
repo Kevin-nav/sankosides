@@ -17,7 +17,7 @@
 - [x] Task: Conductor - User Manual Verification 'Synthesis Tool Implementation' (Protocol in workflow.md) (checkpoint: manual)
 
 ## Phase 3: Flow Integration
-- [ ] Task: Update `app/crew/flows/slide_generation.py` to add the `run_synthesis` method.
+- [x] Task: Update `app/crew/flows/slide_generation.py` to add the `run_synthesis` method. (09f196b)
     *   *Details:* This method should accept file inputs (simulated paths for now), run the agent, and update `self.state.knowledge_base`.
 - [ ] Task: Update `app/crew/agents/clarifier.py` to accept context.
     *   *Details:* Modify `create_clarification_task` to inject `summary` and `section_titles` into the prompt if `knowledge_base` exists.
