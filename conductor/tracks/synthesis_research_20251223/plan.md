@@ -13,10 +13,10 @@
 - [x] Task: Conductor - User Manual Verification 'Proof of Concept Implementation' (Protocol in workflow.md) (c3b8448)
 
 ## Phase 3: Analysis & Design
-- [ ] Task: Analyze the results. Compare the output against the original PDFs manually. Create a findings report `research/synthesis_poc/FINDINGS.md` documenting:
+- [x] Task: Analyze the results. Compare the output against the original PDFs manually. Create a findings report `research/synthesis_poc/FINDINGS.md` documenting:
     *   Quality of equation extraction (LaTeX accuracy).
     *   Quality of diagram descriptions.
-    *   Speed/Latency observations.
+    *   Speed/Latency observations. (5596889)
 - [ ] Task: Draft the **Integration Design Document** at `research/synthesis_poc/INTEGRATION_DESIGN.md`.
     *   Detail how `SynthesisAgent` in `sanko-backend` will be updated.
     *   Define the data model changes (if any) to store the rich multimodal data.
