@@ -3,7 +3,7 @@
 ## Phase 1: Environment & Setup
 - [x] Task: Create a dedicated research directory `research/synthesis_poc` and initialize a separate virtual environment or requirements file for the POC script to avoid polluting the main backend yet. (1fb5eca)
 - [x] Task: Verify API access to Gemini 3 Flash. Create a simple "Hello World" script `research/synthesis_poc/test_access.py` to confirm the model is accessible and accepts multimodal input. (e137a2d)
-- [ ] Task: Conductor - User Manual Verification 'Environment & Setup' (Protocol in workflow.md)
+- [~] Task: Conductor - User Manual Verification 'Environment & Setup' (Protocol in workflow.md)
 
 ## Phase 2: Proof of Concept Implementation
 - [ ] Task: Create `research/synthesis_poc/pdf_processor.py`. Implement a function to upload a PDF file to the Gemini API (using the File API if necessary) and prompt Gemini 3 Flash to extract content.
