@@ -76,3 +76,11 @@ yarn-error.log*
 # University papers
 university_guidelines_draft/
 screenshots/
+
+# Research and Notes
+CrewAI, Gemini, and Multi-Agent Workflows.md
+Custom AI Referencing for Presentations.md
+Google AI Studio Gemini API Inquiry.md
+Interactions API Technical Guide Research.md
+idea.md
+things_to_note_do_not_read.md
