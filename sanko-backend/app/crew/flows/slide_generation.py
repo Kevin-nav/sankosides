@@ -27,6 +27,7 @@ from datetime import datetime
 from enum import Enum
 import asyncio
 import json
+import os
 
 from app.models.schemas import (
     OrderForm,
@@ -59,6 +60,7 @@ from app.crew.agents.helper import (
     build_guardrail_prompt,
 )
 from app.crew.tools.render_service_tool import get_render_tool
+from app.crew.tools.synthesis_tool import SynthesisTool
 from app.core.logging import get_logger
 from app.crew.flows.metrics import (
     MetricsCollector,
@@ -75,6 +77,7 @@ logger = get_logger(__name__)
 
 class FlowStatus(str, Enum):
     """Pipeline status values."""
+    SYNTHESIZING = "synthesizing"
     AWAITING_CLARIFICATION = "awaiting_clarification"
     CLARIFICATION_COMPLETE = "clarification_complete"
     AWAITING_OUTLINE_APPROVAL = "awaiting_outline_approval"
@@ -286,6 +289,60 @@ class SlideGenerationFlow:
         self.retry_tracker = RetryBudget()
         self.metrics = MetricsCollector.get_or_create(self.state.session_id)
     
+    # =========================================================================
+    # Stage 0: Synthesis (Pre-processing)
+    # =========================================================================
+
+    async def run_synthesis(self, file_paths: List[str]) -> KnowledgeBase:
+        """
+        Run multimodal extraction on a list of PDF files.
+        
+        This is the first stage of the Synthesis Engine mode.
+        
+        Args:
+            file_paths: List of local paths to the uploaded PDFs.
+            
+        Returns:
+            The combined KnowledgeBase.
+        """
+        await self.emitter.stage_start("synthesis")
+        self.state.status = FlowStatus.SYNTHESIZING
+        self.state.current_stage = "synthesis"
+        
+        synthesis_tool = SynthesisTool()
+        
+        # Combine results from all files
+        all_sections = []
+        combined_summary_parts = []
+        
+        for path in file_paths:
+            logger.info(f"Synthesizing file: {path}")
+            # Wrap the tool call in a thread pool since it's blocking
+            loop = asyncio.get_event_loop()
+            kb = await loop.run_in_executor(None, synthesis_tool._run, path)
+            
+            if isinstance(kb, str) and kb.startswith("Error"):
+                logger.error(f"Synthesis failed for {path}: {kb}")
+                continue
+                
+            all_sections.extend(kb.sections)
+            combined_summary_parts.append(f"Content from {os.path.basename(path)}: {kb.summary}")
+            
+        final_kb = KnowledgeBase(
+            summary="\n\n".join(combined_summary_parts),
+            sections=all_sections
+        )
+        
+        self.state.knowledge_base = final_kb
+        self.state.status = FlowStatus.AWAITING_CLARIFICATION
+        
+        await self.emitter.stage_complete("synthesis", {
+            "sections_extracted": len(all_sections),
+            "summary": final_kb.summary[:200] + "..."
+        })
+        
+        return final_kb
+
     # =========================================================================
     # Stage 1: Clarification (Interactive)
     # =========================================================================
