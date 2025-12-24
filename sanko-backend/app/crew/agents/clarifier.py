@@ -43,6 +43,13 @@ Gather information in this order, ONE question at a time:
 7. **Theme**: academic (formal), modern (vibrant), minimal (clean), or dark
 8. **CONFIRMATION**: Summarize everything and ask user to confirm before finalizing
 
+## DYNAMIC CONTEXT (READING DOCUMENTS)
+
+If the user has uploaded documents (you will see 'CONTEXT FROM USER DOCUMENTS' in the task), you MUST:
+1. **Fact-Check**: Use the `Read Document Section` tool to verify if a user's request is supported by the source material.
+2. **Deep Reading**: If the user asks for a specific topic (e.g., "Tell me about the Power Rule"), use the tool to read that section before responding.
+3. **Proactive Suggestions**: Use the section titles to suggest focus areas to the user.
+
 ## RESPONSE FORMAT
 
 **For follow-up questions**: 
@@ -85,7 +92,7 @@ Gather information in this order, ONE question at a time:
 
 
 
-def create_clarifier_agent(llm=None) -> Agent:
+def create_clarifier_agent(llm=None, tools=None) -> Agent:
     """
     Create the Clarifier Agent (The Negotiator).
     
@@ -96,6 +103,7 @@ def create_clarifier_agent(llm=None) -> Agent:
     
     Args:
         llm: The LLM instance (defaults to CLARIFIER_LLM if not provided)
+        tools: Optional list of tools for the agent (e.g., ReadSectionTool)
         
     Returns:
         Configured CrewAI Agent
@@ -118,6 +126,7 @@ def create_clarifier_agent(llm=None) -> Agent:
         questions and can read between the lines when users aren't sure what they want.
         You're patient, conversational, and thorough.""",
         llm=llm,
+        tools=tools or [],
         verbose=True,
         allow_delegation=False,
         memory=True,

@@ -21,11 +21,11 @@
     *   *Details:* This method should accept file inputs (simulated paths for now), run the agent, and update `self.state.knowledge_base`.
 - [x] Task: Update `app/crew/agents/clarifier.py` to accept context. (2e07943)
     *   *Details:* Modify `create_clarification_task` to inject `summary` and `section_titles` into the prompt if `knowledge_base` exists.
-- [~] Task: Conductor - User Manual Verification 'Flow Integration' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Flow Integration' (Protocol in workflow.md) (manual)
 
 ## Phase 4: Dynamic Context Tooling (Clarifier)
 - [x] Task: Create a new tool `app/crew/tools/context_tool.py`. (869e351)
     *   *Details:* Implement `ReadSectionTool` that takes a `section_title` and returns the `content` from `state.knowledge_base`.
-- [ ] Task: Register this tool with the `ClarifierAgent` in `app/crew/agents/clarifier.py`.
-- [ ] Task: Update `CLARIFIER_SYSTEM_PROMPT` to explicitly instruct the agent on how to use the tool for fact-checking user requests.
-- [ ] Task: Conductor - User Manual Verification 'Dynamic Context Tooling' (Protocol in workflow.md)
+- [x] Task: Register this tool with the `ClarifierAgent` in `app/crew/agents/clarifier.py`. (2e07943)
+- [x] Task: Update `CLARIFIER_SYSTEM_PROMPT` to explicitly instruct the agent on how to use the tool for fact-checking user requests. (2e07943)
+- [x] Task: Conductor - User Manual Verification 'Dynamic Context Tooling' (Protocol in workflow.md) (manual)

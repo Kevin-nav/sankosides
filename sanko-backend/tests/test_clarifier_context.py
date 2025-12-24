@@ -1,4 +1,5 @@
 import pytest
+from unittest.mock import MagicMock
 from app.crew.agents.clarifier import create_clarification_task, create_clarifier_agent
 from app.models.schemas import KnowledgeBase, DocumentSection
 
@@ -20,3 +21,12 @@ def test_create_clarification_task_without_context():
     task = create_clarification_task(agent, "Hi")
     
     assert "CONTEXT FROM USER DOCUMENTS" not in task.description
+
+def test_clarifier_agent_tool_registration():
+    from app.crew.tools.context_tool import ReadSectionTool
+    kb = KnowledgeBase(summary="S", sections=[])
+    tool = ReadSectionTool(kb=kb)
+    agent = create_clarifier_agent(tools=[tool])
+    assert tool in agent.tools
+
+

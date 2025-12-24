@@ -8,25 +8,10 @@ from unittest.mock import MagicMock
 # Mock external dependencies before any other imports
 # This allows tests to run without the full installation
 
-# Mock Google GenAI
-mock_genai = MagicMock()
-mock_genai.Client = MagicMock
-sys.modules['google'] = MagicMock()
-sys.modules['google.genai'] = mock_genai
+# Mock Google GenAI (only the genai module, not google namespace since crewai needs it)
+# Note: We don't mock crewai or crewai.tools since they work correctly with the installed package
 
-# Mock CrewAI and related dependencies
-if 'crewai' not in sys.modules:
-    mock_crewai = MagicMock()
-    mock_crewai.Agent = MagicMock
-    mock_crewai.Task = MagicMock
-    mock_crewai.Crew = MagicMock
-    sys.modules['crewai'] = mock_crewai
-    sys.modules['crewai.flow'] = MagicMock()
-    sys.modules['crewai.flow.flow'] = MagicMock()
-    sys.modules['crewai.tools'] = MagicMock()
-    sys.modules['crewai.tools.base_tool'] = MagicMock()
-
-# Mock litellm (used by crewai)
+# Mock litellm (used by crewai internally, may not be needed for all tests)
 sys.modules['litellm'] = MagicMock()
 
 import pytest
