@@ -15,6 +15,7 @@ SankoSlides is an AI-powered presentation engine designed specifically for the r
 
 ## Key Features & Workflow
 *   **Deep Intent Alignment:**
+    *   **Synthesis Agent:** A pre-processing engine that converts uploaded PDFs into a structured "Knowledge Base" (Summary + Sections) using multimodal analysis. This ensures the Clarifier and Planner agents have access to high-fidelity text, equations, and visual descriptions without hallucinations.
     *   **Clarifier Agent:** Engages in a multi-turn dialogue to fully understand the user's source material (documents/notes) and specific focus areas before any work begins.
     *   **Outliner Agent:** Generates a structured skeleton of the presentation for user review and modification. Development proceeds *only* after the user is satisfied with the outline.
 *   **Replica & Synthesis Engines:** Supports generating slides from uploaded images (Replica) or synthesizing presentations from PDFs/docs (Synthesis).

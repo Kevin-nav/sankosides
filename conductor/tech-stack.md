@@ -3,7 +3,7 @@
 ## Backend (Orchestration & AI)
 *   **Framework:** FastAPI (Python 3.11+)
 *   **Orchestration:** CrewAI (Multi-agent flows with SSE streaming)
-*   **LLM:** Google Gemini (Flash and Pro models)
+*   **LLM:** Google Gemini (Gemini 3 Flash for multimodal synthesis, Pro for reasoning)
 *   **Task Management:** Event-driven pipeline with user review "pause points."
 *   **Testing:** Pytest
 
