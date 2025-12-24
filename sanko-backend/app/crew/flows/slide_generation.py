@@ -44,6 +44,7 @@ from app.models.schemas import (
     CitationMetadata,
     GatheredInfo,
     ClarificationMessage,
+    KnowledgeBase,
 )
 from app.crew.agents.clarifier import create_clarifier_agent
 from app.crew.agents.planner import create_planner_agent
@@ -110,6 +111,12 @@ class FlowState(BaseModel):
     generated_presentation: Optional[GeneratedPresentation] = None
     qa_report: Optional[QAReport] = None
     
+    # Synthesis Engine (NEW)
+    knowledge_base: Optional[KnowledgeBase] = Field(
+        default=None, 
+        description="Structured content extracted from synthesis"
+    )
+    
     # Clarification conversation tracking (NEW - fixes memory issue)
     conversation_history: List[ClarificationMessage] = Field(
         default_factory=list,
@@ -154,6 +161,7 @@ class FlowState(BaseModel):
             "planned_content": self.planned_content.model_dump() if self.planned_content else None,
             "refined_content": self.refined_content.model_dump() if self.refined_content else None,
             "generated_slides": self.generated_presentation.model_dump() if self.generated_presentation else None,
+            "knowledge_base": self.knowledge_base.model_dump() if self.knowledge_base else None,
             "qa_loops_count": self.qa_loops,
             "helper_retries": sum(self.helper_attempts.values()),
             "final_qa_score": self.qa_report.average_score if self.qa_report else None,
@@ -180,6 +188,8 @@ class FlowState(BaseModel):
             state.refined_content = RefinedContent(**db_session["refined_content"])
         if db_session.get("generated_slides"):
             state.generated_presentation = GeneratedPresentation(**db_session["generated_slides"])
+        if db_session.get("knowledge_base"):
+            state.knowledge_base = KnowledgeBase(**db_session["knowledge_base"])
         
         return state
 
