@@ -17,10 +17,10 @@
     *   Quality of equation extraction (LaTeX accuracy).
     *   Quality of diagram descriptions.
     *   Speed/Latency observations. (5596889)
-- [ ] Task: Draft the **Integration Design Document** at `research/synthesis_poc/INTEGRATION_DESIGN.md`.
+- [x] Task: Draft the **Integration Design Document** at `research/synthesis_poc/INTEGRATION_DESIGN.md`.
     *   Detail how `SynthesisAgent` in `sanko-backend` will be updated.
     *   Define the data model changes (if any) to store the rich multimodal data.
-    *   Propose the prompt structure for the production agent.
+    *   Propose the prompt structure for the production agent. (b27d105)
 - [ ] Task: **CRITICAL STOP:** Present the `FINDINGS.md` and `INTEGRATION_DESIGN.md` to the user.
     *   *Instruction:* Do not proceed to implementation. Ask the user for feedback and approval to move to the next phase (which will be a separate track or added tasks).
 - [ ] Task: Conductor - User Manual Verification 'Analysis & Design' (Protocol in workflow.md)
