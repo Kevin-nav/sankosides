@@ -1,12 +1,12 @@
 # Plan: Synthesis Engine Backend Integration
 
-## Phase 1: Data Models & Schema
+## Phase 1: Data Models & Schema [checkpoint: 3a272c0]
 - [x] Task: Update `app/models/schemas.py` to include `DocumentSection` and `KnowledgeBase` Pydantic models. (c857ce2)
     *   *Details:* Define the structure for holding extracted content.
 - [x] Task: Update `FlowState` in `app/crew/flows/slide_generation.py` (and schemas if separated) to include `knowledge_base` field. (f2370a2)
     *   *Details:* Ensure it defaults to `None` and is included in `to_db_dict` / `from_db`.
-- [ ] Task: Create a unit test `tests/test_schemas_knowledge_base.py` to verify the serialization/deserialization of the new models.
-- [~] Task: Conductor - User Manual Verification 'Data Models & Schema' (Protocol in workflow.md)
+- [x] Task: Create a unit test `tests/test_schemas_knowledge_base.py` to verify the serialization/deserialization of the new models. (c857ce2)
+- [x] Task: Conductor - User Manual Verification 'Data Models & Schema' (Protocol in workflow.md) (3a272c0)
 
 ## Phase 2: Synthesis Agent Implementation
 - [ ] Task: Create `app/crew/agents/synthesis.py`.
