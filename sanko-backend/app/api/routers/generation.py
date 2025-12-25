@@ -9,7 +9,7 @@ Supports:
 - Session management with database persistence
 """
 
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, UploadFile, File
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any, AsyncGenerator
@@ -17,6 +17,8 @@ from uuid import UUID, uuid4
 from datetime import datetime
 import json
 import asyncio
+import os
+from pathlib import Path
 
 from app.models.schemas import (
     OrderForm,
@@ -126,15 +128,46 @@ class SessionStatusResponse(BaseModel):
 # =============================================================================
 
 @router.post("/start", response_model=StartSessionResponse)
-async def start_session():
+async def start_session(files: Optional[List[UploadFile]] = File(None)):
     """
     Start a new generation session.
     
     Returns a session_id to use for subsequent calls.
-    Begins in AWAITING_CLARIFICATION status.
+    Begins in AWAITING_CLARIFICATION status (or SYNTHESIZING if files are provided).
     """
     state = await create_session()
     save_session(state)
+    
+    # If files are provided, run synthesis immediately
+    if files:
+        logger.info(f"Received {len(files)} files for synthesis. Starting session {state.session_id}")
+        
+        # Save files to a temporary location
+        upload_dir = Path("generated_assets/uploads") / state.session_id
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        
+        saved_paths = []
+        for file in files:
+            file_path = upload_dir / file.filename
+            with open(file_path, "wb") as f:
+                f.write(await file.read())
+            saved_paths.append(str(file_path))
+            
+        # Run synthesis (this updates flow status)
+        # Note: SlideGenerationFlow is created internally by create_session,
+        # but create_session returns FlowState. 
+        # We need the Flow object to call run_synthesis.
+        # SlideGenerationFlow(session_id=state.session_id) can be used to wrap state.
+        flow = SlideGenerationFlow(session_id=state.session_id)
+        flow.state = state
+        await flow.run_synthesis(saved_paths)
+        save_session(state)
+        
+        return StartSessionResponse(
+            session_id=state.session_id,
+            status=state.status,
+            message=f"Session created and synthesis started for {len(files)} files.",
+        )
     
     return StartSessionResponse(
         session_id=state.session_id,
