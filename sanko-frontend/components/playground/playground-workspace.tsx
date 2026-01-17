@@ -8,13 +8,46 @@ import { SlideViewer } from "@/components/editor/slide-viewer";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, RefreshCcw, Save, Play, Terminal, Brain, Check, Settings2, Activity } from "lucide-react";
+import { Loader2, RefreshCcw, Save, Play, Terminal, Check, Settings2, Activity } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { Group, Panel } from "react-resizable-panels";
 import { ResizeHandle } from "./resize-handle";
-
+import React from "react";
 import { MetricsDashboard } from "./metrics-dashboard";
 import { cn } from "@/lib/utils";
+import { Brain, Sparkles, BookOpen, FileText, Layers, Eye, ChevronRight } from "lucide-react";
+
+const PipelineStages = ({ currentStage }: { currentStage: string | null }) => {
+    const stages = [
+        { id: 'planner', label: 'Planner', icon: Brain },
+        { id: 'refiner', label: 'Refiner', icon: Sparkles },
+        { id: 'citation_auditor', label: 'Citations', icon: BookOpen },
+        { id: 'final_slides', label: 'Final', icon: FileText },
+        { id: 'generator', label: 'Generator', icon: Layers },
+        { id: 'visual_qa', label: 'QA', icon: Eye },
+    ];
+
+    return (
+        <div className="flex items-center gap-1 px-4 py-2 bg-neutral-900/50 border-b border-white/5 overflow-x-auto custom-scrollbar">
+            {stages.map((stage, idx) => (
+                <React.Fragment key={stage.id}>
+                    <div className={cn(
+                        "flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-mono uppercase whitespace-nowrap transition-colors",
+                        currentStage === stage.id
+                            ? "bg-emerald-500/20 text-emerald-400 animate-pulse border border-emerald-500/20"
+                            : "text-neutral-600"
+                    )}>
+                        <stage.icon className="w-3 h-3" />
+                        <span>{stage.label}</span>
+                    </div>
+                    {idx < stages.length - 1 && (
+                        <ChevronRight className="w-3 h-3 text-neutral-800 flex-shrink-0" />
+                    )}
+                </React.Fragment>
+            ))}
+        </div>
+    );
+};
 
 interface PromptRegistry {
     CLARIFIER_SYSTEM: string;
@@ -59,6 +92,7 @@ export function PlaygroundWorkspace() {
     const [metrics, setMetrics] = useState<MetricsSummary | null>(null);
     const [activeAgent, setActiveAgent] = useState<string | null>(null);
     const [currentThinking, setCurrentThinking] = useState<string>("");
+    const [currentStage, setCurrentStage] = useState<string | null>(null);
 
     // Initialize View Mode logic
     useEffect(() => {
@@ -153,6 +187,9 @@ export function PlaygroundWorkspace() {
         setIsGenerating(false);
         setIsCompleted(false);
         setViewMode('chat');
+        setCurrentStage(null);
+        setActiveAgent(null);
+        setCurrentThinking("");
     };
 
     const handleSavePrompts = async () => {
@@ -341,13 +378,17 @@ export function PlaygroundWorkspace() {
                             )}
 
                             {viewMode === 'generating' && (
-                                <div className="h-full animate-in fade-in duration-700">
-                                    {activeSessionId && (
-                                        <GenerationProgress
-                                            sessionId={activeSessionId}
-                                            onComplete={handleGenerationComplete}
-                                        />
-                                    )}
+                                <div className="h-full animate-in fade-in duration-700 flex flex-col">
+                                    <PipelineStages currentStage={currentStage} />
+                                    <div className="flex-1 relative">
+                                        {activeSessionId && (
+                                            <GenerationProgress
+                                                sessionId={activeSessionId}
+                                                onComplete={handleGenerationComplete}
+                                                onStageChange={setCurrentStage}
+                                            />
+                                        )}
+                                    </div>
                                 </div>
                             )}
 

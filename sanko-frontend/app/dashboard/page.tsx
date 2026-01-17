@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { ProjectList } from "@/components/dashboard/project-list";
 import { ModeSelector } from "@/components/dashboard/mode-selector";
@@ -13,60 +12,29 @@ import {
 } from "@/components/ui/dialog";
 import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { useProjects, useCreateProject } from "@/hooks/api";
 
 export default function DashboardPage() {
     const { user } = useAuth();
-    const [projects, setProjects] = useState<any[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [detailsOpen, setDetailsOpen] = useState(false);
     const router = useRouter();
+    const [detailsOpen, setDetailsOpen] = useState(false);
 
-    useEffect(() => {
-        async function fetchProjects() {
-            if (!user) return;
-            try {
-                const token = await user.getIdToken();
-                const res = await fetch("/api/projects", {
-                    headers: { Authorization: `Bearer ${token}` },
-                });
-                if (res.ok) {
-                    const data = await res.json();
-                    setProjects(data.projects || []);
-                }
-            } catch (e) {
-                console.error("Failed to fetch projects", e);
-            } finally {
-                setIsLoading(false);
-            }
-        }
-        fetchProjects();
-    }, [user]);
+    // TanStack Query hooks - replaces manual useState/useEffect
+    const { data: projects = [], isPending: isLoading } = useProjects();
+    const createProject = useCreateProject();
 
     const handleModeSelect = async (mode: string) => {
-        // For now, let's just create a draft project and redirect
         if (!user) return;
-        try {
-            const token = await user.getIdToken();
-            const res = await fetch("/api/projects", {
-                method: "POST",
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    title: "New Presentation",
-                    mode: mode
-                })
-            });
 
-            if (res.ok) {
-                const data = await res.json();
-                // Redirect to the generator workspace
-                router.push(`/editor/${data.project.id}`);
+        createProject.mutate(
+            { title: "New Presentation", mode },
+            {
+                onSuccess: (data) => {
+                    router.push(`/editor/${data.project.id}`);
+                },
             }
-        } catch (e) {
-            console.error(e);
-        }
+        );
     };
 
     if (isLoading) {
@@ -105,3 +73,4 @@ export default function DashboardPage() {
         </div>
     );
 }
+

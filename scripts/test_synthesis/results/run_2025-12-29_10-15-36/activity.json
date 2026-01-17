@@ -1,0 +1,218 @@
+[
+  {
+    "timestamp": "2025-12-29T10:15:37.020546",
+    "run_id": "run_0001",
+    "event": "started",
+    "details": "PDF: 1S2.1 Str.O.Mat 152.pdf, Strategy: baseline"
+  },
+  {
+    "timestamp": "2025-12-29T10:17:26.938925",
+    "run_id": "run_0001",
+    "event": "completed",
+    "details": "Sections: 7, Time: 109914ms"
+  },
+  {
+    "timestamp": "2025-12-29T10:17:27.554636",
+    "run_id": "run_0002",
+    "event": "started",
+    "details": "PDF: Calculus 166.pdf, Strategy: baseline"
+  },
+  {
+    "timestamp": "2025-12-29T10:18:07.304231",
+    "run_id": "run_0002",
+    "event": "completed",
+    "details": "Sections: 7, Time: 39735ms"
+  },
+  {
+    "timestamp": "2025-12-29T10:18:07.940201",
+    "run_id": "run_0003",
+    "event": "started",
+    "details": "PDF: Complete Lecture Notes.pdf, Strategy: baseline"
+  },
+  {
+    "timestamp": "2025-12-29T10:19:01.920146",
+    "run_id": "run_0003",
+    "event": "completed",
+    "details": "Sections: 8, Time: 53964ms"
+  },
+  {
+    "timestamp": "2025-12-29T10:19:02.639210",
+    "run_id": "run_0004",
+    "event": "started",
+    "details": "PDF: EL 171 Handout.pdf, Strategy: baseline"
+  },
+  {
+    "timestamp": "2025-12-29T10:24:49.488627",
+    "run_id": "run_0004",
+    "event": "failed",
+    "details": "json_truncated: Unterminated string starting at: line 40 column 18 (char 12320)"
+  },
+  {
+    "timestamp": "2025-12-29T10:24:50.100689",
+    "run_id": "run_0005",
+    "event": "started",
+    "details": "PDF: ENGINEERING DRAWING R3.pdf, Strategy: baseline"
+  },
+  {
+    "timestamp": "2025-12-29T10:26:09.130191",
+    "run_id": "run_0005",
+    "event": "completed",
+    "details": "Sections: 13, Time: 79008ms"
+  },
+  {
+    "timestamp": "2025-12-29T10:26:09.681383",
+    "run_id": "run_0006",
+    "event": "started",
+    "details": "PDF: Basic Materials Science 2025.pdf, Strategy: baseline"
+  },
+  {
+    "timestamp": "2025-12-29T10:29:51.381976",
+    "run_id": "run_0006",
+    "event": "failed",
+    "details": "json_truncated: Unterminated string starting at: line 18 column 20 (char 5730)"
+  },
+  {
+    "timestamp": "2025-12-29T10:29:51.945096",
+    "run_id": "run_0007",
+    "event": "started",
+    "details": "PDF: 1S2.1 Str.O.Mat 152.pdf, Strategy: baseline"
+  },
+  {
+    "timestamp": "2025-12-29T10:34:56.453570",
+    "run_id": "run_0007",
+    "event": "failed",
+    "details": "json_truncated: Unterminated string starting at: line 69 column 9 (char 9865)"
+  },
+  {
+    "timestamp": "2025-12-29T10:34:57.090355",
+    "run_id": "run_0008",
+    "event": "started",
+    "details": "PDF: Calculus 166.pdf, Strategy: baseline"
+  },
+  {
+    "timestamp": "2025-12-29T10:35:44.779341",
+    "run_id": "run_0008",
+    "event": "completed",
+    "details": "Sections: 7, Time: 47686ms"
+  },
+  {
+    "timestamp": "2025-12-29T10:35:45.270436",
+    "run_id": "run_0009",
+    "event": "started",
+    "details": "PDF: Complete Lecture Notes.pdf, Strategy: baseline"
+  },
+  {
+    "timestamp": "2025-12-29T10:36:53.525259",
+    "run_id": "run_0009",
+    "event": "completed",
+    "details": "Sections: 8, Time: 68251ms"
+  },
+  {
+    "timestamp": "2025-12-29T10:36:54.023074",
+    "run_id": "run_0010",
+    "event": "started",
+    "details": "PDF: EL 171 Handout.pdf, Strategy: baseline"
+  },
+  {
+    "timestamp": "2025-12-29T10:42:42.151851",
+    "run_id": "run_0010",
+    "event": "failed",
+    "details": "json_truncated: Unterminated string starting at: line 40 column 18 (char 12320)"
+  },
+  {
+    "timestamp": "2025-12-29T10:42:42.910731",
+    "run_id": "run_0011",
+    "event": "started",
+    "details": "PDF: ENGINEERING DRAWING R3.pdf, Strategy: baseline"
+  },
+  {
+    "timestamp": "2025-12-29T10:44:03.554827",
+    "run_id": "run_0011",
+    "event": "completed",
+    "details": "Sections: 13, Time: 80636ms"
+  },
+  {
+    "timestamp": "2025-12-29T10:44:04.137922",
+    "run_id": "run_0012",
+    "event": "started",
+    "details": "PDF: Basic Materials Science 2025.pdf, Strategy: baseline"
+  },
+  {
+    "timestamp": "2025-12-29T10:47:39.386654",
+    "run_id": "run_0012",
+    "event": "failed",
+    "details": "json_truncated: Unterminated string starting at: line 18 column 20 (char 6096)"
+  },
+  {
+    "timestamp": "2025-12-29T10:47:39.982283",
+    "run_id": "run_0013",
+    "event": "started",
+    "details": "PDF: 1S2.1 Str.O.Mat 152.pdf, Strategy: baseline"
+  },
+  {
+    "timestamp": "2025-12-29T10:49:35.089796",
+    "run_id": "run_0013",
+    "event": "completed",
+    "details": "Sections: 7, Time: 115104ms"
+  },
+  {
+    "timestamp": "2025-12-29T10:49:35.788787",
+    "run_id": "run_0014",
+    "event": "started",
+    "details": "PDF: Calculus 166.pdf, Strategy: baseline"
+  },
+  {
+    "timestamp": "2025-12-29T10:50:11.071122",
+    "run_id": "run_0014",
+    "event": "completed",
+    "details": "Sections: 7, Time: 35279ms"
+  },
+  {
+    "timestamp": "2025-12-29T10:50:11.774788",
+    "run_id": "run_0015",
+    "event": "started",
+    "details": "PDF: Complete Lecture Notes.pdf, Strategy: baseline"
+  },
+  {
+    "timestamp": "2025-12-29T10:57:50.433799",
+    "run_id": "run_0015",
+    "event": "failed",
+    "details": "json_truncated: Unterminated string starting at: line 52 column 20 (char 8731)"
+  },
+  {
+    "timestamp": "2025-12-29T10:57:51.082640",
+    "run_id": "run_0016",
+    "event": "started",
+    "details": "PDF: EL 171 Handout.pdf, Strategy: baseline"
+  },
+  {
+    "timestamp": "2025-12-29T11:03:41.631905",
+    "run_id": "run_0016",
+    "event": "failed",
+    "details": "json_truncated: Unterminated string starting at: line 40 column 18 (char 12320)"
+  },
+  {
+    "timestamp": "2025-12-29T11:03:42.251709",
+    "run_id": "run_0017",
+    "event": "started",
+    "details": "PDF: ENGINEERING DRAWING R3.pdf, Strategy: baseline"
+  },
+  {
+    "timestamp": "2025-12-29T11:05:08.927455",
+    "run_id": "run_0017",
+    "event": "completed",
+    "details": "Sections: 13, Time: 86668ms"
+  },
+  {
+    "timestamp": "2025-12-29T11:05:09.468440",
+    "run_id": "run_0018",
+    "event": "started",
+    "details": "PDF: Basic Materials Science 2025.pdf, Strategy: baseline"
+  },
+  {
+    "timestamp": "2025-12-29T11:08:51.087370",
+    "run_id": "run_0018",
+    "event": "failed",
+    "details": "json_truncated: Unterminated string starting at: line 18 column 20 (char 6096)"
+  }
+]

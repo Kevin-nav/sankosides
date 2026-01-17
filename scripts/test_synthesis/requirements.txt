@@ -1,0 +1,14 @@
+# Gemini Synthesis Test Dependencies
+# Install with: pip install -r requirements.txt
+
+# Core
+google-genai>=1.0.0
+python-dotenv>=1.0.0  # For .env file support
+
+# PDF processing (for chunked strategy)
+PyMuPDF>=1.24.0
+
+# Dashboard
+streamlit>=1.40.0
+pandas>=2.0.0
+plotly>=5.18.0

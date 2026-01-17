@@ -1,0 +1,880 @@
+[
+  {
+    "run_id": "run_0001",
+    "pdf_name": "1S2.1 Str.O.Mat 152.pdf",
+    "pdf_size_bytes": 1096626,
+    "strategy_name": "baseline",
+    "timestamp": "2025-12-29T10:15:37.020524",
+    "performance": {
+      "total_time_ms": 109914.27889995975,
+      "api_latency_ms": 109913.85990002891,
+      "json_parse_time_ms": 0.19500002963468432,
+      "validation_time_ms": 0.030099996365606785,
+      "chunk_times_ms": []
+    },
+    "quality": {
+      "sections_count": 7,
+      "total_content_chars": 37940,
+      "avg_section_chars": 5420.0,
+      "min_section_chars": 1458,
+      "max_section_chars": 19928,
+      "sections_with_visuals": 7,
+      "sections_with_latex": 7,
+      "sections_with_page_range": 7,
+      "empty_sections": 0,
+      "potential_split_sections": 0,
+      "merged_sections": 0
+    },
+    "response": {
+      "raw_response_chars": 46634,
+      "valid_json": true,
+      "json_parse_error": null,
+      "response_tokens_estimate": 11658,
+      "appears_truncated": false,
+      "truncation_indicators": []
+    },
+    "failure": {
+      "success": true,
+      "error_type": "success",
+      "error_message": null,
+      "retry_count": 0,
+      "failed_at_stage": null
+    },
+    "strategy_params": {
+      "model": "gemini-3-flash-preview",
+      "temperature": 0.0
+    },
+    "chunks_processed": 0
+  },
+  {
+    "run_id": "run_0002",
+    "pdf_name": "Calculus 166.pdf",
+    "pdf_size_bytes": 1670264,
+    "strategy_name": "baseline",
+    "timestamp": "2025-12-29T10:17:27.554605",
+    "performance": {
+      "total_time_ms": 39734.664599993266,
+      "api_latency_ms": 39734.536099946126,
+      "json_parse_time_ms": 0.05169998621568084,
+      "validation_time_ms": 0.020099978428333998,
+      "chunk_times_ms": []
+    },
+    "quality": {
+      "sections_count": 7,
+      "total_content_chars": 6607,
+      "avg_section_chars": 943.8571428571429,
+      "min_section_chars": 227,
+      "max_section_chars": 2223,
+      "sections_with_visuals": 2,
+      "sections_with_latex": 5,
+      "sections_with_page_range": 7,
+      "empty_sections": 0,
+      "potential_split_sections": 0,
+      "merged_sections": 0
+    },
+    "response": {
+      "raw_response_chars": 8847,
+      "valid_json": true,
+      "json_parse_error": null,
+      "response_tokens_estimate": 2211,
+      "appears_truncated": false,
+      "truncation_indicators": []
+    },
+    "failure": {
+      "success": true,
+      "error_type": "success",
+      "error_message": null,
+      "retry_count": 0,
+      "failed_at_stage": null
+    },
+    "strategy_params": {
+      "model": "gemini-3-flash-preview",
+      "temperature": 0.0
+    },
+    "chunks_processed": 0
+  },
+  {
+    "run_id": "run_0003",
+    "pdf_name": "Complete Lecture Notes.pdf",
+    "pdf_size_bytes": 3140659,
+    "strategy_name": "baseline",
+    "timestamp": "2025-12-29T10:18:07.940167",
+    "performance": {
+      "total_time_ms": 53963.56379997451,
+      "api_latency_ms": 53963.361700007226,
+      "json_parse_time_ms": 0.08350005373358727,
+      "validation_time_ms": 0.032100011594593525,
+      "chunk_times_ms": []
+    },
+    "quality": {
+      "sections_count": 8,
+      "total_content_chars": 10159,
+      "avg_section_chars": 1269.875,
+      "min_section_chars": 357,
+      "max_section_chars": 2811,
+      "sections_with_visuals": 7,
+      "sections_with_latex": 6,
+      "sections_with_page_range": 8,
+      "empty_sections": 0,
+      "potential_split_sections": 0,
+      "merged_sections": 0
+    },
+    "response": {
+      "raw_response_chars": 17193,
+      "valid_json": true,
+      "json_parse_error": null,
+      "response_tokens_estimate": 4298,
+      "appears_truncated": false,
+      "truncation_indicators": []
+    },
+    "failure": {
+      "success": true,
+      "error_type": "success",
+      "error_message": null,
+      "retry_count": 0,
+      "failed_at_stage": null
+    },
+    "strategy_params": {
+      "model": "gemini-3-flash-preview",
+      "temperature": 0.0
+    },
+    "chunks_processed": 0
+  },
+  {
+    "run_id": "run_0004",
+    "pdf_name": "EL 171 Handout.pdf",
+    "pdf_size_bytes": 6968863,
+    "strategy_name": "baseline",
+    "timestamp": "2025-12-29T10:19:02.639183",
+    "performance": {
+      "total_time_ms": 0.0,
+      "api_latency_ms": 346822.1367999795,
+      "json_parse_time_ms": 13.539200008381158,
+      "validation_time_ms": 0.0,
+      "chunk_times_ms": []
+    },
+    "quality": {
+      "sections_count": 0,
+      "total_content_chars": 0,
+      "avg_section_chars": 0.0,
+      "min_section_chars": 0,
+      "max_section_chars": 0,
+      "sections_with_visuals": 0,
+      "sections_with_latex": 0,
+      "sections_with_page_range": 0,
+      "empty_sections": 0,
+      "potential_split_sections": 0,
+      "merged_sections": 0
+    },
+    "response": {
+      "raw_response_chars": 12351,
+      "valid_json": false,
+      "json_parse_error": "Unterminated string starting at: line 40 column 18 (char 12320)",
+      "response_tokens_estimate": 3087,
+      "appears_truncated": true,
+      "truncation_indicators": [
+        "unclosed_braces:2",
+        "unclosed_brackets:2",
+        "unclosed_string"
+      ]
+    },
+    "failure": {
+      "success": false,
+      "error_type": "json_truncated",
+      "error_message": "Unterminated string starting at: line 40 column 18 (char 12320)",
+      "retry_count": 0,
+      "failed_at_stage": "json_parse"
+    },
+    "strategy_params": {
+      "model": "gemini-3-flash-preview",
+      "temperature": 0.0
+    },
+    "chunks_processed": 0
+  },
+  {
+    "run_id": "run_0005",
+    "pdf_name": "ENGINEERING DRAWING R3.pdf",
+    "pdf_size_bytes": 8669491,
+    "strategy_name": "baseline",
+    "timestamp": "2025-12-29T10:24:50.100668",
+    "performance": {
+      "total_time_ms": 79008.43699998222,
+      "api_latency_ms": 79007.3961999733,
+      "json_parse_time_ms": 0.4123999970033765,
+      "validation_time_ms": 0.3198000486008823,
+      "chunk_times_ms": []
+    },
+    "quality": {
+      "sections_count": 13,
+      "total_content_chars": 29822,
+      "avg_section_chars": 2294.0,
+      "min_section_chars": 719,
+      "max_section_chars": 5579,
+      "sections_with_visuals": 13,
+      "sections_with_latex": 2,
+      "sections_with_page_range": 13,
+      "empty_sections": 0,
+      "potential_split_sections": 0,
+      "merged_sections": 0
+    },
+    "response": {
+      "raw_response_chars": 43037,
+      "valid_json": true,
+      "json_parse_error": null,
+      "response_tokens_estimate": 10759,
+      "appears_truncated": false,
+      "truncation_indicators": []
+    },
+    "failure": {
+      "success": true,
+      "error_type": "success",
+      "error_message": null,
+      "retry_count": 0,
+      "failed_at_stage": null
+    },
+    "strategy_params": {
+      "model": "gemini-3-flash-preview",
+      "temperature": 0.0
+    },
+    "chunks_processed": 0
+  },
+  {
+    "run_id": "run_0006",
+    "pdf_name": "Basic Materials Science 2025.pdf",
+    "pdf_size_bytes": 9879802,
+    "strategy_name": "baseline",
+    "timestamp": "2025-12-29T10:26:09.681367",
+    "performance": {
+      "total_time_ms": 0.0,
+      "api_latency_ms": 221672.77419997845,
+      "json_parse_time_ms": 5.7845000410452485,
+      "validation_time_ms": 0.0,
+      "chunk_times_ms": []
+    },
+    "quality": {
+      "sections_count": 0,
+      "total_content_chars": 0,
+      "avg_section_chars": 0.0,
+      "min_section_chars": 0,
+      "max_section_chars": 0,
+      "sections_with_visuals": 0,
+      "sections_with_latex": 0,
+      "sections_with_page_range": 0,
+      "empty_sections": 0,
+      "potential_split_sections": 0,
+      "merged_sections": 0
+    },
+    "response": {
+      "raw_response_chars": 12928,
+      "valid_json": false,
+      "json_parse_error": "Unterminated string starting at: line 18 column 20 (char 5730)",
+      "response_tokens_estimate": 3232,
+      "appears_truncated": true,
+      "truncation_indicators": [
+        "unclosed_braces:2",
+        "unclosed_brackets:2",
+        "unclosed_string"
+      ]
+    },
+    "failure": {
+      "success": false,
+      "error_type": "json_truncated",
+      "error_message": "Unterminated string starting at: line 18 column 20 (char 5730)",
+      "retry_count": 0,
+      "failed_at_stage": "json_parse"
+    },
+    "strategy_params": {
+      "model": "gemini-3-flash-preview",
+      "temperature": 0.0
+    },
+    "chunks_processed": 0
+  },
+  {
+    "run_id": "run_0007",
+    "pdf_name": "1S2.1 Str.O.Mat 152.pdf",
+    "pdf_size_bytes": 1096626,
+    "strategy_name": "baseline",
+    "timestamp": "2025-12-29T10:29:51.945067",
+    "performance": {
+      "total_time_ms": 0.0,
+      "api_latency_ms": 304504.615199985,
+      "json_parse_time_ms": 0.6708999862894416,
+      "validation_time_ms": 0.0,
+      "chunk_times_ms": []
+    },
+    "quality": {
+      "sections_count": 0,
+      "total_content_chars": 0,
+      "avg_section_chars": 0.0,
+      "min_section_chars": 0,
+      "max_section_chars": 0,
+      "sections_with_visuals": 0,
+      "sections_with_latex": 0,
+      "sections_with_page_range": 0,
+      "empty_sections": 0,
+      "potential_split_sections": 0,
+      "merged_sections": 0
+    },
+    "response": {
+      "raw_response_chars": 9875,
+      "valid_json": false,
+      "json_parse_error": "Unterminated string starting at: line 69 column 9 (char 9865)",
+      "response_tokens_estimate": 2468,
+      "appears_truncated": true,
+      "truncation_indicators": [
+        "unclosed_braces:2",
+        "unclosed_brackets:2",
+        "unclosed_string"
+      ]
+    },
+    "failure": {
+      "success": false,
+      "error_type": "json_truncated",
+      "error_message": "Unterminated string starting at: line 69 column 9 (char 9865)",
+      "retry_count": 0,
+      "failed_at_stage": "json_parse"
+    },
+    "strategy_params": {
+      "model": "gemini-3-flash-preview",
+      "temperature": 0.0
+    },
+    "chunks_processed": 0
+  },
+  {
+    "run_id": "run_0008",
+    "pdf_name": "Calculus 166.pdf",
+    "pdf_size_bytes": 1670264,
+    "strategy_name": "baseline",
+    "timestamp": "2025-12-29T10:34:57.090337",
+    "performance": {
+      "total_time_ms": 47686.46029999945,
+      "api_latency_ms": 47686.20960001135,
+      "json_parse_time_ms": 0.12919999426230788,
+      "validation_time_ms": 0.03960001049563289,
+      "chunk_times_ms": []
+    },
+    "quality": {
+      "sections_count": 7,
+      "total_content_chars": 6607,
+      "avg_section_chars": 943.8571428571429,
+      "min_section_chars": 227,
+      "max_section_chars": 2223,
+      "sections_with_visuals": 2,
+      "sections_with_latex": 5,
+      "sections_with_page_range": 7,
+      "empty_sections": 0,
+      "potential_split_sections": 0,
+      "merged_sections": 0
+    },
+    "response": {
+      "raw_response_chars": 8847,
+      "valid_json": true,
+      "json_parse_error": null,
+      "response_tokens_estimate": 2211,
+      "appears_truncated": false,
+      "truncation_indicators": []
+    },
+    "failure": {
+      "success": true,
+      "error_type": "success",
+      "error_message": null,
+      "retry_count": 0,
+      "failed_at_stage": null
+    },
+    "strategy_params": {
+      "model": "gemini-3-flash-preview",
+      "temperature": 0.0
+    },
+    "chunks_processed": 0
+  },
+  {
+    "run_id": "run_0009",
+    "pdf_name": "Complete Lecture Notes.pdf",
+    "pdf_size_bytes": 3140659,
+    "strategy_name": "baseline",
+    "timestamp": "2025-12-29T10:35:45.270421",
+    "performance": {
+      "total_time_ms": 68250.87660003919,
+      "api_latency_ms": 68250.4683000152,
+      "json_parse_time_ms": 0.1849000109359622,
+      "validation_time_ms": 0.06500002928078175,
+      "chunk_times_ms": []
+    },
+    "quality": {
+      "sections_count": 8,
+      "total_content_chars": 10159,
+      "avg_section_chars": 1269.875,
+      "min_section_chars": 357,
+      "max_section_chars": 2811,
+      "sections_with_visuals": 7,
+      "sections_with_latex": 6,
+      "sections_with_page_range": 8,
+      "empty_sections": 0,
+      "potential_split_sections": 0,
+      "merged_sections": 0
+    },
+    "response": {
+      "raw_response_chars": 17193,
+      "valid_json": true,
+      "json_parse_error": null,
+      "response_tokens_estimate": 4298,
+      "appears_truncated": false,
+      "truncation_indicators": []
+    },
+    "failure": {
+      "success": true,
+      "error_type": "success",
+      "error_message": null,
+      "retry_count": 0,
+      "failed_at_stage": null
+    },
+    "strategy_params": {
+      "model": "gemini-3-flash-preview",
+      "temperature": 0.0
+    },
+    "chunks_processed": 0
+  },
+  {
+    "run_id": "run_0010",
+    "pdf_name": "EL 171 Handout.pdf",
+    "pdf_size_bytes": 6968863,
+    "strategy_name": "baseline",
+    "timestamp": "2025-12-29T10:36:54.023053",
+    "performance": {
+      "total_time_ms": 0.0,
+      "api_latency_ms": 348121.0365999723,
+      "json_parse_time_ms": 1.2277999776415527,
+      "validation_time_ms": 0.0,
+      "chunk_times_ms": []
+    },
+    "quality": {
+      "sections_count": 0,
+      "total_content_chars": 0,
+      "avg_section_chars": 0.0,
+      "min_section_chars": 0,
+      "max_section_chars": 0,
+      "sections_with_visuals": 0,
+      "sections_with_latex": 0,
+      "sections_with_page_range": 0,
+      "empty_sections": 0,
+      "potential_split_sections": 0,
+      "merged_sections": 0
+    },
+    "response": {
+      "raw_response_chars": 12351,
+      "valid_json": false,
+      "json_parse_error": "Unterminated string starting at: line 40 column 18 (char 12320)",
+      "response_tokens_estimate": 3087,
+      "appears_truncated": true,
+      "truncation_indicators": [
+        "unclosed_braces:2",
+        "unclosed_brackets:2",
+        "unclosed_string"
+      ]
+    },
+    "failure": {
+      "success": false,
+      "error_type": "json_truncated",
+      "error_message": "Unterminated string starting at: line 40 column 18 (char 12320)",
+      "retry_count": 0,
+      "failed_at_stage": "json_parse"
+    },
+    "strategy_params": {
+      "model": "gemini-3-flash-preview",
+      "temperature": 0.0
+    },
+    "chunks_processed": 0
+  },
+  {
+    "run_id": "run_0011",
+    "pdf_name": "ENGINEERING DRAWING R3.pdf",
+    "pdf_size_bytes": 8669491,
+    "strategy_name": "baseline",
+    "timestamp": "2025-12-29T10:42:42.910702",
+    "performance": {
+      "total_time_ms": 80635.87559998268,
+      "api_latency_ms": 80635.0774000166,
+      "json_parse_time_ms": 0.305499997921288,
+      "validation_time_ms": 0.23750000400468707,
+      "chunk_times_ms": []
+    },
+    "quality": {
+      "sections_count": 13,
+      "total_content_chars": 29822,
+      "avg_section_chars": 2294.0,
+      "min_section_chars": 719,
+      "max_section_chars": 5579,
+      "sections_with_visuals": 13,
+      "sections_with_latex": 2,
+      "sections_with_page_range": 13,
+      "empty_sections": 0,
+      "potential_split_sections": 0,
+      "merged_sections": 0
+    },
+    "response": {
+      "raw_response_chars": 43037,
+      "valid_json": true,
+      "json_parse_error": null,
+      "response_tokens_estimate": 10759,
+      "appears_truncated": false,
+      "truncation_indicators": []
+    },
+    "failure": {
+      "success": true,
+      "error_type": "success",
+      "error_message": null,
+      "retry_count": 0,
+      "failed_at_stage": null
+    },
+    "strategy_params": {
+      "model": "gemini-3-flash-preview",
+      "temperature": 0.0
+    },
+    "chunks_processed": 0
+  },
+  {
+    "run_id": "run_0012",
+    "pdf_name": "Basic Materials Science 2025.pdf",
+    "pdf_size_bytes": 9879802,
+    "strategy_name": "baseline",
+    "timestamp": "2025-12-29T10:44:04.137898",
+    "performance": {
+      "total_time_ms": 0.0,
+      "api_latency_ms": 215238.40280005243,
+      "json_parse_time_ms": 1.0115999612025917,
+      "validation_time_ms": 0.0,
+      "chunk_times_ms": []
+    },
+    "quality": {
+      "sections_count": 0,
+      "total_content_chars": 0,
+      "avg_section_chars": 0.0,
+      "min_section_chars": 0,
+      "max_section_chars": 0,
+      "sections_with_visuals": 0,
+      "sections_with_latex": 0,
+      "sections_with_page_range": 0,
+      "empty_sections": 0,
+      "potential_split_sections": 0,
+      "merged_sections": 0
+    },
+    "response": {
+      "raw_response_chars": 11438,
+      "valid_json": false,
+      "json_parse_error": "Unterminated string starting at: line 18 column 20 (char 6096)",
+      "response_tokens_estimate": 2859,
+      "appears_truncated": true,
+      "truncation_indicators": [
+        "unclosed_braces:2",
+        "unclosed_brackets:2",
+        "unclosed_string"
+      ]
+    },
+    "failure": {
+      "success": false,
+      "error_type": "json_truncated",
+      "error_message": "Unterminated string starting at: line 18 column 20 (char 6096)",
+      "retry_count": 0,
+      "failed_at_stage": "json_parse"
+    },
+    "strategy_params": {
+      "model": "gemini-3-flash-preview",
+      "temperature": 0.0
+    },
+    "chunks_processed": 0
+  },
+  {
+    "run_id": "run_0013",
+    "pdf_name": "1S2.1 Str.O.Mat 152.pdf",
+    "pdf_size_bytes": 1096626,
+    "strategy_name": "baseline",
+    "timestamp": "2025-12-29T10:47:39.982254",
+    "performance": {
+      "total_time_ms": 115103.8066999754,
+      "api_latency_ms": 115102.9053000384,
+      "json_parse_time_ms": 0.5258999881334603,
+      "validation_time_ms": 0.041499966755509377,
+      "chunk_times_ms": []
+    },
+    "quality": {
+      "sections_count": 7,
+      "total_content_chars": 37940,
+      "avg_section_chars": 5420.0,
+      "min_section_chars": 1458,
+      "max_section_chars": 19928,
+      "sections_with_visuals": 7,
+      "sections_with_latex": 7,
+      "sections_with_page_range": 7,
+      "empty_sections": 0,
+      "potential_split_sections": 0,
+      "merged_sections": 0
+    },
+    "response": {
+      "raw_response_chars": 46634,
+      "valid_json": true,
+      "json_parse_error": null,
+      "response_tokens_estimate": 11658,
+      "appears_truncated": false,
+      "truncation_indicators": []
+    },
+    "failure": {
+      "success": true,
+      "error_type": "success",
+      "error_message": null,
+      "retry_count": 0,
+      "failed_at_stage": null
+    },
+    "strategy_params": {
+      "model": "gemini-3-flash-preview",
+      "temperature": 0.0
+    },
+    "chunks_processed": 0
+  },
+  {
+    "run_id": "run_0014",
+    "pdf_name": "Calculus 166.pdf",
+    "pdf_size_bytes": 1670264,
+    "strategy_name": "baseline",
+    "timestamp": "2025-12-29T10:49:35.788758",
+    "performance": {
+      "total_time_ms": 35278.7268999964,
+      "api_latency_ms": 35278.53780001169,
+      "json_parse_time_ms": 0.07219996768981218,
+      "validation_time_ms": 0.024600012693554163,
+      "chunk_times_ms": []
+    },
+    "quality": {
+      "sections_count": 7,
+      "total_content_chars": 6607,
+      "avg_section_chars": 943.8571428571429,
+      "min_section_chars": 227,
+      "max_section_chars": 2223,
+      "sections_with_visuals": 2,
+      "sections_with_latex": 5,
+      "sections_with_page_range": 7,
+      "empty_sections": 0,
+      "potential_split_sections": 0,
+      "merged_sections": 0
+    },
+    "response": {
+      "raw_response_chars": 8847,
+      "valid_json": true,
+      "json_parse_error": null,
+      "response_tokens_estimate": 2211,
+      "appears_truncated": false,
+      "truncation_indicators": []
+    },
+    "failure": {
+      "success": true,
+      "error_type": "success",
+      "error_message": null,
+      "retry_count": 0,
+      "failed_at_stage": null
+    },
+    "strategy_params": {
+      "model": "gemini-3-flash-preview",
+      "temperature": 0.0
+    },
+    "chunks_processed": 0
+  },
+  {
+    "run_id": "run_0015",
+    "pdf_name": "Complete Lecture Notes.pdf",
+    "pdf_size_bytes": 3140659,
+    "strategy_name": "baseline",
+    "timestamp": "2025-12-29T10:50:11.774741",
+    "performance": {
+      "total_time_ms": 0.0,
+      "api_latency_ms": 458654.27140000975,
+      "json_parse_time_ms": 0.298700004350394,
+      "validation_time_ms": 0.0,
+      "chunk_times_ms": []
+    },
+    "quality": {
+      "sections_count": 0,
+      "total_content_chars": 0,
+      "avg_section_chars": 0.0,
+      "min_section_chars": 0,
+      "max_section_chars": 0,
+      "sections_with_visuals": 0,
+      "sections_with_latex": 0,
+      "sections_with_page_range": 0,
+      "empty_sections": 0,
+      "potential_split_sections": 0,
+      "merged_sections": 0
+    },
+    "response": {
+      "raw_response_chars": 9553,
+      "valid_json": false,
+      "json_parse_error": "Unterminated string starting at: line 52 column 20 (char 8731)",
+      "response_tokens_estimate": 2388,
+      "appears_truncated": true,
+      "truncation_indicators": [
+        "unclosed_braces:3",
+        "unclosed_brackets:2",
+        "unclosed_string"
+      ]
+    },
+    "failure": {
+      "success": false,
+      "error_type": "json_truncated",
+      "error_message": "Unterminated string starting at: line 52 column 20 (char 8731)",
+      "retry_count": 0,
+      "failed_at_stage": "json_parse"
+    },
+    "strategy_params": {
+      "model": "gemini-3-flash-preview",
+      "temperature": 0.0
+    },
+    "chunks_processed": 0
+  },
+  {
+    "run_id": "run_0016",
+    "pdf_name": "EL 171 Handout.pdf",
+    "pdf_size_bytes": 6968863,
+    "strategy_name": "baseline",
+    "timestamp": "2025-12-29T10:57:51.082620",
+    "performance": {
+      "total_time_ms": 0.0,
+      "api_latency_ms": 350543.2004999602,
+      "json_parse_time_ms": 0.8234999841079116,
+      "validation_time_ms": 0.0,
+      "chunk_times_ms": []
+    },
+    "quality": {
+      "sections_count": 0,
+      "total_content_chars": 0,
+      "avg_section_chars": 0.0,
+      "min_section_chars": 0,
+      "max_section_chars": 0,
+      "sections_with_visuals": 0,
+      "sections_with_latex": 0,
+      "sections_with_page_range": 0,
+      "empty_sections": 0,
+      "potential_split_sections": 0,
+      "merged_sections": 0
+    },
+    "response": {
+      "raw_response_chars": 12351,
+      "valid_json": false,
+      "json_parse_error": "Unterminated string starting at: line 40 column 18 (char 12320)",
+      "response_tokens_estimate": 3087,
+      "appears_truncated": true,
+      "truncation_indicators": [
+        "unclosed_braces:2",
+        "unclosed_brackets:2",
+        "unclosed_string"
+      ]
+    },
+    "failure": {
+      "success": false,
+      "error_type": "json_truncated",
+      "error_message": "Unterminated string starting at: line 40 column 18 (char 12320)",
+      "retry_count": 0,
+      "failed_at_stage": "json_parse"
+    },
+    "strategy_params": {
+      "model": "gemini-3-flash-preview",
+      "temperature": 0.0
+    },
+    "chunks_processed": 0
+  },
+  {
+    "run_id": "run_0017",
+    "pdf_name": "ENGINEERING DRAWING R3.pdf",
+    "pdf_size_bytes": 8669491,
+    "strategy_name": "baseline",
+    "timestamp": "2025-12-29T11:03:42.251688",
+    "performance": {
+      "total_time_ms": 86667.87940001814,
+      "api_latency_ms": 86666.85400001006,
+      "json_parse_time_ms": 0.40359998820349574,
+      "validation_time_ms": 0.3266999847255647,
+      "chunk_times_ms": []
+    },
+    "quality": {
+      "sections_count": 13,
+      "total_content_chars": 29822,
+      "avg_section_chars": 2294.0,
+      "min_section_chars": 719,
+      "max_section_chars": 5579,
+      "sections_with_visuals": 13,
+      "sections_with_latex": 2,
+      "sections_with_page_range": 13,
+      "empty_sections": 0,
+      "potential_split_sections": 0,
+      "merged_sections": 0
+    },
+    "response": {
+      "raw_response_chars": 43037,
+      "valid_json": true,
+      "json_parse_error": null,
+      "response_tokens_estimate": 10759,
+      "appears_truncated": false,
+      "truncation_indicators": []
+    },
+    "failure": {
+      "success": true,
+      "error_type": "success",
+      "error_message": null,
+      "retry_count": 0,
+      "failed_at_stage": null
+    },
+    "strategy_params": {
+      "model": "gemini-3-flash-preview",
+      "temperature": 0.0
+    },
+    "chunks_processed": 0
+  },
+  {
+    "run_id": "run_0018",
+    "pdf_name": "Basic Materials Science 2025.pdf",
+    "pdf_size_bytes": 9879802,
+    "strategy_name": "baseline",
+    "timestamp": "2025-12-29T11:05:09.468424",
+    "performance": {
+      "total_time_ms": 0.0,
+      "api_latency_ms": 221611.69930000324,
+      "json_parse_time_ms": 0.6266999989748001,
+      "validation_time_ms": 0.0,
+      "chunk_times_ms": []
+    },
+    "quality": {
+      "sections_count": 0,
+      "total_content_chars": 0,
+      "avg_section_chars": 0.0,
+      "min_section_chars": 0,
+      "max_section_chars": 0,
+      "sections_with_visuals": 0,
+      "sections_with_latex": 0,
+      "sections_with_page_range": 0,
+      "empty_sections": 0,
+      "potential_split_sections": 0,
+      "merged_sections": 0
+    },
+    "response": {
+      "raw_response_chars": 11438,
+      "valid_json": false,
+      "json_parse_error": "Unterminated string starting at: line 18 column 20 (char 6096)",
+      "response_tokens_estimate": 2859,
+      "appears_truncated": true,
+      "truncation_indicators": [
+        "unclosed_braces:2",
+        "unclosed_brackets:2",
+        "unclosed_string"
+      ]
+    },
+    "failure": {
+      "success": false,
+      "error_type": "json_truncated",
+      "error_message": "Unterminated string starting at: line 18 column 20 (char 6096)",
+      "retry_count": 0,
+      "failed_at_stage": "json_parse"
+    },
+    "strategy_params": {
+      "model": "gemini-3-flash-preview",
+      "temperature": 0.0
+    },
+    "chunks_processed": 0
+  }
+]

@@ -22,16 +22,26 @@ class RenderServiceClient:
     
     This service handles deterministic rendering tasks that
     should not be done by AI (to avoid hallucination).
+    
+    Note: Uses lazy client initialization to handle cases where
+    the client is used across different event loops (e.g., when
+    called from ThreadPoolExecutor with new event loops).
     """
     
     def __init__(self, base_url: str = "http://localhost:3001"):
         self.base_url = base_url
-        self._client = httpx.AsyncClient(timeout=30.0)
+        self._client: httpx.AsyncClient | None = None
+    
+    def _get_client(self) -> httpx.AsyncClient:
+        """Get or create HTTP client for current event loop."""
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(timeout=30.0)
+        return self._client
     
     async def health_check(self) -> bool:
         """Check if the render service is running."""
         try:
-            response = await self._client.get(f"{self.base_url}/health")
+            response = await self._get_client().get(f"{self.base_url}/health")
             return response.status_code == 200
         except Exception:
             return False
@@ -52,7 +62,7 @@ class RenderServiceClient:
             Dict with 'svg', 'width', 'height' on success
         """
         try:
-            response = await self._client.post(
+            response = await self._get_client().post(
                 f"{self.base_url}/render/latex",
                 json={"latex": latex, "display": display},
             )
@@ -71,7 +81,7 @@ class RenderServiceClient:
             Dict with 'svg' on success
         """
         try:
-            response = await self._client.post(
+            response = await self._get_client().post(
                 f"{self.base_url}/render/mermaid",
                 json={"diagram": diagram},
             )
@@ -112,7 +122,7 @@ class RenderServiceClient:
             Dict with 'citations' array of formatted strings
         """
         try:
-            response = await self._client.post(
+            response = await self._get_client().post(
                 f"{self.base_url}/render/citation",
                 json={"citations": citations, "style": style},
             )
@@ -142,7 +152,7 @@ class RenderServiceClient:
             Dict with results for each type
         """
         try:
-            response = await self._client.post(
+            response = await self._get_client().post(
                 f"{self.base_url}/render/batch",
                 json={
                     "latex": latex or [],
@@ -155,9 +165,40 @@ class RenderServiceClient:
         except Exception as e:
             return {"success": False, "error": str(e)}
     
+    async def render_html_to_png(
+        self,
+        html: str,
+        width: int = 1280,
+        height: int = 720,
+    ) -> Dict[str, Any]:
+        """
+        Render HTML content to a PNG screenshot.
+        
+        Uses Puppeteer on the render service to capture a screenshot
+        of the rendered HTML. Used by Visual QA for slide grading.
+        
+        Args:
+            html: Complete HTML document to render
+            width: Viewport width in pixels (default 1280 for 16:9)
+            height: Viewport height in pixels (default 720)
+            
+        Returns:
+            Dict with 'png_base64' on success, 'error' on failure
+        """
+        try:
+            response = await self._get_client().post(
+                f"{self.base_url}/render/screenshot",
+                json={"html": html, "width": width, "height": height},
+                timeout=60.0,  # Screenshots can take longer
+            )
+            return response.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
     async def close(self):
         """Close the HTTP client."""
-        await self._client.aclose()
+        if self._client and not self._client.is_closed:
+            await self._client.aclose()
 
 
 # Convenience function

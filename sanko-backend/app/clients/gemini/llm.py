@@ -29,15 +29,19 @@ else:
 # LLM Factory Functions
 # =============================================================================
 
+# Default timeout for LLM calls (in seconds)
+DEFAULT_TIMEOUT = 120
+
 def get_flash_llm(temperature: float = 0.7) -> LLM:
     """
     Get a Gemini Flash model for fast, routine tasks.
     
-    Uses gemini-2.0-flash - the latest fast model.
+    Uses gemini-3-flash-preview - the latest fast model.
     """
     return LLM(
-        model="gemini/gemini-2.0-flash",
+        model="gemini/gemini-3-flash-preview",
         temperature=temperature,
+        timeout=DEFAULT_TIMEOUT,
     )
 
 
@@ -45,11 +49,12 @@ def get_pro_llm(temperature: float = 0.7) -> LLM:
     """
     Get a Gemini Pro model for complex reasoning tasks.
     
-    Uses gemini-2.0-flash-thinking-exp for deep reasoning.
+    Uses gemini-3-pro-preview for advanced reasoning.
     """
     return LLM(
-        model="gemini/gemini-2.0-flash-thinking-exp",
+        model="gemini/gemini-3-pro-preview",
         temperature=temperature,
+        timeout=DEFAULT_TIMEOUT,
     )
 
 
@@ -63,7 +68,7 @@ OUTLINER_LLM = lambda: get_flash_llm(0.5)       # Document parsing
 GENERATOR_LLM = lambda: get_flash_llm(0.6)      # HTML generation
 VISUAL_QA_LLM = lambda: get_flash_llm(0.5)      # Vision grading
 
-# Complex reasoning agents use Pro/Thinking
+# Complex reasoning agents use Pro
 PLANNER_LLM = lambda: get_pro_llm(0.7)          # Deep content planning
 REFINER_LLM = lambda: get_pro_llm(0.6)          # Quality verification
 HELPER_LLM = lambda: get_pro_llm(0.7)           # Complex fixing
@@ -82,7 +87,7 @@ class GeminiLLM:
     
     def __new__(
         cls,
-        model: str = "gemini-2.0-flash",
+        model: str = "gemini-3-flash-preview",
         thinking_level: str = "medium",
         **kwargs
     ) -> LLM:

@@ -34,6 +34,8 @@ class SlideContentType(str, Enum):
     TWO_COLUMN = "two_column"
     SECTION = "section"
     CONCLUSION = "conclusion"
+    REFERENCES = "references"   # Dedicated references slide
+    THANK_YOU = "thank_you"     # Simple thank you slide
 
 
 # =============================================================================
@@ -98,7 +100,7 @@ class GatheredInfo(BaseModel):
     has_citation_style: bool = Field(default=False, description="Citation style provided")
     has_references_placement: bool = Field(default=False, description="Reference placement provided")
     has_theme: bool = Field(default=False, description="Theme preference provided")
-    has_speaker_notes_pref: bool = Field(default=False, description="Speaker notes preference provided")
+    # Note: speaker notes not currently supported, field removed
     
     # Partial values gathered so far (before final OrderForm)
     title: Optional[str] = Field(default=None, description="Presentation title/topic")
@@ -111,7 +113,7 @@ class GatheredInfo(BaseModel):
     citation_style: Optional[Literal["apa", "ieee", "harvard", "chicago"]] = None
     references_placement: Optional[Literal["distributed", "last_slide"]] = None
     theme: Optional[str] = Field(default=None, description="Theme preference")
-    include_speaker_notes: Optional[bool] = None
+    # Note: speaker notes not currently supported
     special_requests: Optional[str] = Field(default=None, description="Any special requirements")
     
     # User preferences for agent autonomy
@@ -122,6 +124,19 @@ class GatheredInfo(BaseModel):
     # Confirmation tracking
     confirmation_sent: bool = Field(default=False, description="Whether confirmation was sent to user")
     user_confirmed: bool = Field(default=False, description="Whether user confirmed the details")
+    
+    # Document acknowledgment tracking
+    document_acknowledged: bool = Field(default=False, description="Whether document has been acknowledged")
+    
+    # Source preference tracking (PDF-only vs hybrid vs research-only)
+    source_type: Optional[Literal["pdf_only", "pdf_plus_research", "research_only"]] = Field(
+        default=None,
+        description="Where content should come from: pdf_only, pdf_plus_research, or research_only"
+    )
+    has_source_preference: bool = Field(
+        default=False,
+        description="Whether user has specified their source preference"
+    )
     
     def get_missing_required(self) -> List[str]:
         """Get list of required fields that are still missing."""
@@ -249,8 +264,8 @@ class OrderForm(BaseModel):
     
     # Special requirements
     include_speaker_notes: bool = Field(
-        default=True,
-        description="Whether to generate speaker notes"
+        default=False,
+        description="Whether to generate speaker notes (not currently supported)"
     )
     
     # Session tracking
@@ -340,6 +355,52 @@ class CitationMetadata(BaseModel):
         return str(v)
 
 
+class ImageCitation(BaseModel):
+    """Citation metadata specifically for images."""
+    source_type: Literal["original", "adapted", "screenshot", "generated", "stock", "creative_commons"] = Field(
+        default="original",
+        description="Type of image source"
+    )
+    source_name: Optional[str] = Field(
+        default=None,
+        description="Where the image came from (e.g., 'NASA', 'Author's own')"
+    )
+    creator: Optional[str] = Field(
+        default=None,
+        description="Original creator/photographer"
+    )
+    year: Optional[str] = Field(default=None)
+    license: Optional[str] = Field(
+        default=None,
+        description="License type (CC BY 4.0, Public Domain, etc.)"
+    )
+    url: Optional[str] = Field(default=None)
+    adapted_from: Optional[str] = Field(
+        default=None,
+        description="If adapted, original source citation"
+    )
+    
+    def to_citation_string(self, style: str = "harvard") -> str:
+        """Generate formatted citation string."""
+        if self.source_type == "original":
+            return "Author's own work"
+        elif self.source_type == "generated":
+            return "AI-generated image"
+        elif self.source_type == "adapted":
+            return f"Adapted from {self.adapted_from}" if self.adapted_from else "Adapted"
+        else:
+            parts = []
+            if self.creator:
+                parts.append(self.creator)
+            if self.year:
+                parts.append(f"({self.year})")
+            if self.source_name:
+                parts.append(self.source_name)
+            if self.license:
+                parts.append(f"[{self.license}]")
+            return " ".join(parts) if parts else "Unknown source"
+
+
 class PlannedSlide(BaseModel):
     """Slide after Planner processing - with full content and placeholders."""
     order: int = Field(..., ge=1)
@@ -407,6 +468,10 @@ class RefinedSlide(BaseModel):
     image_url: Optional[str] = None
     image_alt: Optional[str] = None
     image_caption: Optional[str] = None
+    image_citation: Optional["ImageCitation"] = Field(
+        default=None,
+        description="Citation/attribution for the slide's image"
+    )
     
     # Layout
     template_type: str = Field(default="content")
@@ -415,6 +480,12 @@ class RefinedSlide(BaseModel):
     # Quality tracking
     all_claims_verified: bool = Field(default=False)
     removed_claims: List[str] = Field(default_factory=list)
+    
+    # Title slide specific metadata
+    author: Optional[str] = None
+    supervisor: Optional[str] = None
+    degree: Optional[str] = None
+    date: Optional[str] = None
 
 
 class RefinedContent(BaseModel):

@@ -1,0 +1,93 @@
+{
+  "run_name": "run_2025-12-29_10-15-36",
+  "total_runs": 18,
+  "last_updated": "2025-12-29T11:08:51.113426",
+  "overall": {
+    "total": 18,
+    "successes": 10,
+    "failures": 8,
+    "success_rate": 55.55555555555556,
+    "avg_time_ms": 71624.4569799921,
+    "avg_sections": 9.0,
+    "error_types": {
+      "json_truncated": 8
+    }
+  },
+  "by_strategy": {
+    "baseline": {
+      "total": 18,
+      "successes": 10,
+      "failures": 8,
+      "success_rate": 55.55555555555556,
+      "avg_time_ms": 71624.4569799921,
+      "avg_sections": 9.0,
+      "error_types": {
+        "json_truncated": 8
+      }
+    }
+  },
+  "by_pdf": {
+    "1S2.1 Str.O.Mat 152.pdf": {
+      "total": 3,
+      "successes": 2,
+      "failures": 1,
+      "success_rate": 66.66666666666666,
+      "avg_time_ms": 112509.04279996757,
+      "avg_sections": 7.0,
+      "error_types": {
+        "json_truncated": 1
+      }
+    },
+    "Calculus 166.pdf": {
+      "total": 3,
+      "successes": 3,
+      "failures": 0,
+      "success_rate": 100.0,
+      "avg_time_ms": 40899.95059999637,
+      "avg_sections": 7.0,
+      "error_types": {}
+    },
+    "Complete Lecture Notes.pdf": {
+      "total": 3,
+      "successes": 2,
+      "failures": 1,
+      "success_rate": 66.66666666666666,
+      "avg_time_ms": 61107.22020000685,
+      "avg_sections": 8.0,
+      "error_types": {
+        "json_truncated": 1
+      }
+    },
+    "EL 171 Handout.pdf": {
+      "total": 3,
+      "successes": 0,
+      "failures": 3,
+      "success_rate": 0.0,
+      "avg_time_ms": 0,
+      "avg_sections": 0,
+      "error_types": {
+        "json_truncated": 3
+      }
+    },
+    "ENGINEERING DRAWING R3.pdf": {
+      "total": 3,
+      "successes": 3,
+      "failures": 0,
+      "success_rate": 100.0,
+      "avg_time_ms": 82104.06399999435,
+      "avg_sections": 13.0,
+      "error_types": {}
+    },
+    "Basic Materials Science 2025.pdf": {
+      "total": 3,
+      "successes": 0,
+      "failures": 3,
+      "success_rate": 0.0,
+      "avg_time_ms": 0,
+      "avg_sections": 0,
+      "error_types": {
+        "json_truncated": 3
+      }
+    }
+  }
+}

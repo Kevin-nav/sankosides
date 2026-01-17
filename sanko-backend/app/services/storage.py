@@ -1,0 +1,358 @@
+"""
+R2 Storage Service
+
+Async storage service for Cloudflare R2 (S3-compatible).
+
+Features:
+- Content-hash based deduplication (same file only stored once)
+- KnowledgeBase caching in PostgreSQL (same file only processed once)
+- Async upload/download with aioboto3
+- Pre-signed URLs for temporary access
+"""
+
+import hashlib
+import json
+import time
+from typing import Optional, Tuple
+from contextlib import asynccontextmanager
+from datetime import datetime
+
+import aioboto3
+from botocore.config import Config
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.config import settings
+from app.core.logging import get_logger
+from app.core.database import PDFCache, get_async_session
+from app.models.schemas import KnowledgeBase
+
+logger = get_logger(__name__)
+
+
+class R2StorageService:
+    """
+    Async storage service for Cloudflare R2.
+    
+    Storage Structure:
+    ```
+    {bucket}/
+    └── uploads/
+        └── {file_hash}/
+            └── {sanitized_filename}.pdf
+    ```
+    
+    Note: KnowledgeBase cache is stored in PostgreSQL, not R2.
+    """
+    
+    def __init__(self):
+        self.bucket_name = settings.r2_bucket_name
+        self.account_id = settings.r2_account_id
+        self.access_key_id = settings.r2_access_key_id
+        self.secret_access_key = settings.r2_secret_access_key
+        self.public_url = settings.r2_public_url
+        
+        # R2 endpoint format
+        self.endpoint_url = f"https://{self.account_id}.r2.cloudflarestorage.com"
+        
+        # boto3 configuration for retries and R2 compatibility
+        # CRITICAL: R2 requires SigV4 - SigV2 causes "Unauthorized" errors
+        self._boto_config = Config(
+            retries={"max_attempts": 3, "mode": "adaptive"},
+            connect_timeout=10,
+            read_timeout=30,
+            signature_version='s3v4',
+        )
+        
+        # aioboto3 session
+        self._session = aioboto3.Session()
+    
+    def _is_configured(self) -> bool:
+        """Check if R2 credentials are configured."""
+        return bool(
+            self.account_id
+            and self.access_key_id
+            and self.secret_access_key
+            and self.bucket_name
+        )
+    
+    @asynccontextmanager
+    async def _get_client(self):
+        """Get async S3 client for R2."""
+        if not self._is_configured():
+            raise RuntimeError("R2 storage not configured. Check environment variables.")
+        
+        async with self._session.client(
+            "s3",
+            endpoint_url=self.endpoint_url,
+            aws_access_key_id=self.access_key_id,
+            aws_secret_access_key=self.secret_access_key,
+            config=self._boto_config,
+        ) as client:
+            yield client
+    
+    @staticmethod
+    def calculate_hash(data: bytes) -> str:
+        """Calculate SHA-256 hash of file content."""
+        return hashlib.sha256(data).hexdigest()
+    
+    @staticmethod
+    def sanitize_filename(filename: str) -> str:
+        """Sanitize filename to prevent path traversal."""
+        import re
+        # Remove path separators and dangerous characters
+        safe = re.sub(r'[/\\:*?"<>|]', '_', filename)
+        # Limit length
+        return safe[:200] if len(safe) > 200 else safe
+    
+    async def upload_file(
+        self,
+        file_data: bytes,
+        original_filename: str,
+        content_type: str = "application/pdf",
+    ) -> Tuple[str, str, bool]:
+        """
+        Upload file to R2 with content-hash deduplication.
+        
+        Args:
+            file_data: File content as bytes
+            original_filename: Original filename for reference
+            content_type: MIME type of the file
+            
+        Returns:
+            Tuple of (file_hash, r2_key, was_cached)
+            - file_hash: SHA-256 hash of content
+            - r2_key: Full path in R2
+            - was_cached: True if file already existed (not re-uploaded)
+        """
+        # Calculate content hash
+        file_hash = self.calculate_hash(file_data)
+        safe_name = self.sanitize_filename(original_filename)
+        
+        # Build R2 key
+        r2_key = f"uploads/{file_hash}/{safe_name}"
+        
+        async with self._get_client() as client:
+            # Check if file already exists (deduplication)
+            try:
+                await client.head_object(Bucket=self.bucket_name, Key=r2_key)
+                logger.info(f"File already exists in R2: {r2_key}")
+                return file_hash, r2_key, True
+            except Exception as e:
+                # File doesn't exist, continue to upload
+                if "404" not in str(e) and "NoSuchKey" not in str(e):
+                    raise
+            
+            # Upload new file
+            logger.info(f"Uploading file to R2: {r2_key}")
+            await client.put_object(
+                Bucket=self.bucket_name,
+                Key=r2_key,
+                Body=file_data,
+                ContentType=content_type,
+            )
+            
+            return file_hash, r2_key, False
+    
+    async def download_file(self, r2_key: str) -> bytes:
+        """Download file content from R2."""
+        async with self._get_client() as client:
+            response = await client.get_object(Bucket=self.bucket_name, Key=r2_key)
+            async with response["Body"] as stream:
+                return await stream.read()
+    
+    async def get_presigned_url(
+        self,
+        r2_key: str,
+        expires_in: int = 3600,
+        operation: str = "get_object",
+    ) -> str:
+        """
+        Generate a pre-signed URL for temporary access.
+        
+        Args:
+            r2_key: Object key in R2
+            expires_in: URL expiration time in seconds (default: 1 hour)
+            operation: 'get_object' or 'put_object'
+            
+        Returns:
+            Pre-signed URL string
+        """
+        async with self._get_client() as client:
+            url = await client.generate_presigned_url(
+                ClientMethod=operation,
+                Params={"Bucket": self.bucket_name, "Key": r2_key},
+                ExpiresIn=expires_in,
+            )
+            return url
+    
+    def get_public_url(self, r2_key: str) -> Optional[str]:
+        """
+        Get public URL if custom domain is configured.
+        
+        Returns None if no public URL is configured.
+        """
+        if self.public_url:
+            return f"{self.public_url.rstrip('/')}/{r2_key}"
+        return None
+    
+    async def delete_file(self, r2_key: str) -> bool:
+        """Delete a file from R2."""
+        async with self._get_client() as client:
+            try:
+                await client.delete_object(Bucket=self.bucket_name, Key=r2_key)
+                return True
+            except Exception as e:
+                logger.error(f"Failed to delete {r2_key}: {e}")
+                return False
+    
+    async def exists(self, r2_key: str) -> bool:
+        """
+        Check if a file exists in R2.
+        
+        Args:
+            r2_key: Object key in R2
+            
+        Returns:
+            True if file exists, False otherwise
+        """
+        async with self._get_client() as client:
+            try:
+                await client.head_object(Bucket=self.bucket_name, Key=r2_key)
+                return True
+            except Exception as e:
+                # 404/NoSuchKey means file doesn't exist
+                if "404" in str(e) or "NoSuchKey" in str(e):
+                    return False
+                # Other errors, log and return False
+                logger.warning(f"Error checking existence of {r2_key}: {e}")
+                return False
+
+
+class PDFCacheService:
+    """
+    Service for caching PDF → KnowledgeBase mappings.
+    
+    2-tier cache:
+    - L2: Redis (24-hour TTL) - Fast access
+    - L3: PostgreSQL - Permanent storage
+    
+    Session-independent: same file hash = same cached result for everyone.
+    """
+    
+    @staticmethod
+    async def get_cached(
+        file_hash: str,
+        db_session: AsyncSession,
+    ) -> Optional[KnowledgeBase]:
+        """
+        Get cached KnowledgeBase for a file hash.
+        
+        Checks L2 (Redis) first, then L3 (PostgreSQL).
+        If found in PostgreSQL, populates Redis for faster future access.
+        
+        Args:
+            file_hash: SHA-256 hash of PDF content
+            db_session: Async database session
+            
+        Returns:
+            KnowledgeBase if cached, None otherwise
+        """
+        from app.services.unified_cache import pdf_kb_cache
+        
+        cache_key = file_hash
+        
+        # L2: Check Redis first (skip L1 - KB objects are too large)
+        cached_dict = pdf_kb_cache.get(cache_key)
+        if cached_dict:
+            logger.info(f"PDF KB L2 cache HIT: {file_hash[:16]}...")
+            return KnowledgeBase(**cached_dict)
+        
+        # L3: Check PostgreSQL
+        result = await db_session.execute(
+            select(PDFCache).where(PDFCache.file_hash == file_hash)
+        )
+        cache_entry = result.scalar_one_or_none()
+        
+        if cache_entry:
+            logger.info(f"PDF KB L3 cache HIT: {file_hash[:16]}... (populating L2)")
+            kb = KnowledgeBase(**cache_entry.knowledge_base)
+            
+            # Populate L2 Redis for faster future access
+            pdf_kb_cache.set(cache_key, cache_entry.knowledge_base, skip_l1=True)
+            
+            return kb
+        
+        logger.info(f"PDF KB cache MISS: {file_hash[:16]}...")
+        return None
+    
+    @staticmethod
+    async def save_cache(
+        file_hash: str,
+        r2_key: str,
+        knowledge_base: KnowledgeBase,
+        db_session: AsyncSession,
+        original_filename: Optional[str] = None,
+        file_size_bytes: Optional[int] = None,
+        processing_time_ms: Optional[int] = None,
+    ) -> None:
+        """
+        Cache a KnowledgeBase result in PostgreSQL and Redis.
+        
+        Args:
+            file_hash: SHA-256 hash of PDF content
+            r2_key: R2 storage key for the file
+            knowledge_base: Extracted KnowledgeBase
+            db_session: Async database session
+            original_filename: Original filename (optional)
+            file_size_bytes: File size in bytes (optional)
+            processing_time_ms: Processing time (optional)
+        """
+        from app.services.unified_cache import pdf_kb_cache
+        
+        kb_dict = knowledge_base.model_dump()
+        
+        # Save to L3 (PostgreSQL)
+        cache_entry = PDFCache(
+            file_hash=file_hash,
+            r2_key=r2_key,
+            knowledge_base=kb_dict,
+            original_filename=original_filename,
+            sections_count=len(knowledge_base.sections),
+            file_size_bytes=file_size_bytes,
+            processing_time_ms=processing_time_ms,
+            model_version="gemini-3-flash-preview",
+        )
+        
+        db_session.add(cache_entry)
+        await db_session.commit()
+        
+        # Also populate L2 (Redis) for faster future access
+        pdf_kb_cache.set(file_hash, kb_dict, skip_l1=True)
+        
+        logger.info(f"Cached KnowledgeBase (L2+L3) for hash: {file_hash[:16]}...")
+    
+    @staticmethod
+    async def exists(file_hash: str, db_session: AsyncSession) -> bool:
+        """Check if a file hash exists in cache."""
+        result = await db_session.execute(
+            select(PDFCache.file_hash).where(PDFCache.file_hash == file_hash)
+        )
+        return result.scalar_one_or_none() is not None
+
+
+# Global singleton instances
+_storage_service: Optional[R2StorageService] = None
+
+
+def get_storage_service() -> R2StorageService:
+    """Get or create the global storage service instance."""
+    global _storage_service
+    if _storage_service is None:
+        _storage_service = R2StorageService()
+    return _storage_service
+
+
+def get_cache_service() -> PDFCacheService:
+    """Get PDF cache service (stateless, creates new instance)."""
+    return PDFCacheService()

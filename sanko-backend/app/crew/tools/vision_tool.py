@@ -21,7 +21,8 @@ from pydantic import BaseModel, Field
 from google import genai
 from google.genai import types
 
-from app.config import settings
+from app.core.config import settings
+from app.clients.gemini.retry import gemini_retry
 
 
 class VisionVerification(BaseModel):
@@ -130,29 +131,34 @@ Be strict but fair. A perfect match is 1.0. Minor differences are 0.8-0.9.
 Somewhat related is 0.5-0.7. Not related is 0.0-0.4."""
 
         try:
-            # Call Gemini 3 Flash with HIGH thinking for careful analysis
-            response = self.client.models.generate_content(
-                model=settings.model_flash,
-                contents=[
-                    types.Content(
-                        role="user",
-                        parts=[
-                            types.Part(text=prompt),
-                            types.Part(
-                                inline_data=types.Blob(
-                                    mime_type=mime_type,
-                                    data=image_b64,
+            # Wrap API call with retry for transient errors (503, 429)
+            @gemini_retry(max_attempts=4, min_wait=1, max_wait=30)
+            def call_vision_api():
+                return self.client.models.generate_content(
+                    model=settings.model_flash,
+                    contents=[
+                        types.Content(
+                            role="user",
+                            parts=[
+                                types.Part(text=prompt),
+                                types.Part(
+                                    inline_data=types.Blob(
+                                        mime_type=mime_type,
+                                        data=image_b64,
+                                    )
                                 )
-                            )
-                        ]
-                    )
-                ],
-                config=types.GenerateContentConfig(
-                    thinking_config=types.ThinkingConfig(
-                        thinking_level=settings.thinking_level_high
+                            ]
+                        )
+                    ],
+                    config=types.GenerateContentConfig(
+                        thinking_config=types.ThinkingConfig(
+                            thinking_level=settings.thinking_level_high
+                        )
                     )
                 )
-            )
+            
+            # Call Gemini 3 Flash with retry for 503/429 errors
+            response = call_vision_api()
             
             response_text = response.text
             
@@ -204,23 +210,28 @@ Somewhat related is 0.5-0.7. Not related is 0.0-0.4."""
         mime_type = self._get_mime_type(image_url, image_data)
         
         try:
-            response = self.client.models.generate_content(
-                model=settings.model_flash,
-                contents=[
-                    types.Content(
-                        role="user",
-                        parts=[
-                            types.Part(text="Describe this image in detail. Focus on the main subject, style, and any text visible."),
-                            types.Part(
-                                inline_data=types.Blob(
-                                    mime_type=mime_type,
-                                    data=image_b64,
+            # Wrap API call with retry for transient errors
+            @gemini_retry(max_attempts=4, min_wait=1, max_wait=30)
+            def call_describe_api():
+                return self.client.models.generate_content(
+                    model=settings.model_flash,
+                    contents=[
+                        types.Content(
+                            role="user",
+                            parts=[
+                                types.Part(text="Describe this image in detail. Focus on the main subject, style, and any text visible."),
+                                types.Part(
+                                    inline_data=types.Blob(
+                                        mime_type=mime_type,
+                                        data=image_b64,
+                                    )
                                 )
-                            )
-                        ]
-                    )
-                ],
-            )
+                            ]
+                        )
+                    ],
+                )
+            
+            response = call_describe_api()
             return response.text
         except Exception as e:
             return f"Error: {str(e)}"

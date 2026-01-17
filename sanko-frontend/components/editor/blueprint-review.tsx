@@ -5,7 +5,7 @@ import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Check, GripVertical, Plus, Trash2, Edit2, Send, Wand2 } from "lucide-react";
+import { Check, GripVertical, Plus, Trash2, Edit2, Send, Wand2, Loader2 } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -19,6 +19,16 @@ interface SlideSkeleton {
     bullet_points: string[]; // Keep for compatibility, but UI focuses on description
     needs_citation: boolean;
     needs_diagram: boolean;
+    [key: string]: any; // Allow other props
+}
+
+interface FullSkeleton {
+    presentation_title: string;
+    target_audience: string;
+    narrative_arc: string;
+    slides: SlideSkeleton[];
+    source_documents: string[];
+    [key: string]: any;
 }
 
 interface BlueprintReviewProps {
@@ -28,10 +38,12 @@ interface BlueprintReviewProps {
 
 export function BlueprintReview({ sessionId, onApprove }: BlueprintReviewProps) {
     const { user } = useAuth();
-    const [skeleton, setSkeleton] = useState<{ title: string, slides: SlideSkeleton[] } | null>(null);
+    const [skeleton, setSkeleton] = useState<FullSkeleton | null>(null);
     const [loading, setLoading] = useState(true);
     const [aiInput, setAiInput] = useState("");
     const [aiLoading, setAiLoading] = useState(false);
+
+    const [loadingMessage, setLoadingMessage] = useState("Loading blueprint...");
 
     useEffect(() => {
         if (!sessionId || !user) return;
@@ -46,14 +58,118 @@ export function BlueprintReview({ sessionId, onApprove }: BlueprintReviewProps) 
         });
         if (res.ok) {
             const data = await res.json();
-            // Ensure content_description exists
-            const slides = data.slides.map((s: any) => ({
-                ...s,
-                content_description: s.content_description || s.key_points?.[0] || "No description provided."
-            }));
-            setSkeleton({ title: data.title, slides });
+
+            // If skeleton exists, render it
+            if (data.skeleton) {
+                processSkeleton(data.skeleton);
+                setLoading(false);
+                return;
+            }
+
+            // Check if outline is already ready (status is awaiting_outline_approval)
+            if (['awaiting_outline_approval', 5].includes(data.status)) {
+                // Skeleton should exist but wasn't returned - refetch directly
+                setLoadingMessage("Loading outline...");
+                await refetchSkeleton();
+                return;
+            }
+
+            // If still generating, start SSE with fallback polling
+            if (['clarification_complete', 3].includes(data.status)) {
+                setLoadingMessage("Generating outline...");
+                startSSE();
+                startFallbackPolling(); // In case SSE misses events
+            } else {
+                setLoadingMessage("Waiting for generation...");
+                startSSE();
+                startFallbackPolling();
+            }
+        } else {
+            setLoading(false);
         }
-        setLoading(false);
+    }
+
+    async function refetchSkeleton() {
+        if (!user) return;
+        const token = await user.getIdToken();
+        const res = await fetch(`/api/generate/blueprint/${sessionId}`, {
+            headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (res.ok) {
+            const data = await res.json();
+            if (data.skeleton) {
+                processSkeleton(data.skeleton);
+                setLoading(false);
+            }
+        }
+    }
+
+    function startFallbackPolling() {
+        const pollInterval = setInterval(async () => {
+            if (!user || !loading) {
+                clearInterval(pollInterval);
+                return;
+            }
+            try {
+                const token = await user.getIdToken();
+                const res = await fetch(`/api/generate/blueprint/${sessionId}`, {
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.skeleton) {
+                        processSkeleton(data.skeleton);
+                        setLoading(false);
+                        clearInterval(pollInterval);
+                    }
+                }
+            } catch (e) {
+                console.error("Polling error:", e);
+            }
+        }, 3000); // Poll every 3 seconds as fallback
+    }
+
+    function processSkeleton(skeletonData: any) {
+        const slides = (skeletonData.slides || []).map((s: any) => ({
+            ...s,
+            content_description: s.content_description || s.key_points?.[0] || s.description || "No description provided."
+        }));
+
+        setSkeleton({
+            ...skeletonData,
+            presentation_title: skeletonData.presentation_title || "Untitled Presentation",
+            target_audience: skeletonData.target_audience || "General Audience",
+            narrative_arc: skeletonData.narrative_arc || "",
+            source_documents: skeletonData.source_documents || [],
+            slides
+        });
+    }
+
+    function startSSE() {
+        console.log("Starting SSE for outline...");
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
+        const eventSource = new EventSource(`${backendUrl}/api/generation/stream/${sessionId}`);
+
+        eventSource.onmessage = (event) => {
+            // Keep alive
+        };
+
+        eventSource.addEventListener("blueprint_ready", (event) => {
+            const data = JSON.parse(event.data);
+            console.log("Blueprint Received via SSE:", data);
+            if (data.skeleton) {
+                processSkeleton(data.skeleton);
+                setLoading(false);
+                eventSource.close();
+            }
+        });
+
+        eventSource.onerror = (error) => {
+            console.error("SSE Error:", error);
+            eventSource.close();
+        };
+
+        return () => eventSource.close();
     }
 
     const onDragEnd = (result: DropResult) => {
@@ -98,7 +214,9 @@ export function BlueprintReview({ sessionId, onApprove }: BlueprintReviewProps) 
         if (!user || !skeleton) return;
         try {
             const token = await user.getIdToken();
-            const res = await fetch("/api/generate/approve", {
+
+            // Step 1: Approve the outline
+            const approveRes = await fetch(`/api/generate/blueprint/${sessionId}`, {
                 method: "POST",
                 headers: {
                     Authorization: `Bearer ${token}`,
@@ -111,15 +229,39 @@ export function BlueprintReview({ sessionId, onApprove }: BlueprintReviewProps) 
                 })
             });
 
-            if (res.ok) {
-                onApprove(true);
+            if (!approveRes.ok) {
+                console.error("Approval failed:", await approveRes.text());
+                return;
             }
+
+            // Step 2: Start generation (this kicks off the Planner agent)
+            const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
+            const generateRes = await fetch(`${backendUrl}/api/generation/generate/${sessionId}`, {
+                method: "POST",
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    "Content-Type": "application/json"
+                }
+            });
+
+            if (!generateRes.ok) {
+                console.error("Generation start failed:", await generateRes.text());
+                return;
+            }
+
+            // Transition UI to generation progress view
+            onApprove(true);
         } catch (e) {
             console.error(e);
         }
     };
 
-    if (loading) return <div className="p-8 text-neutral-400">Loading blueprint...</div>;
+    if (loading) return (
+        <div className="flex flex-col items-center justify-center p-12 text-neutral-400 gap-4">
+            <Loader2 className="w-8 h-8 animate-spin text-emerald-500/50" />
+            <span className="font-mono text-xs tracking-widest uppercase">{loadingMessage}</span>
+        </div>
+    );
     if (!skeleton) return <div className="p-8 text-red-400">Failed to load blueprint.</div>;
 
     return (

@@ -19,9 +19,8 @@ import os
 import re
 import asyncio
 
-
-from app.config import Settings, get_settings
-from app.logging_config import get_logger
+from app.core.config import Settings, get_settings
+from app.core.logging import get_logger
 from app.services.gemini import GeminiInteractionsClient
 from app.services.metrics import get_metrics_tracker
 from app.pipeline import SlideGenerationPipeline, PipelineResult

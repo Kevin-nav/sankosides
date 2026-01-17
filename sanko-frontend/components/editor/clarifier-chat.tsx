@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Send, Paperclip, Bot, User, File as FileIcon, X, Loader2, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { FileAttachmentBar, useFileUpload } from "@/components/ui/file-attachment";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/auth-provider";
 import ReactMarkdown from "react-markdown";
@@ -36,13 +37,15 @@ export function ClarifierChat({ projectId, mode, onOrderComplete, readOnly = fal
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [input, setInput] = useState("");
     const [isTyping, setIsTyping] = useState(true); // Start with typing as we fetch initial
-    const [attachments, setAttachments] = useState<File[]>([]);
     const [sessionId, setSessionId] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [isCopied, setIsCopied] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const initialized = useRef(false);
+
+    // File upload hook (replaces old attachments state)
+    const { files: attachedFiles, addFiles, removeFile, getReadyHashes, allReady, clearFiles, isUploading } = useFileUpload();
 
     // Confirmation state
     const [pendingConfirmation, setPendingConfirmation] = useState<any>(null);
@@ -111,19 +114,24 @@ export function ClarifierChat({ projectId, mode, onOrderComplete, readOnly = fal
 
 
     const handleSend = async () => {
-        if ((!input.trim() && attachments.length === 0) || isTyping || !sessionId) return;
+        const hasFiles = attachedFiles.some(f => f.status === 'ready' || f.status === 'cached');
+        if ((!input.trim() && !hasFiles) || isTyping || !sessionId) return;
 
+        // Block send if files are still processing
+        if (!allReady()) {
+            return; // Wait for all files to be ready
+        }
+
+        const filesForMessage = attachedFiles.filter(f => f.status === 'ready' || f.status === 'cached');
         const userMsg: ChatMessage = {
             id: Date.now().toString(),
             role: "user",
             content: input,
-            attachments: [...attachments],
+            attachments: filesForMessage.map(f => f.file),
         };
 
         setMessages((prev) => [...prev, userMsg]);
         setInput("");
-        const currentAttachments = [...attachments];
-        setAttachments([]);
         setIsTyping(true);
 
         if (sessionId?.startsWith("mock-session")) {
@@ -169,14 +177,15 @@ export function ClarifierChat({ projectId, mode, onOrderComplete, readOnly = fal
             // Prepare payload
             let promptText = input;
 
-            for (const file of currentAttachments) {
-                if (file.type === "text/plain" || file.name.endsWith(".md")) {
-                    const text = await file.text();
-                    promptText += `\n\n[Attached File: ${file.name}]\n${text}`;
+            for (const fileData of filesForMessage) {
+                if (fileData.file.type === "text/plain" || fileData.file.name.endsWith(".md")) {
+                    const text = await fileData.file.text();
+                    promptText += `\n\n[Attached File: ${fileData.file.name}]\n${text}`;
                 }
             }
 
             // Use streaming endpoint
+            const fileHashes = getReadyHashes();
             const res = await fetch("/api/generate/clarify/stream", {
                 method: "POST",
                 headers: {
@@ -185,9 +194,15 @@ export function ClarifierChat({ projectId, mode, onOrderComplete, readOnly = fal
                 },
                 body: JSON.stringify({
                     session_id: sessionId,
-                    answer: promptText
+                    answer: promptText,
+                    file_hashes: fileHashes.length > 0 ? fileHashes : undefined
                 })
             });
+
+            // Clear files after successful send
+            if (fileHashes.length > 0) {
+                clearFiles();
+            }
 
             if (!res.ok) {
                 throw new Error("Stream request failed");
@@ -306,14 +321,12 @@ export function ClarifierChat({ projectId, mode, onOrderComplete, readOnly = fal
     };
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files[0]) {
-            setAttachments((prev) => [...prev, e.target.files![0]]);
+        if (e.target.files && e.target.files.length > 0) {
+            addFiles(Array.from(e.target.files));
+            // Reset the input so the same file can be selected again
+            e.target.value = '';
         }
     };
-
-    const removeAttachment = (index: number) => {
-        setAttachments((prev) => prev.filter((_, i) => i !== index));
-    }
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === "Enter" && !e.shiftKey) {
@@ -514,31 +527,14 @@ export function ClarifierChat({ projectId, mode, onOrderComplete, readOnly = fal
 
             {/* Input Area */}
             <div className="border-t border-white/10 bg-neutral-950 p-4 sticky bottom-0 z-20">
-                {/* Attachment Staging */}
+                {/* Attachment Bar - using new component */}
                 <AnimatePresence>
-                    {attachments.length > 0 && (
-                        <motion.div
-                            initial={{ opacity: 0, height: 0 }}
-                            animate={{ opacity: 1, height: "auto" }}
-                            exit={{ opacity: 0, height: 0 }}
-                            className="mb-3 flex flex-wrap gap-2 overflow-hidden"
-                        >
-                            {attachments.map((file, i) => (
-                                <motion.div
-                                    key={i}
-                                    initial={{ opacity: 0, scale: 0.8 }}
-                                    animate={{ opacity: 1, scale: 1 }}
-                                    exit={{ opacity: 0, scale: 0.8 }}
-                                    className="flex items-center gap-2 rounded-lg bg-neutral-900 px-3 py-2 text-xs text-neutral-300 border border-neutral-800"
-                                >
-                                    <FileIcon className="h-3.5 w-3.5 text-emerald-500" />
-                                    <span className="max-w-[200px] truncate">{file.name}</span>
-                                    <button onClick={() => removeAttachment(i)} className="ml-1 rounded-full p-0.5 hover:bg-neutral-800 text-neutral-500 hover:text-white transition-colors">
-                                        <X className="h-3 w-3" />
-                                    </button>
-                                </motion.div>
-                            ))}
-                        </motion.div>
+                    {attachedFiles.length > 0 && (
+                        <FileAttachmentBar
+                            files={attachedFiles}
+                            onRemove={removeFile}
+                            disabled={isTyping}
+                        />
                     )}
                 </AnimatePresence>
 
@@ -549,7 +545,7 @@ export function ClarifierChat({ projectId, mode, onOrderComplete, readOnly = fal
                         ref={fileInputRef}
                         className="hidden"
                         onChange={handleFileSelect}
-                        accept=".pdf,.txt,.md,.png,.jpg,.jpeg"
+                        accept=".pdf"
                     />
 
                     <Button
@@ -574,12 +570,12 @@ export function ClarifierChat({ projectId, mode, onOrderComplete, readOnly = fal
                         size="icon"
                         className={cn(
                             "h-9 w-9 shrink-0 rounded-lg transition-all shadow-sm",
-                            input.trim() || attachments.length > 0
+                            (input.trim() || attachedFiles.some(f => f.status === 'ready' || f.status === 'cached')) && allReady()
                                 ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-900/20"
                                 : "bg-neutral-800 text-neutral-500 cursor-not-allowed"
                         )}
                         onClick={handleSend}
-                        disabled={(!input.trim() && attachments.length === 0) || isTyping}
+                        disabled={(!input.trim() && !attachedFiles.some(f => f.status === 'ready' || f.status === 'cached')) || isTyping || !allReady()}
                     >
                         {isTyping ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                         <span className="sr-only">Send</span>

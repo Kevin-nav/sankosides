@@ -126,3 +126,89 @@ def test_image_template_caption(slide_data):
     
     assert "image-caption" in html
     assert "My Caption" in html
+
+
+def test_references_template_render(slide_data):
+    """Test that References template renders a list of formatted citations."""
+    from app.templates.layouts import ReferencesTemplate
+    
+    slide = slide_data.model_copy(update={
+        "title": "References",
+        "content_type": "references",
+        "bullet_points": [],
+        "formatted_citations": [
+            "Smith, J. (2024). <em>A Study on Testing</em>. Journal of Tests.",
+            "Jones, A. (2023). <em>Another Important Paper</em>. Science Weekly."
+        ]
+    })
+    template = ReferencesTemplate()
+    html = template.render(slide, MODERN_THEME)
+    
+    assert 'class="slide slide-references"' in html
+    assert "References" in html
+    assert "references-list" in html
+    assert "Smith, J. (2024)" in html
+    assert "Jones, A. (2023)" in html
+
+
+def test_references_template_empty(slide_data):
+    """Test that References template handles empty citations gracefully."""
+    from app.templates.layouts import ReferencesTemplate
+    
+    slide = slide_data.model_copy(update={
+        "title": "References",
+        "content_type": "references",
+        "bullet_points": [],
+        "formatted_citations": []
+    })
+    template = ReferencesTemplate()
+    html = template.render(slide, MODERN_THEME)
+    
+    assert 'class="slide slide-references"' in html
+    assert "References" in html
+
+
+def test_thank_you_template_render(slide_data):
+    """Test that Thank You template renders the message."""
+    from app.templates.layouts import ThankYouTemplate
+    
+    slide = slide_data.model_copy(update={
+        "title": "Thank You",
+        "content_type": "thank_you",
+        "bullet_points": []
+    })
+    template = ThankYouTemplate()
+    html = template.render(slide, MODERN_THEME)
+    
+    assert 'class="slide slide-thank-you"' in html
+    assert "thank-you-message" in html
+    assert "Thank You" in html
+
+
+def test_thank_you_template_with_config(slide_data):
+    """Test that Thank You template renders with custom config."""
+    from app.templates.layouts import ThankYouTemplate
+    
+    slide = slide_data.model_copy(update={
+        "title": "Thank You",
+        "content_type": "thank_you",
+        "bullet_points": []
+    })
+    template = ThankYouTemplate()
+    html = template.render(
+        slide, 
+        MODERN_THEME, 
+        config={
+            "custom_message": "Questions?",
+            "show_logo": True,
+            "logo_url": "https://example.com/logo.png",
+            "show_presenter_name": True,
+            "presenter_name": "John Doe"
+        }
+    )
+    
+    assert "Questions?" in html
+    assert 'src="https://example.com/logo.png"' in html
+    assert "John Doe" in html
+    assert "presenter-name" in html
+

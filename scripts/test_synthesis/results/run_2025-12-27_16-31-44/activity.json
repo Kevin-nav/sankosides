@@ -1,0 +1,92 @@
+[
+  {
+    "timestamp": "2025-12-27T16:31:45.355133",
+    "run_id": "run_0001",
+    "event": "started",
+    "details": "PDF: 1S2.1 Str.O.Mat 152.pdf, Strategy: baseline"
+  },
+  {
+    "timestamp": "2025-12-27T16:37:18.874345",
+    "run_id": "run_0001",
+    "event": "failed",
+    "details": "json_truncated: Unterminated string starting at: line 69 column 9 (char 9865)"
+  },
+  {
+    "timestamp": "2025-12-27T16:37:19.669820",
+    "run_id": "run_0002",
+    "event": "started",
+    "details": "PDF: 1S2.1 Str.O.Mat 152.pdf, Strategy: baseline_t01"
+  },
+  {
+    "timestamp": "2025-12-27T16:41:06.908102",
+    "run_id": "run_0002",
+    "event": "completed",
+    "details": "Sections: 8, Time: 227236ms"
+  },
+  {
+    "timestamp": "2025-12-27T16:41:07.747502",
+    "run_id": "run_0003",
+    "event": "started",
+    "details": "PDF: 1S2.1 Str.O.Mat 152.pdf, Strategy: baseline_t02"
+  },
+  {
+    "timestamp": "2025-12-27T16:42:37.731678",
+    "run_id": "run_0003",
+    "event": "failed",
+    "details": "api_error: 'list' object has no attribute 'get'"
+  },
+  {
+    "timestamp": "2025-12-27T16:42:38.419572",
+    "run_id": "run_0004",
+    "event": "started",
+    "details": "PDF: 1S2.1 Str.O.Mat 152.pdf, Strategy: chunked_10"
+  },
+  {
+    "timestamp": "2025-12-27T16:42:38.508211",
+    "run_id": "run_0004",
+    "event": "failed",
+    "details": "file_error: Failed to extract chunk 0: code=2: cannot remove file 'C:\\Users\\Kevin\\AppData\\Local\\Temp\\tmpy06j2oey"
+  },
+  {
+    "timestamp": "2025-12-27T16:42:39.246032",
+    "run_id": "run_0005",
+    "event": "started",
+    "details": "PDF: 1S2.1 Str.O.Mat 152.pdf, Strategy: chunked_5"
+  },
+  {
+    "timestamp": "2025-12-27T16:42:39.254316",
+    "run_id": "run_0005",
+    "event": "failed",
+    "details": "file_error: Failed to extract chunk 0: code=2: cannot remove file 'C:\\Users\\Kevin\\AppData\\Local\\Temp\\tmppuvh__i9"
+  },
+  {
+    "timestamp": "2025-12-27T16:42:39.988116",
+    "run_id": "run_0006",
+    "event": "started",
+    "details": "PDF: 1S2.1 Str.O.Mat 152.pdf, Strategy: two_phase"
+  },
+  {
+    "timestamp": "2025-12-27T16:54:27.413970",
+    "run_id": "run_0006",
+    "event": "failed",
+    "details": "api_error: 'list' object has no attribute 'get'"
+  },
+  {
+    "timestamp": "2025-12-27T16:54:28.107657",
+    "run_id": "run_0007",
+    "event": "started",
+    "details": "PDF: 1S2.1 Str.O.Mat 152.pdf, Strategy: model_3_pro"
+  },
+  {
+    "timestamp": "2025-12-27T16:57:48.914391",
+    "run_id": "run_0007",
+    "event": "completed",
+    "details": "Sections: 32, Time: 200803ms"
+  },
+  {
+    "timestamp": "2025-12-27T16:57:49.697726",
+    "run_id": "run_0008",
+    "event": "started",
+    "details": "PDF: 1S2.1 Str.O.Mat 152.pdf, Strategy: model_25_pro"
+  }
+]

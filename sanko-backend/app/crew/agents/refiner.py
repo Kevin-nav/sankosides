@@ -24,6 +24,7 @@ from app.models.schemas import (
     RefinedContent,
     RefinedSlide,
     CitationMetadata,
+    ImageCitation,
 )
 from app.clients.gemini.llm import REFINER_LLM
 
@@ -84,6 +85,31 @@ For each slide with image_query:
 - Ensure logical flow between slides
 - Verify all bullet points are substantive
 - Mark all_claims_verified when appropriate
+
+### 7. Image Attribution (REQUIRED)
+For each slide with an image, you MUST create proper image_citation metadata:
+
+1. Determine the source type:
+   - "original" - Author's own photo/diagram/illustration
+   - "adapted" - Modified from another source (specify adapted_from)
+   - "screenshot" - Screenshot from software/website
+   - "stock" - Stock photo (include license info)
+   - "creative_commons" - CC-licensed image (include license)
+   - "generated" - AI-generated image
+
+2. Create ImageCitation with appropriate metadata:
+   - source_name: Where from (NASA, Wikipedia, Nature, etc.)
+   - creator: Original photographer/artist name
+   - year: When created/published
+   - license: License type if applicable (CC BY 4.0, Public Domain, etc.)
+   - url: Original source URL
+   - adapted_from: Original source citation if adapted
+
+3. The image_caption should describe what the image shows
+4. The source attribution will be auto-formatted by the template
+
+DO NOT leave images without attribution. Even if the image is original/self-created, 
+mark source_type as "original" so proper attribution ("Author's own work") is shown.
 
 ## TOOLS YOU SHOULD USE
 
@@ -168,6 +194,7 @@ def create_refining_task(
     planned_content: PlannedContent,
     order_form: OrderForm,
     skeleton: Skeleton,
+    university_context: Optional["UniversityContext"] = None,
 ) -> Task:
     """
     Create a task for the Refiner to verify and render assets.
@@ -177,6 +204,7 @@ def create_refining_task(
         planned_content: Content from Planner
         order_form: User preferences
         skeleton: Original structure (for context)
+        university_context: Optional university context for compliance checking
         
     Returns:
         CrewAI Task for content refinement
@@ -190,6 +218,11 @@ def create_refining_task(
         f"\n  - Has image query: {bool(s.image_query)}"
         for s in planned_content.slides
     ])
+    
+    # Build compliance context if university is set
+    compliance_context = ""
+    if university_context:
+        compliance_context = university_context.get_refiner_compliance_context()
     
     return Task(
         description=f"""Refine and render all assets for this presentation.
@@ -207,6 +240,7 @@ Slides: {len(planned_content.slides)}
 - **Focus Areas**: {', '.join(order_form.focus_areas) if order_form.focus_areas else 'None'}
 - **Citation Style**: {order_form.citation_style}
 - **References Placement**: {order_form.references_placement}
+{compliance_context}
 
 ## YOUR TASKS
 
@@ -225,6 +259,7 @@ Slides: {len(planned_content.slides)}
    - Search for images
    - Verify with VisionTool
 6. **Polish Content**: Fix any issues
+7. **Compliance Check**: Verify all institution rules are followed (if specified)
 
 Return a complete RefinedContent object.""",
         expected_output="""A RefinedContent JSON with:

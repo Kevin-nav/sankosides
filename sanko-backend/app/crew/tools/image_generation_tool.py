@@ -23,7 +23,11 @@ from pydantic import BaseModel, Field
 from google import genai
 from google.genai import types
 
-from app.config import settings
+from app.core.config import settings
+from app.clients.gemini.retry import gemini_retry
+from app.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class GeneratedAsset(BaseModel):
@@ -63,6 +67,15 @@ class NanoBananaImageTool:
         self.client = genai.Client(api_key=self.api_key)
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
+        # Lazy-loaded R2 storage service
+        self._storage = None
+    
+    def _get_storage(self):
+        """Get R2 storage service (lazy-loaded)."""
+        if self._storage is None:
+            from app.services.storage import get_storage_service
+            self._storage = get_storage_service()
+        return self._storage
     
     def _build_structured_prompt(
         self,
@@ -110,7 +123,7 @@ class NanoBananaImageTool:
         prompt: str,
         reference_images: Optional[List[str]] = None,
         style: str = "professional, high quality",
-        save: bool = True,
+        upload_to_r2: bool = True,
     ) -> GeneratedAsset:
         """
         Generate a visual asset from a text prompt.
@@ -119,10 +132,10 @@ class NanoBananaImageTool:
             prompt: Description of what to generate
             reference_images: Optional list of image paths for style reference (up to 14)
             style: Artistic style to apply
-            save: Whether to save to disk
+            upload_to_r2: Whether to upload to R2 (True) or save locally (False)
             
         Returns:
-            GeneratedAsset with file path and metadata
+            GeneratedAsset with file path/URL and metadata
         """
         # Build full prompt with style
         full_prompt = f"{prompt}\n\nStyle: {style}"
@@ -156,21 +169,27 @@ class NanoBananaImageTool:
                             )
                         )
                     except Exception as e:
-                        print(f"Failed to load reference image {img_path}: {e}")
+                        logger.warning(f"Failed to load reference image {img_path}: {e}")
             
-            # Call Nano Banana Pro (Gemini 3 Pro Image)
-            response = self.client.models.generate_content(
-                model=settings.model_image,  # gemini-3-pro-image-preview
-                contents=[
-                    types.Content(
-                        role="user",
-                        parts=content_parts
+            # Wrap API call with retry for transient errors (503, 429)
+            @gemini_retry(max_attempts=4, min_wait=2, max_wait=60)
+            def call_image_api():
+                return self.client.models.generate_content(
+                    model=settings.model_image,  # gemini-3-pro-image-preview
+                    contents=[
+                        types.Content(
+                            role="user",
+                            parts=content_parts
+                        )
+                    ],
+                    config=types.GenerateContentConfig(
+                        response_modalities=["IMAGE"],
                     )
-                ],
-                config=types.GenerateContentConfig(
-                    response_modalities=["IMAGE"],
                 )
-            )
+            
+            # Call Nano Banana Pro (Gemini 3 Pro Image) with retry
+            logger.info(f"[IMAGE GEN] Generating image with prompt: {prompt[:100]}...")
+            response = call_image_api()
             
             # Extract generated image
             for candidate in response.candidates:
@@ -181,12 +200,47 @@ class NanoBananaImageTool:
                         
                         # Generate filename
                         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                        filename = f"asset_{timestamp}.png"
-                        file_path = self.output_dir / filename
+                        filename = f"generated_{timestamp}.png"
                         
-                        if save:
-                            with open(file_path, "wb") as f:
-                                f.write(image_data)
+                        # Try to upload to R2 for production use
+                        if upload_to_r2:
+                            try:
+                                storage = self._get_storage()
+                                # upload_file returns tuple: (file_hash, r2_key, was_cached)
+                                file_hash, r2_key, was_cached = await storage.upload_file(
+                                    file_data=image_data,
+                                    original_filename=filename,
+                                    content_type="image/png",
+                                )
+                                
+                                # Get public URL
+                                public_url = storage.get_public_url(r2_key)
+                                if not public_url:
+                                    # Fallback to pre-signed URL (1 hour)
+                                    public_url = await storage.get_presigned_url(
+                                        r2_key, 
+                                        expires_in=3600
+                                    )
+                                
+                                logger.info(f"[IMAGE GEN] Uploaded to R2: {public_url}")
+                                
+                                return GeneratedAsset(
+                                    success=True,
+                                    file_path=public_url,  # R2 URL
+                                    file_name=filename,
+                                    prompt_used=full_prompt,
+                                    mime_type="image/png",
+                                )
+                            except Exception as upload_error:
+                                # Fall back to local save
+                                logger.warning(f"[IMAGE GEN] R2 upload failed, saving locally: {upload_error}")
+                        
+                        # Local fallback
+                        file_path = self.output_dir / filename
+                        with open(file_path, "wb") as f:
+                            f.write(image_data)
+                        
+                        logger.info(f"[IMAGE GEN] Saved locally: {file_path}")
                         
                         return GeneratedAsset(
                             success=True,
@@ -203,6 +257,7 @@ class NanoBananaImageTool:
             )
             
         except Exception as e:
+            logger.error(f"[IMAGE GEN] Generation failed: {e}")
             return GeneratedAsset(
                 success=False,
                 prompt_used=full_prompt,

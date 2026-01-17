@@ -8,6 +8,8 @@ from .math import TwoColMathTemplate
 from .diagram import DiagramTemplate
 from .quote import QuoteTemplate
 from .special import TimelineTemplate, ComparisonTemplate, CodeTemplate
+from .references import ReferencesTemplate
+from .thank_you import ThankYouTemplate
 
 __all__ = [
     "TitleTemplate",
@@ -23,4 +25,7 @@ __all__ = [
     "TimelineTemplate",
     "ComparisonTemplate",
     "CodeTemplate",
+    "ReferencesTemplate",
+    "ThankYouTemplate",
 ]
+

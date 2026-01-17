@@ -6,20 +6,70 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, School, Check } from "lucide-react";
-import { useState, useEffect } from "react";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+    SelectGroup,
+    SelectLabel,
+} from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Loader2, School, Check, GraduationCap, Building2, BookOpen, Info } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { useUniversities, useUpdateProfile } from "@/hooks/api";
+
+// Types for university hierarchy (from single API call)
+interface DepartmentHierarchy {
+    department_id: string;
+    name: string;
+    is_stem: boolean;
+}
+
+interface FacultyHierarchy {
+    faculty_id: string;
+    name: string;
+    short_name: string;
+    departments: DepartmentHierarchy[];
+}
+
+interface UniversityHierarchy {
+    university_id: string;
+    name: string;
+    short_name: string;
+    country: string;
+    default_citation_style: string;
+    spelling_variant: string;
+    unit_system: string;
+    faculties: FacultyHierarchy[];
+}
+
+interface HierarchyResponse {
+    universities: UniversityHierarchy[];
+    cached: boolean;
+    cache_ttl_seconds: number;
+}
 
 export default function ProfilePage() {
     const { user, dbUser, loading, syncUser } = useAuth();
 
     // Form states
     const [displayName, setDisplayName] = useState("");
-    const [university, setUniversity] = useState("");
-    const [department, setDepartment] = useState("");
 
-    // Loading states
-    const [savingProfile, setSavingProfile] = useState(false);
-    const [savingAcademic, setSavingAcademic] = useState(false);
+    // TanStack Query hooks - replaces manual useState/useEffect
+    const { data: hierarchyData, isPending: loadingHierarchy } = useUniversities();
+    const hierarchy = hierarchyData?.universities ?? [];
+    const updateProfile = useUpdateProfile();
+
+    // Selection state
+    const [selectedUniversity, setSelectedUniversity] = useState<string>("");
+    const [selectedFaculty, setSelectedFaculty] = useState<string>("");
+    const [selectedDepartment, setSelectedDepartment] = useState<string>("");
+    const [selectedAcademicLevel, setSelectedAcademicLevel] = useState<string>("");
+    const [selectedAcademicYear, setSelectedAcademicYear] = useState<string>("");
+
+    // Success state for UI feedback
     const [profileSaved, setProfileSaved] = useState(false);
     const [academicSaved, setAcademicSaved] = useState(false);
 
@@ -27,77 +77,83 @@ export default function ProfilePage() {
     useEffect(() => {
         if (dbUser) {
             setDisplayName(dbUser.displayName || "");
-            if (dbUser.universityProfile) {
-                const profile = dbUser.universityProfile as { university?: string; department?: string };
-                setUniversity(profile.university || "");
-                setDepartment(profile.department || "");
-            }
+            if (dbUser.universityId) setSelectedUniversity(dbUser.universityId);
+            if (dbUser.facultyId) setSelectedFaculty(dbUser.facultyId);
+            if (dbUser.departmentId) setSelectedDepartment(dbUser.departmentId);
+            if (dbUser.academicLevel) setSelectedAcademicLevel(dbUser.academicLevel);
+            if (dbUser.academicYear) setSelectedAcademicYear(String(dbUser.academicYear));
         }
     }, [dbUser]);
 
-    const handleSaveProfile = async () => {
-        if (!user) return;
-        setSavingProfile(true);
-        setProfileSaved(false);
+    // Derived data from hierarchy (no additional fetches needed!)
+    const selectedUniversityData = useMemo(() =>
+        hierarchy.find(u => u.university_id === selectedUniversity),
+        [hierarchy, selectedUniversity]
+    );
 
-        try {
-            const token = await user.getIdToken();
-            const res = await fetch("/api/user/profile", {
-                method: "PUT",
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({ displayName }),
-            });
+    const faculties = useMemo(() =>
+        selectedUniversityData?.faculties || [],
+        [selectedUniversityData]
+    );
 
-            if (res.ok) {
-                await syncUser(); // Refresh dbUser state
-                setProfileSaved(true);
-                setTimeout(() => setProfileSaved(false), 2000);
-            } else {
-                console.error("Failed to save profile");
-            }
-        } catch (error) {
-            console.error("Error saving profile:", error);
-        } finally {
-            setSavingProfile(false);
-        }
+    const selectedFacultyData = useMemo(() =>
+        faculties.find(f => f.faculty_id === selectedFaculty),
+        [faculties, selectedFaculty]
+    );
+
+    const departments = useMemo(() =>
+        selectedFacultyData?.departments || [],
+        [selectedFacultyData]
+    );
+
+    const selectedDepartmentData = useMemo(() =>
+        departments.find(d => d.department_id === selectedDepartment),
+        [departments, selectedDepartment]
+    );
+
+    const handleUniversityChange = (value: string) => {
+        setSelectedUniversity(value);
+        setSelectedFaculty("");
+        setSelectedDepartment("");
     };
 
-    const handleSaveAcademic = async () => {
+    const handleFacultyChange = (value: string) => {
+        setSelectedFaculty(value);
+        setSelectedDepartment("");
+    };
+
+    const handleSaveProfile = () => {
         if (!user) return;
-        setSavingAcademic(true);
-        setAcademicSaved(false);
 
-        try {
-            const token = await user.getIdToken();
-            const res = await fetch("/api/user/profile", {
-                method: "PUT",
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    "Content-Type": "application/json",
+        updateProfile.mutate(
+            { displayName },
+            {
+                onSuccess: () => {
+                    setProfileSaved(true);
+                    setTimeout(() => setProfileSaved(false), 2000);
                 },
-                body: JSON.stringify({
-                    universityProfile: {
-                        university,
-                        department,
-                    },
-                }),
-            });
-
-            if (res.ok) {
-                await syncUser(); // Refresh dbUser state
-                setAcademicSaved(true);
-                setTimeout(() => setAcademicSaved(false), 2000);
-            } else {
-                console.error("Failed to save academic info");
             }
-        } catch (error) {
-            console.error("Error saving academic info:", error);
-        } finally {
-            setSavingAcademic(false);
-        }
+        );
+    };
+
+    const handleSaveAcademic = () => {
+        if (!user) return;
+
+        updateProfile.mutate(
+            {
+                universityId: selectedUniversity || null,
+                facultyId: selectedFaculty || null,
+                departmentId: selectedDepartment || null,
+                academicLevel: selectedAcademicLevel || null,
+                academicYear: selectedAcademicYear ? parseInt(selectedAcademicYear) : null,
+            },
+            {
+                onSuccess: () => {
+                    setAcademicSaved(true);
+                    setTimeout(() => setAcademicSaved(false), 2000);
+                },
+            }
+        );
     };
 
     if (loading) {
@@ -135,7 +191,21 @@ export default function ProfilePage() {
                             <h3 className="font-semibold text-lg text-foreground">{dbUser?.displayName || displayName || "Scholar"}</h3>
                             <p className="text-sm text-muted-foreground">{user?.email}</p>
                         </div>
-                        <div className="w-full pt-4">
+
+                        {/* University Badge */}
+                        {selectedUniversityData && (
+                            <div className="w-full">
+                                <div className="rounded-lg bg-primary/5 border border-primary/20 p-3 text-center">
+                                    <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1">Institution</p>
+                                    <p className="text-primary font-bold">{selectedUniversityData.short_name}</p>
+                                    {selectedDepartmentData?.is_stem && (
+                                        <Badge variant="secondary" className="text-xs mt-1">STEM</Badge>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="w-full pt-2">
                             <div className="rounded-lg bg-muted p-3 text-center border border-border">
                                 <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1">Plan</p>
                                 <p className="text-primary font-bold">{dbUser?.subscriptionTier === "pro" ? "Pro Scholar" : "Free Tier"}</p>
@@ -178,9 +248,9 @@ export default function ProfilePage() {
                             <Button
                                 className="ml-auto"
                                 onClick={handleSaveProfile}
-                                disabled={savingProfile}
+                                disabled={updateProfile.isPending}
                             >
-                                {savingProfile ? (
+                                {updateProfile.isPending ? (
                                     <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</>
                                 ) : profileSaved ? (
                                     <><Check className="mr-2 h-4 w-4" /> Saved!</>
@@ -197,36 +267,146 @@ export default function ProfilePage() {
                                 <School className="h-5 w-5 text-primary" />
                                 Academic Profile
                             </CardTitle>
-                            <CardDescription>Used to tailor your citation styles and slide templates.</CardDescription>
+                            <CardDescription>Used to tailor your citation styles, spelling, and slide templates.</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
+                            {/* University Selection */}
+                            <div className="space-y-2">
+                                <Label className="flex items-center gap-2">
+                                    <Building2 className="h-4 w-4 text-muted-foreground" />
+                                    University / Institution
+                                </Label>
+                                <Select
+                                    value={selectedUniversity}
+                                    onValueChange={handleUniversityChange}
+                                    disabled={loadingHierarchy}
+                                >
+                                    <SelectTrigger className="w-full">
+                                        <SelectValue placeholder={loadingHierarchy ? "Loading..." : "Select your university"} />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectGroup>
+                                            <SelectLabel>Supported Universities</SelectLabel>
+                                            {hierarchy.map((uni) => (
+                                                <SelectItem key={uni.university_id} value={uni.university_id}>
+                                                    {uni.name} ({uni.short_name})
+                                                </SelectItem>
+                                            ))}
+                                        </SelectGroup>
+                                    </SelectContent>
+                                </Select>
+                                {hierarchy.length > 0 && !selectedUniversity && (
+                                    <p className="text-xs text-muted-foreground">
+                                        Can&apos;t find your university? More coming soon!
+                                    </p>
+                                )}
+                            </div>
+
+                            {/* Faculty Selection */}
+                            {selectedUniversity && faculties.length > 0 && (
+                                <div className="space-y-2">
+                                    <Label className="flex items-center gap-2">
+                                        <GraduationCap className="h-4 w-4 text-muted-foreground" />
+                                        Faculty / School
+                                    </Label>
+                                    <Select value={selectedFaculty} onValueChange={handleFacultyChange}>
+                                        <SelectTrigger className="w-full">
+                                            <SelectValue placeholder="Select your faculty" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {faculties.map((faculty) => (
+                                                <SelectItem key={faculty.faculty_id} value={faculty.faculty_id}>
+                                                    {faculty.name} ({faculty.short_name})
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            )}
+
+                            {/* Department Selection */}
+                            {selectedFaculty && departments.length > 0 && (
+                                <div className="space-y-2">
+                                    <Label className="flex items-center gap-2">
+                                        <BookOpen className="h-4 w-4 text-muted-foreground" />
+                                        Department
+                                    </Label>
+                                    <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
+                                        <SelectTrigger className="w-full">
+                                            <SelectValue placeholder="Select your department" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {departments.map((dept) => (
+                                                <SelectItem key={dept.department_id} value={dept.department_id}>
+                                                    {dept.name}
+                                                    {dept.is_stem && " (STEM)"}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            )}
+
+                            {/* Academic Level and Year */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="space-y-2">
-                                    <Label>University / Institution</Label>
-                                    <Input
-                                        value={university}
-                                        onChange={(e) => setUniversity(e.target.value)}
-                                        placeholder="e.g. Stanford University"
-                                    />
+                                    <Label>Academic Level</Label>
+                                    <Select value={selectedAcademicLevel} onValueChange={setSelectedAcademicLevel}>
+                                        <SelectTrigger className="w-full">
+                                            <SelectValue placeholder="Select level" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="undergraduate">Undergraduate (BSc)</SelectItem>
+                                            <SelectItem value="masters">Masters (MSc/MPhil)</SelectItem>
+                                            <SelectItem value="phd">PhD</SelectItem>
+                                            <SelectItem value="faculty">Faculty/Staff</SelectItem>
+                                        </SelectContent>
+                                    </Select>
                                 </div>
-                                <div className="space-y-2">
-                                    <Label>Department / Major</Label>
-                                    <Input
-                                        value={department}
-                                        onChange={(e) => setDepartment(e.target.value)}
-                                        placeholder="e.g. Computer Science"
-                                    />
-                                </div>
+
+                                {selectedAcademicLevel === "undergraduate" && (
+                                    <div className="space-y-2">
+                                        <Label>Academic Year</Label>
+                                        <Select value={selectedAcademicYear} onValueChange={setSelectedAcademicYear}>
+                                            <SelectTrigger className="w-full">
+                                                <SelectValue placeholder="Select year" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="1">Year 1 (Freshman)</SelectItem>
+                                                <SelectItem value="2">Year 2 (Sophomore)</SelectItem>
+                                                <SelectItem value="3">Year 3 (Junior)</SelectItem>
+                                                <SelectItem value="4">Year 4 (Senior)</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                )}
                             </div>
+
+                            {/* Info Banner */}
+                            {selectedUniversityData && (
+                                <div className="rounded-lg bg-primary/5 border border-primary/20 p-4 mt-4">
+                                    <div className="flex items-start gap-2">
+                                        <Info className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
+                                        <div className="text-sm">
+                                            <p className="font-medium text-foreground mb-1">What this means for your presentations:</p>
+                                            <ul className="text-muted-foreground space-y-0.5">
+                                                <li>• <span className="font-medium">Citation Style:</span> {selectedUniversityData.default_citation_style}</li>
+                                                <li>• <span className="font-medium">Spelling:</span> {selectedUniversityData.spelling_variant}</li>
+                                                <li>• <span className="font-medium">Units:</span> {selectedUniversityData.unit_system}</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </CardContent>
                         <CardFooter className="border-t border-border pt-6">
                             <Button
                                 variant="outline"
                                 className="ml-auto"
                                 onClick={handleSaveAcademic}
-                                disabled={savingAcademic}
+                                disabled={updateProfile.isPending}
                             >
-                                {savingAcademic ? (
+                                {updateProfile.isPending ? (
                                     <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</>
                                 ) : academicSaved ? (
                                     <><Check className="mr-2 h-4 w-4" /> Saved!</>

@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
         const decodedToken = await adminAuth.verifyIdToken(idToken);
 
         const body = await request.json();
-        const { title, mode } = body;
+        const { title } = body;
 
         // Get user ID
         const users = await db
@@ -72,7 +72,6 @@ export async function POST(request: NextRequest) {
         const [newProject] = await db.insert(schema.projects).values({
             userId: users[0].id,
             title: title || "Untitled Presentation",
-            mode: mode,
             status: "draft",
         }).returning();
 

@@ -7,6 +7,7 @@ Supports:
 - Outline review and modification
 - SSE streaming of generation progress
 - Session management with database persistence
+- R2 cloud storage for PDF uploads with content-hash caching
 """
 
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, UploadFile, File
@@ -19,6 +20,7 @@ import json
 import asyncio
 import os
 from pathlib import Path
+import threading
 
 from app.models.schemas import (
     OrderForm,
@@ -38,6 +40,8 @@ from app.crew.flows.slide_generation import (
 )
 from app.crew.flows.metrics import MetricsCollector
 from app.core.logging import get_logger
+from app.core.database import get_async_session
+from app.services.storage import get_storage_service, PDFCacheService
 
 logger = get_logger(__name__)
 
@@ -45,22 +49,96 @@ router = APIRouter(prefix="/generation", tags=["generation"])
 
 
 # =============================================================================
-# In-Memory Session Store (Replace with DB in production)
+# Thread-Safe In-Memory Session Store
 # =============================================================================
 
 _sessions: Dict[str, FlowState] = {}
+_sessions_lock = threading.RLock()  # Thread-safe lock for session access
 
 
 def get_session(session_id: str) -> FlowState:
-    """Get session from store."""
-    if session_id not in _sessions:
-        raise HTTPException(status_code=404, detail="Session not found")
-    return _sessions[session_id]
+    """Get session from store (thread-safe)."""
+    with _sessions_lock:
+        if session_id not in _sessions:
+            raise HTTPException(status_code=404, detail="Session not found")
+        return _sessions[session_id]
 
 
 def save_session(state: FlowState):
-    """Save session to store."""
-    _sessions[state.session_id] = state
+    """Save session to store (thread-safe)."""
+    with _sessions_lock:
+        _sessions[state.session_id] = state
+
+
+# =============================================================================
+# Background Processing Status Tracker
+# =============================================================================
+
+from enum import Enum
+from dataclasses import dataclass, field
+from datetime import datetime
+
+class ProcessingStatus(str, Enum):
+    """Status of PDF synthesis processing."""
+    QUEUED = "queued"        # Waiting to start
+    PROCESSING = "processing"  # Gemini is extracting content
+    COMPLETED = "completed"   # Successfully cached
+    FAILED = "failed"         # Synthesis failed
+
+
+@dataclass
+class ProcessingJob:
+    """Tracks a background synthesis job."""
+    file_hash: str
+    filename: str
+    r2_key: str
+    status: ProcessingStatus = ProcessingStatus.QUEUED
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    error_message: Optional[str] = None
+    sections_count: Optional[int] = None
+
+
+# In-memory tracking of processing jobs (keyed by file_hash)
+_processing_jobs: Dict[str, ProcessingJob] = {}
+_processing_lock = threading.RLock()
+
+
+def get_processing_status(file_hash: str) -> Optional[ProcessingJob]:
+    """Get the processing status for a file hash."""
+    with _processing_lock:
+        return _processing_jobs.get(file_hash)
+
+
+def set_processing_status(job: ProcessingJob):
+    """Update the processing status for a file."""
+    with _processing_lock:
+        _processing_jobs[job.file_hash] = job
+
+
+# =============================================================================
+# File Upload Helpers
+# =============================================================================
+
+ALLOWED_CONTENT_TYPES = {"application/pdf"}
+MAX_FILE_SIZE_MB = 50
+
+
+def validate_upload_file(file: UploadFile) -> None:
+    """Validate uploaded file is a PDF and within size limits."""
+    # Check content type
+    if file.content_type not in ALLOWED_CONTENT_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid file type: {file.content_type}. Only PDF files are allowed."
+        )
+    
+    # Check filename extension as fallback
+    if not file.filename.lower().endswith('.pdf'):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid file extension. Only .pdf files are allowed."
+        )
 
 
 # =============================================================================
@@ -72,11 +150,14 @@ class StartSessionResponse(BaseModel):
     session_id: str
     status: str
     message: str
+    files_uploaded: Optional[int] = None
+    cache_hits: Optional[int] = None  # Number of files with cached KnowledgeBase
 
 
 class ClarifyRequest(BaseModel):
     """Request to continue clarification."""
     message: str
+    file_hashes: Optional[List[str]] = None  # NEW: Hashes of attached files to process
 
 
 class ClarifyResponse(BaseModel):
@@ -91,6 +172,23 @@ class ClarifyResponse(BaseModel):
     message: Optional[str] = None  # Friendly message for the user
 
 
+class FileUploadResult(BaseModel):
+    """Result for a single uploaded file."""
+    file_hash: str
+    filename: str
+    size_bytes: int
+    r2_key: str
+    cached: bool  # True if KnowledgeBase already in cache
+    sections_count: Optional[int] = None  # If cached, how many sections
+
+
+class FileUploadResponse(BaseModel):
+    """Response from file upload endpoint."""
+    files: List[FileUploadResult]
+    total_cached: int
+    message: str
+
+
 class OutlineResponse(BaseModel):
     """Response containing the outline."""
     session_id: str
@@ -101,6 +199,7 @@ class OutlineResponse(BaseModel):
 class ApproveRequest(BaseModel):
     """Request to approve/modify outline."""
     modifications: Optional[List[Dict]] = None
+    modified_skeleton: Optional[Dict] = None  # Full skeleton replacement
 
 
 class GenerationStartResponse(BaseModel):
@@ -128,45 +227,85 @@ class SessionStatusResponse(BaseModel):
 # =============================================================================
 
 @router.post("/start", response_model=StartSessionResponse)
-async def start_session(files: Optional[List[UploadFile]] = File(None)):
+async def start_session_endpoint(
+    project_id: Optional[str] = None,
+    mode: Optional[str] = None,
+    topic: Optional[str] = None,
+    files: Optional[List[UploadFile]] = File(None),
+):
     """
     Start a new generation session.
     
+    Args:
+        project_id: Optional link to an existing project for history tracking
+        mode: Generation mode - "deep_research", "synthesis", or "replica"
+        topic: Initial topic for deep research mode
+        files: Optional PDF files for synthesis mode
+    
     Returns a session_id to use for subsequent calls.
     Begins in AWAITING_CLARIFICATION status (or SYNTHESIZING if files are provided).
+    
+    Files are uploaded to R2 cloud storage with content-hash deduplication.
     """
-    state = await create_session()
+    state = await create_session(project_id=project_id, mode=mode, topic=topic)
     save_session(state)
     
-    # If files are provided, run synthesis immediately
+    # If files are provided, upload to R2 and run synthesis
     if files:
         logger.info(f"Received {len(files)} files for synthesis. Starting session {state.session_id}")
         
-        # Save files to a temporary location
-        upload_dir = Path("generated_assets/uploads") / state.session_id
-        upload_dir.mkdir(parents=True, exist_ok=True)
+        storage = get_storage_service()
+        cache_service = PDFCacheService()
         
-        saved_paths = []
-        for file in files:
-            file_path = upload_dir / file.filename
-            with open(file_path, "wb") as f:
-                f.write(await file.read())
-            saved_paths.append(str(file_path))
-            
-        # Run synthesis (this updates flow status)
-        # Note: SlideGenerationFlow is created internally by create_session,
-        # but create_session returns FlowState. 
-        # We need the Flow object to call run_synthesis.
-        # SlideGenerationFlow(session_id=state.session_id) can be used to wrap state.
+        # Track uploaded files and cache hits
+        uploaded_files = []
+        cache_hits = 0
+        
+        # Get DB session for cache lookups
+        async for db_session in get_async_session():
+            for file in files:
+                # Validate file
+                validate_upload_file(file)
+                
+                # Read file content
+                file_data = await file.read()
+                
+                # Upload to R2 (with deduplication)
+                file_hash, r2_key, was_duplicate = await storage.upload_file(
+                    file_data=file_data,
+                    original_filename=file.filename,
+                    content_type=file.content_type or "application/pdf",
+                )
+                
+                # Check cache for existing KnowledgeBase
+                cached_kb = await cache_service.get_cached(file_hash, db_session)
+                if cached_kb:
+                    cache_hits += 1
+                
+                uploaded_files.append({
+                    "file_hash": file_hash,
+                    "r2_key": r2_key,
+                    "filename": file.filename,
+                    "size_bytes": len(file_data),
+                    "cached": cached_kb is not None,
+                })
+            break  # Only need one iteration of the generator
+        
+        # Store file info in state for synthesis
+        state.uploaded_files = uploaded_files
+        
+        # Run synthesis with R2 keys
         flow = SlideGenerationFlow(session_id=state.session_id)
         flow.state = state
-        await flow.run_synthesis(saved_paths)
+        await flow.run_synthesis_from_r2(uploaded_files)
         save_session(state)
         
         return StartSessionResponse(
             session_id=state.session_id,
             status=state.status,
-            message=f"Session created and synthesis started for {len(files)} files.",
+            message=f"Session created. {len(files)} files processed ({cache_hits} from cache).",
+            files_uploaded=len(files),
+            cache_hits=cache_hits,
         )
     
     return StartSessionResponse(
@@ -176,6 +315,221 @@ async def start_session(files: Optional[List[UploadFile]] = File(None)):
     )
 
 
+@router.post("/upload", response_model=FileUploadResponse)
+async def upload_files(files: List[UploadFile] = File(...)):
+    """
+    Upload PDF files to R2 storage and check cache.
+    
+    This is Phase 1 of the two-phase upload:
+    1. Upload to R2 + check cache (this endpoint)
+    2. Process with Gemini on message send (if not cached)
+    
+    Returns file hash and cache status for each file.
+    Frontend should call this as soon as user attaches files.
+    
+    If a file is not cached, background synthesis is started automatically.
+    Frontend can poll /processing-status/{file_hash} to check progress.
+    """
+    if not files:
+        raise HTTPException(status_code=400, detail="No files provided")
+    
+    logger.info(f"[UPLOAD] Starting upload for {len(files)} file(s)")
+    
+    storage = get_storage_service()
+    cache_service = PDFCacheService()
+    
+    results = []
+    total_cached = 0
+    files_to_process = []  # Files that need background synthesis
+    
+    async for db_session in get_async_session():
+        for file in files:
+            logger.info(f"[UPLOAD] Processing file: {file.filename}")
+            
+            # Validate file
+            validate_upload_file(file)
+            logger.info(f"[UPLOAD]   ✓ File validation passed")
+            
+            # Check file size (20MB limit)
+            file_data = await file.read()
+            file_size_mb = len(file_data) / 1024 / 1024
+            logger.info(f"[UPLOAD]   File size: {file_size_mb:.2f}MB")
+            
+            if len(file_data) > 20 * 1024 * 1024:  # 20MB
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"File '{file.filename}' exceeds 20MB limit ({file_size_mb:.1f}MB)"
+                )
+            
+            # Upload to R2 (with deduplication)
+            logger.info(f"[UPLOAD]   Uploading to R2...")
+            file_hash, r2_key, was_duplicate = await storage.upload_file(
+                file_data=file_data,
+                original_filename=file.filename,
+                content_type=file.content_type or "application/pdf",
+            )
+            logger.info(f"[UPLOAD]   ✓ R2 upload complete: hash={file_hash[:16]}... (duplicate={was_duplicate})")
+            
+            # Check cache for existing KnowledgeBase (this means Gemini has already processed it)
+            logger.info(f"[UPLOAD]   Checking if Gemini has processed this PDF...")
+            cached_kb = await cache_service.get_cached(file_hash, db_session)
+            is_cached = cached_kb is not None
+            sections_count = len(cached_kb.sections) if cached_kb else None
+            
+            # Check if already being processed
+            existing_job = get_processing_status(file_hash)
+            is_processing = existing_job and existing_job.status in [ProcessingStatus.QUEUED, ProcessingStatus.PROCESSING]
+            
+            if is_cached:
+                total_cached += 1
+                logger.info(f"[UPLOAD]   ✓ CACHE HIT: Gemini already processed - {sections_count} sections extracted")
+            elif is_processing:
+                logger.info(f"[UPLOAD]   ⏳ Already processing in background")
+            else:
+                # Queue for background processing
+                logger.info(f"[UPLOAD]   🚀 Queuing for background synthesis")
+                files_to_process.append({
+                    "file_hash": file_hash,
+                    "r2_key": r2_key,
+                    "filename": file.filename,
+                })
+                # Create job tracker
+                job = ProcessingJob(
+                    file_hash=file_hash,
+                    filename=file.filename,
+                    r2_key=r2_key,
+                    status=ProcessingStatus.QUEUED,
+                )
+                set_processing_status(job)
+            
+            results.append(FileUploadResult(
+                file_hash=file_hash,
+                filename=file.filename,
+                size_bytes=len(file_data),
+                r2_key=r2_key,
+                cached=is_cached,
+                sections_count=sections_count,
+            ))
+        break  # Only need one iteration of the generator
+    
+    # Start background synthesis for uncached files
+    if files_to_process:
+        logger.info(f"[UPLOAD] Starting background synthesis for {len(files_to_process)} file(s)")
+        for file_info in files_to_process:
+            asyncio.create_task(_run_background_synthesis(file_info))
+    
+    logger.info(f"[UPLOAD] Complete: {len(results)} file(s), {total_cached} cached, {len(files_to_process)} queued for processing")
+    
+    return FileUploadResponse(
+        files=results,
+        total_cached=total_cached,
+        message=f"{len(results)} file(s) uploaded. {total_cached} cached, {len(files_to_process)} processing.",
+    )
+
+
+async def _run_background_synthesis(file_info: Dict[str, str]):
+    """
+    Run synthesis in background for a single file.
+    Updates the ProcessingJob status throughout.
+    """
+    file_hash = file_info["file_hash"]
+    r2_key = file_info["r2_key"]
+    filename = file_info["filename"]
+    
+    logger.info(f"[BG-SYNTHESIS] Starting for {filename} ({file_hash[:16]}...)")
+    
+    # Update status to processing
+    job = ProcessingJob(
+        file_hash=file_hash,
+        filename=filename,
+        r2_key=r2_key,
+        status=ProcessingStatus.PROCESSING,
+        started_at=datetime.now(),
+    )
+    set_processing_status(job)
+    
+    try:
+        # Create a temporary flow just for synthesis
+        from app.crew.flows.slide_generation import SlideGenerationFlow
+        
+        flow = SlideGenerationFlow(session_id=f"bg-{file_hash[:16]}")
+        await flow.run_synthesis_from_r2([{
+            "file_hash": file_hash,
+            "r2_key": r2_key,
+            "filename": filename,
+        }])
+        
+        # Check if synthesis succeeded
+        if flow.state.knowledge_base and flow.state.knowledge_base.sections:
+            sections_count = len(flow.state.knowledge_base.sections)
+            job.status = ProcessingStatus.COMPLETED
+            job.sections_count = sections_count
+            job.completed_at = datetime.now()
+            logger.info(f"[BG-SYNTHESIS] ✓ Completed {filename}: {sections_count} sections")
+        elif flow.state.failure_context:
+            failures = flow.state.failure_context.get("failed_synthesis", [])
+            error_msg = failures[0].get("error", "Unknown error") if failures else "Unknown error"
+            job.status = ProcessingStatus.FAILED
+            job.error_message = error_msg
+            job.completed_at = datetime.now()
+            logger.error(f"[BG-SYNTHESIS] ✗ Failed {filename}: {error_msg}")
+        else:
+            job.status = ProcessingStatus.FAILED
+            job.error_message = "No content extracted"
+            job.completed_at = datetime.now()
+            logger.error(f"[BG-SYNTHESIS] ✗ Failed {filename}: No content extracted")
+            
+    except Exception as e:
+        logger.error(f"[BG-SYNTHESIS] ✗ Exception for {filename}: {e}")
+        job.status = ProcessingStatus.FAILED
+        job.error_message = str(e)
+        job.completed_at = datetime.now()
+    
+    set_processing_status(job)
+
+
+@router.get("/processing-status/{file_hash}")
+async def get_file_processing_status(file_hash: str):
+    """
+    Get the processing status for a specific file.
+    
+    Frontend can poll this while waiting for synthesis to complete.
+    """
+    job = get_processing_status(file_hash)
+    
+    if not job:
+        # Check if it's already cached
+        cache_service = PDFCacheService()
+        try:
+            async for db_session in get_async_session():
+                cached_kb = await cache_service.get_cached(file_hash, db_session)
+                if cached_kb:
+                    return {
+                        "file_hash": file_hash,
+                        "status": "completed",
+                        "cached": True,
+                        "sections_count": len(cached_kb.sections),
+                    }
+                break
+        except Exception:
+            pass
+        
+        raise HTTPException(
+            status_code=404,
+            detail="No processing job found for this file hash"
+        )
+    
+    return {
+        "file_hash": job.file_hash,
+        "filename": job.filename,
+        "status": job.status.value,
+        "started_at": job.started_at.isoformat() if job.started_at else None,
+        "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+        "sections_count": job.sections_count,
+        "error_message": job.error_message,
+    }
+
+
 @router.post("/clarify/{session_id}", response_model=ClarifyResponse)
 async def clarify_session(session_id: str, request: ClarifyRequest):
     """
@@ -183,6 +537,9 @@ async def clarify_session(session_id: str, request: ClarifyRequest):
     
     Send user messages here until the OrderForm is complete.
     The agent will ask follow-up questions until it has enough info.
+    
+    If file_hashes are provided, process any uncached PDFs before responding.
+    This enables mid-chat PDF uploads with immediate integration.
     
     When complete=True, proceed to /outline/{session_id}
     """
@@ -195,7 +552,107 @@ async def clarify_session(session_id: str, request: ClarifyRequest):
         )
     
     try:
-        result = await process_clarification(session_id, request.message, state)
+        # Process any new file attachments before agent response
+        new_files_processed = 0
+        synthesis_failures = []
+        
+        if request.file_hashes:
+            logger.info(f"[CLARIFY] Processing {len(request.file_hashes)} attached file(s)")
+            storage = get_storage_service()
+            cache_service = PDFCacheService()
+            
+            for file_hash in request.file_hashes:
+                logger.info(f"[CLARIFY] Checking file hash: {file_hash[:16]}...")
+                
+                # Check if already in session's uploaded_files
+                existing_hashes = {f.get("file_hash") for f in state.uploaded_files}
+                if file_hash in existing_hashes:
+                    logger.info(f"[CLARIFY]  ⏭ Already in session, skipping")
+                    continue  # Already processed
+                
+                # Check cache first (quick separate DB session)
+                logger.info(f"[CLARIFY]   Checking if Gemini has processed this PDF...")
+                cached_kb = None
+                try:
+                    async for db_session in get_async_session():
+                        cached_kb = await cache_service.get_cached(file_hash, db_session)
+                        break
+                except Exception as e:
+                    logger.warning(f"[CLARIFY]   Cache check failed: {e}")
+                
+                if cached_kb:
+                    # Merge cached KB into session
+                    logger.info(f"[CLARIFY]   ✓ CACHE HIT: Using pre-processed KnowledgeBase ({len(cached_kb.sections)} sections)")
+                    if state.knowledge_base:
+                        state.knowledge_base.sections.extend(cached_kb.sections)
+                        state.knowledge_base.summary += f"\n\n{cached_kb.summary}"
+                    else:
+                        state.knowledge_base = cached_kb
+                    new_files_processed += 1
+                else:
+                    # Need to process with Gemini - find R2 key
+                    logger.info(f"[CLARIFY]  CACHE MISS: Need to process with Gemini")
+                    
+                    # Search R2 for the file (no DB connection needed)
+                    r2_key = None
+                    logger.info(f"[CLARIFY]  Searching R2 for files with hash {file_hash[:16]}...")
+                    try:
+                        async with storage._get_client() as client:
+                            response = await client.list_objects_v2(
+                                Bucket=storage.bucket_name,
+                                Prefix=f"uploads/{file_hash}/",
+                                MaxKeys=1
+                            )
+                            contents = response.get("Contents", [])
+                            if contents:
+                                r2_key = contents[0]["Key"]
+                                logger.info(f"[CLARIFY]   ✓ Found R2 file: {r2_key}")
+                            else:
+                                logger.warning(f"[CLARIFY]  No files found in R2 with hash prefix")
+                    except Exception as e:
+                        logger.error(f"[CLARIFY]   ✗ Error searching R2: {e}")
+                    
+                    if r2_key:
+                        # Run synthesis (manages its own DB connections now)
+                        logger.info(f"[CLARIFY]  Starting Gemini processing for: {r2_key}")
+                        try:
+                            flow = SlideGenerationFlow(session_id=session_id)
+                            flow.state = state
+                            await flow.run_synthesis_from_r2([{
+                                "file_hash": file_hash,
+                                "r2_key": r2_key,
+                                "filename": r2_key.split("/")[-1] if "/" in r2_key else "document.pdf",
+                            }])
+                            
+                            # Check if synthesis had failures
+                            if state.failure_context and "failed_synthesis" in state.failure_context:
+                                synthesis_failures.extend(state.failure_context["failed_synthesis"])
+                            else:
+                                new_files_processed += 1
+                            logger.info(f"[CLARIFY]   ✓ Gemini processing complete")
+                        except Exception as e:
+                            logger.error(f"[CLARIFY]   ✗ Synthesis failed: {e}")
+                            synthesis_failures.append({
+                                "filename": r2_key.split("/")[-1] if "/" in r2_key else "document.pdf",
+                                "error": str(e)
+                            })
+                    else:
+                        logger.warning(f"[CLARIFY]   ✗ File not found - hash {file_hash[:16]} not in cache or R2")
+        
+        # Build message with synthesis status
+        message = request.message
+        if new_files_processed > 0:
+            message = f"[SYSTEM NOTE: {new_files_processed} new document(s) have been added to the context. The document content is now available for reference.]\n\nUser message: {message}"
+            logger.info(f"[CLARIFY] Injected system note for {new_files_processed} new document(s)")
+        
+        if synthesis_failures:
+            # Add failure notice so agent can inform user
+            failure_msg = f"[SYSTEM NOTE: {len(synthesis_failures)} document(s) could not be processed. "
+            failure_msg += "The user can paste relevant text content directly as a fallback.]\n\n"
+            message = failure_msg + message
+            logger.info(f"[CLARIFY] Injected synthesis failure note")
+        
+        result = await process_clarification(session_id, message, state)
         save_session(state)
         
         return ClarifyResponse(
@@ -208,21 +665,78 @@ async def clarify_session(session_id: str, request: ClarifyRequest):
             message=result.get("message"),
         )
     except Exception as e:
+        error_str = str(e)
         logger.error(f"Clarification failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        import traceback
+        traceback.print_exc()
+        
+        # Handle rate limit / quota errors
+        if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str or "quota" in error_str.lower():
+            # Extract retry delay if available
+            retry_delay = 60  # Default
+            if "retry in" in error_str.lower():
+                import re
+                match = re.search(r'retry in (\d+)', error_str.lower())
+                if match:
+                    retry_delay = int(match.group(1))
+            
+            raise HTTPException(
+                status_code=429,
+                detail={
+                    "error": "rate_limit",
+                    "message": "API rate limit exceeded. Please wait before trying again.",
+                    "retry_after": retry_delay,
+                    "user_message": f"You've hit the API rate limit. Please wait {retry_delay} seconds and try again."
+                }
+            )
+        
+        # Handle model not found errors
+        if "404" in error_str or "NOT_FOUND" in error_str or "is not found" in error_str:
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "error": "model_unavailable",
+                    "message": "The AI model is currently unavailable.",
+                    "user_message": "The AI service is temporarily unavailable. Please try again later."
+                }
+            )
+        
+        # Handle authentication errors
+        if "401" in error_str or "UNAUTHENTICATED" in error_str or "api key" in error_str.lower():
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "error": "auth_error",
+                    "message": "API authentication failed.",
+                    "user_message": "There's an issue with the AI service configuration. Please contact support."
+                }
+            )
+        
+        # Generic server error
+        raise HTTPException(
+            status_code=500, 
+            detail={
+                "error": "internal_error",
+                "message": str(e),
+                "user_message": "An unexpected error occurred. Please try again."
+            }
+        )
 
 
 @router.post("/confirm/{session_id}", response_model=ClarifyResponse)
-async def confirm_clarification(session_id: str):
+async def confirm_clarification(session_id: str, background_tasks: BackgroundTasks):
     """
     Confirm the gathered clarification info.
     
     Called when user clicks "Approve" button on the confirmation UI.
     Finalizes the OrderForm and moves to CLARIFICATION_COMPLETE status.
     
-    After this, proceed to /outline/{session_id}
+    Automatically triggers background outline generation.
     """
     state = get_session(session_id)
+    return await _confirm_clarification_logic(session_id, state, background_tasks)
+
+async def _confirm_clarification_logic(session_id: str, state: FlowState, background_tasks: BackgroundTasks):
     
     if state.status not in [FlowStatus.AWAITING_CLARIFICATION, "awaiting_clarification"]:
         raise HTTPException(
@@ -258,7 +772,7 @@ async def confirm_clarification(session_id: str):
         citation_style=state.gathered_info.citation_style or "apa",
         references_placement=state.gathered_info.references_placement or "last_slide",
         theme_id=state.gathered_info.theme or "modern",
-        include_speaker_notes=state.gathered_info.include_speaker_notes or True,
+        include_speaker_notes=False,  # Speaker notes not currently supported
         special_requests=state.gathered_info.special_requests or "",
         is_complete=True,
     )
@@ -266,6 +780,9 @@ async def confirm_clarification(session_id: str):
     state.order_form = order_form
     state.status = FlowStatus.CLARIFICATION_COMPLETE
     save_session(state)
+    
+    # TRIGGER OUTLINE GENERATION IN BACKGROUND
+    background_tasks.add_task(_run_outline_generation_task, session_id, state)
     
     return ClarifyResponse(
         session_id=session_id,
@@ -328,7 +845,12 @@ async def approve_outline_endpoint(session_id: str, request: ApproveRequest):
         )
     
     try:
-        skeleton = await approve_outline(session_id, state, request.modifications)
+        skeleton = await approve_outline(
+            session_id, 
+            state, 
+            request.modifications, 
+            request.modified_skeleton
+        )
         save_session(state)
         
         return OutlineResponse(
@@ -375,9 +897,55 @@ async def _run_generation_task(session_id: str, state: FlowState):
         await run_generation(session_id, state)
         save_session(state)
     except Exception as e:
+        error_str = str(e)
         logger.error(f"Generation failed: {e}")
         state.status = FlowStatus.FAILED
-        state.error_message = str(e)
+        
+        # Classify error for user-friendly message
+        if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str or "quota" in error_str.lower():
+            state.error_message = "Rate limit exceeded. Please wait a moment and try again."
+        elif "404" in error_str or "NOT_FOUND" in error_str:
+            state.error_message = "AI model temporarily unavailable. Please try again later."
+        elif "401" in error_str or "UNAUTHENTICATED" in error_str:
+            state.error_message = "API authentication issue. Please contact support."
+        else:
+            state.error_message = f"Generation failed: {str(e)[:200]}"
+        
+        save_session(state)
+
+
+async def _run_outline_generation_task(session_id: str, state: FlowState):
+    """Background task for outline generation."""
+    try:
+        logger.info(f"[OUTLINE_TASK] Starting background outline generation for session {session_id}")
+        logger.info(f"[OUTLINE_TASK] State BEFORE generate_outline: status={state.status}, skeleton={'SET' if state.skeleton else 'NONE'}")
+        
+        await generate_outline(session_id, state)
+        
+        logger.info(f"[OUTLINE_TASK] State AFTER generate_outline: status={state.status}, skeleton={'SET' if state.skeleton else 'NONE'}")
+        if state.skeleton:
+            logger.info(f"[OUTLINE_TASK] Skeleton has {len(state.skeleton.slides)} slides")
+        
+        save_session(state)
+        logger.info(f"[OUTLINE_TASK] save_session() completed for session {session_id}")
+        logger.info(f"[OUTLINE_TASK] ✅ Outline generation complete - frontend should now detect skeleton")
+    except Exception as e:
+        error_str = str(e)
+        logger.error(f"[OUTLINE_TASK] ❌ Background outline generation failed: {e}")
+        state.status = FlowStatus.FAILED
+        
+        # Classify error for user-friendly message
+        if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str or "quota" in error_str.lower():
+            state.error_message = "Rate limit exceeded. Please wait a moment and try again."
+        elif "503" in error_str or "overloaded" in error_str.lower() or "unavailable" in error_str.lower() or "timed out" in error_str.lower():
+            state.error_message = "AI service is temporarily overloaded. Please try again in a few minutes."
+        elif "404" in error_str or "NOT_FOUND" in error_str:
+            state.error_message = "AI model temporarily unavailable. Please try again later."
+        elif "401" in error_str or "UNAUTHENTICATED" in error_str:
+            state.error_message = "API authentication issue. Please contact support."
+        else:
+            state.error_message = f"Outline generation failed: {str(e)[:200]}"
+        
         save_session(state)
 
 
@@ -385,43 +953,52 @@ async def _run_generation_task(session_id: str, state: FlowState):
 async def stream_progress(session_id: str):
     """
     Stream generation progress via Server-Sent Events (SSE).
-    
-    Events:
-    - stage_start: {"stage": "planner"}
-    - stage_complete: {"stage": "planner", "result": {...}}
-    - slide_progress: {"slide_order": 1, "total": 10, "status": "generating"}
-    - error: {"message": "...", "stage": "..."}
-    - complete: {"slides_count": 10}
     """
-    state = get_session(session_id)
+    # Import here to avoid circular dependency
+    from app.crew.flows.slide_generation import FlowEventEmitter
+    
+    # Get or create emitter for this session
+    emitter = FlowEventEmitter.get_or_create(session_id)
     
     async def event_generator() -> AsyncGenerator[str, None]:
-        # Track state changes
-        last_stage = state.current_stage
-        last_slides = state.slides_completed
+        queue = asyncio.Queue()
         
-        while state.status in [FlowStatus.GENERATING, "generating", FlowStatus.QA_IN_PROGRESS]:
-            # Check for stage changes
-            if state.current_stage != last_stage:
-                yield f"event: stage_start\ndata: {json.dumps({'stage': state.current_stage})}\n\n"
-                last_stage = state.current_stage
+        async def listener(event: Dict):
+            await queue.put(event)
             
-            # Check for slide progress
-            if state.slides_completed != last_slides:
-                yield f"event: slide_progress\ndata: {json.dumps({'slide_order': state.slides_completed, 'total': state.total_slides})}\n\n"
-                last_slides = state.slides_completed
-            
-            await asyncio.sleep(0.5)
+        emitter.add_listener(listener)
         
-        # Final event
-        if state.status == FlowStatus.COMPLETED:
-            yield f"event: complete\ndata: {json.dumps({'slides_count': state.total_slides})}\n\n"
-        elif state.status == FlowStatus.FAILED:
-            yield f"event: error\ndata: {json.dumps({'message': state.error_message or 'Unknown error'})}\n\n"
-    
+        try:
+            while True:
+                # Wait for event with timeout to send keep-alive
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=15.0)
+                    event_type = event.get("type", "message")
+                    yield f"event: {event_type}\ndata: {json.dumps(event)}\n\n"
+                    
+                    if event_type == "complete" or event_type == "error":
+                        break
+                        
+                except asyncio.TimeoutError:
+                    # Keep-alive comment
+                    yield ": keep-alive\n\n"
+                    
+        except asyncio.CancelledError:
+            # Client disconnected
+            pass
+        finally:
+            # Remove listener if possible (requires better clean up in FlowEventEmitter)
+            if listener in emitter.listeners:
+                emitter.listeners.remove(listener)
+
     return StreamingResponse(
         event_generator(),
         media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
     )
 
 
@@ -433,6 +1010,13 @@ async def get_status(session_id: str):
     Use this to poll for completion if not using SSE streaming.
     """
     state = get_session(session_id)
+    
+    # Log status poll for debugging skeleton visibility
+    has_skeleton = state.skeleton is not None
+    if has_skeleton:
+        logger.debug(f"[STATUS_POLL] session={session_id[:8]}... status={state.status} skeleton=SET ({len(state.skeleton.slides)} slides)")
+    else:
+        logger.debug(f"[STATUS_POLL] session={session_id[:8]}... status={state.status} skeleton=NONE")
     
     return SessionStatusResponse(
         session_id=session_id,

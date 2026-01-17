@@ -1,6 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '20mb',
+    },
+  },
   turbopack: {
     // Explicitly set the workspace root to prevent lockfile detection issues
     root: __dirname,

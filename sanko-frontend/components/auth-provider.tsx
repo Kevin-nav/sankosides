@@ -17,8 +17,22 @@ type DbUser = {
     id: string;
     email: string;
     displayName: string | null;
+    photoUrl?: string | null;
     subscriptionTier: string;
     universityProfile: any | null;
+    preferences?: {
+        theme?: string;
+        citationStyle?: string;
+        aspectRatio?: string;
+        language?: string;
+        marketingEmails?: boolean;
+    } | null;
+    // Academic profile fields
+    universityId?: string | null;
+    facultyId?: string | null;
+    departmentId?: string | null;
+    academicLevel?: string | null;
+    academicYear?: number | null;
 };
 
 type AuthContextType = {

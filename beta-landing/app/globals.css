@@ -1,0 +1,174 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: #0a0a0f;
+  --color-foreground: #fafafa;
+  --font-sans: system-ui, -apple-system, sans-serif;
+}
+
+/* Base styles */
+@layer base {
+  * {
+    @apply border-neutral-800;
+  }
+
+  body {
+    @apply bg-[#0a0a0f] text-neutral-100 antialiased;
+  }
+
+  ::selection {
+    @apply bg-emerald-500/30;
+  }
+}
+
+/* Utility classes for glass effects */
+@layer utilities {
+  .glass-card {
+    @apply bg-neutral-900/60 backdrop-blur-md border border-white/5 rounded-2xl;
+  }
+
+  .glass-card-elevated {
+    @apply bg-neutral-900/80 backdrop-blur-lg border border-emerald-500/20 rounded-2xl shadow-xl shadow-emerald-900/10;
+  }
+
+  .hover-lift {
+    @apply transition-transform duration-300 hover:-translate-y-1;
+  }
+
+  .hover-glow {
+    @apply transition-shadow duration-300 hover:shadow-lg hover:shadow-emerald-500/10;
+  }
+
+  .tap-feedback {
+    @apply active:scale-[0.98] transition-transform;
+  }
+}
+
+/* Button styles */
+.btn {
+  @apply inline-flex items-center justify-center gap-2 px-6 py-3 rounded-full font-semibold transition-all duration-200;
+}
+
+.btn-primary {
+  @apply bg-emerald-500 text-white hover:bg-emerald-400 shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40;
+}
+
+.btn-lg {
+  @apply px-6 py-3.5 text-base sm:px-8 sm:py-4 sm:text-lg;
+}
+
+/* Form styles */
+.label {
+  @apply block text-sm font-medium text-neutral-300 mb-2;
+}
+
+.input {
+  @apply w-full px-4 py-3 rounded-xl bg-neutral-800/50 border border-neutral-700 text-white placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all;
+}
+
+.select {
+  @apply w-full px-4 py-3 rounded-xl bg-neutral-800/50 border border-neutral-700 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all appearance-none cursor-pointer;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+  background-position: right 0.75rem center;
+  background-repeat: no-repeat;
+  background-size: 1.5em 1.5em;
+}
+
+.textarea {
+  @apply w-full px-4 py-3 rounded-xl bg-neutral-800/50 border border-neutral-700 text-white placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all resize-none min-h-[100px];
+}
+
+/* Radio and checkbox groups */
+.radio-group,
+.checkbox-group {
+  @apply flex flex-wrap gap-2;
+}
+
+.radio-label,
+.checkbox-label {
+  @apply flex items-center gap-2 px-4 py-2 rounded-lg bg-neutral-800/30 border border-neutral-700 text-neutral-300 cursor-pointer transition-all hover:bg-neutral-800/50;
+}
+
+.radio-label:has(input:checked),
+.checkbox-label:has(input:checked) {
+  @apply bg-emerald-500/10 border-emerald-500/30 text-emerald-300;
+}
+
+.radio-label input,
+.checkbox-label input {
+  @apply sr-only;
+}
+
+/* Verified badge */
+.verified-badge {
+  @apply inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-sm font-medium;
+}
+
+/* Shimmer animation */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.shimmer::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg,
+      transparent,
+      rgba(16, 185, 129, 0.1),
+      transparent);
+  animation: shimmer 2s infinite;
+}
+
+/* Float animation */
+@keyframes float {
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* Glow pulse animation */
+@keyframes glow-pulse {
+
+  0%,
+  100% {
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.2);
+  }
+
+  50% {
+    box-shadow: 0 0 40px rgba(16, 185, 129, 0.4);
+  }
+}
+
+.animate-glow-pulse {
+  animation: glow-pulse 2s ease-in-out infinite;
+}
+
+/* Background gradient orbs */
+.bg-orb {
+  @apply absolute rounded-full blur-[100px] mix-blend-screen;
+}
+
+.bg-orb-emerald {
+  @apply bg-emerald-500/15;
+}
+
+.bg-orb-teal {
+  @apply bg-teal-500/10;
+}

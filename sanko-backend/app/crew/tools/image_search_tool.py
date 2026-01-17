@@ -16,7 +16,8 @@ from pydantic import BaseModel, Field
 from google import genai
 from google.genai import types
 
-from app.config import settings
+from app.core.config import settings
+from app.clients.gemini.retry import gemini_retry
 
 
 class ImageSearchResult(BaseModel):
@@ -145,20 +146,25 @@ Only return images that are:
 - Relevant to the query
 - From reputable sources"""
 
-            # Call Gemini with google_search tool enabled
-            response = self.client.models.generate_content(
-                model=settings.model_flash,
-                contents=[types.Content(
-                    role="user",
-                    parts=[types.Part(text=prompt)]
-                )],
-                config=types.GenerateContentConfig(
-                    tools=[types.Tool(google_search=types.GoogleSearch())],
-                    thinking_config=types.ThinkingConfig(
-                        thinking_level=settings.thinking_level_low
+            # Wrap API call with retry for transient errors (503, 429)
+            @gemini_retry(max_attempts=4, min_wait=1, max_wait=30)
+            def call_search_api():
+                return self.client.models.generate_content(
+                    model=settings.model_flash,
+                    contents=[types.Content(
+                        role="user",
+                        parts=[types.Part(text=prompt)]
+                    )],
+                    config=types.GenerateContentConfig(
+                        tools=[types.Tool(google_search=types.GoogleSearch())],
+                        thinking_config=types.ThinkingConfig(
+                            thinking_level=settings.thinking_level_low
+                        )
                     )
                 )
-            )
+            
+            # Call Gemini with google_search tool enabled (with retry)
+            response = call_search_api()
             
             # Parse response
             import json

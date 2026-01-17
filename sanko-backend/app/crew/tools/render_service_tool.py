@@ -3,14 +3,14 @@ RenderService CrewAI Tool
 
 Wraps the RenderService client as a CrewAI-compatible tool.
 Allows agents to render LaTeX equations, Mermaid diagrams, and format citations.
+
+Uses RenderWorker for thread-safe, connection-pooled HTTP calls.
 """
 
-import asyncio
 from typing import Optional, List, Dict, Any
 from crewai.tools import BaseTool
 from pydantic import Field
 
-from app.clients.render import RenderServiceClient
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -24,6 +24,8 @@ class RenderServiceTool(BaseTool):
     - LaTeX → SVG (math equations)
     - Mermaid → SVG (diagrams, flowcharts)
     - Citation formatting (APA, IEEE, Harvard, Chicago)
+    
+    Uses RenderWorker for thread-safe connection pooling.
     """
     name: str = "render_service"
     description: str = """Use this tool to render STEM content to SVG or format citations.
@@ -41,13 +43,10 @@ Available actions:
 Returns SVG strings for equations/diagrams, formatted text for citations.
 """
     
-    _client: Optional[RenderServiceClient] = None
-    
-    def _get_client(self) -> RenderServiceClient:
-        """Get or create the render service client."""
-        if self._client is None:
-            self._client = RenderServiceClient()
-        return self._client
+    def _get_worker(self):
+        """Get the singleton RenderWorker instance."""
+        from app.services.render_worker import get_render_worker
+        return get_render_worker()
     
     def _run(
         self,
@@ -58,7 +57,7 @@ Returns SVG strings for equations/diagrams, formatted text for citations.
         style: str = "apa",
     ) -> str:
         """
-        Execute a render action.
+        Execute a render action using the connection-pooled worker.
         
         Args:
             action: "latex", "mermaid", or "citation"
@@ -70,25 +69,13 @@ Returns SVG strings for equations/diagrams, formatted text for citations.
         Returns:
             Rendered result as string (SVG for equations/diagrams, formatted text for citations)
         """
-        # Run async code in sync context
-        return asyncio.run(self._async_run(action, content, citation, citations, style))
-    
-    async def _async_run(
-        self,
-        action: str,
-        content: Optional[str],
-        citation: Optional[Dict[str, Any]],
-        citations: Optional[List[Dict[str, Any]]],
-        style: str,
-    ) -> str:
-        """Async implementation of the render action."""
-        client = self._get_client()
+        worker = self._get_worker()
         
         try:
             if action == "latex":
                 if not content:
                     return "Error: 'content' is required for latex rendering"
-                result = await client.render_latex(content)
+                result = worker.render_latex_sync(content)
                 if result.get("success", True) and "svg" in result:
                     return result["svg"]
                 return f"Error rendering LaTeX: {result.get('error', 'Unknown error')}"
@@ -96,21 +83,46 @@ Returns SVG strings for equations/diagrams, formatted text for citations.
             elif action == "mermaid":
                 if not content:
                     return "Error: 'content' is required for mermaid rendering"
-                result = await client.render_mermaid(content)
+                result = worker.render_mermaid_sync(content)
                 if result.get("success", True) and "svg" in result:
                     return result["svg"]
                 return f"Error rendering Mermaid: {result.get('error', 'Unknown error')}"
             
             elif action == "citation":
                 if citations:
-                    result = await client.format_citations(citations, style)
+                    cit_list = citations
                 elif citation:
-                    result = await client.format_citation(citation, style)
+                    cit_list = [citation]
                 else:
                     return "Error: 'citation' or 'citations' is required"
                 
+                result = worker.format_citation_sync(cit_list, style)
+                
+                # Handle different response formats
                 if result.get("success", True) and "citations" in result:
-                    return "\n".join(result["citations"])
+                    formatted_list = []
+                    for c in result["citations"]:
+                        if isinstance(c, str):
+                            formatted_list.append(c)
+                        elif isinstance(c, dict) and "formatted" in c:
+                            formatted_list.append(c["formatted"])
+                        elif isinstance(c, dict):
+                            # Fallback: construct from dict fields
+                            parts = []
+                            if c.get("authors"):
+                                authors = c["authors"]
+                                if isinstance(authors, list):
+                                    parts.append(", ".join(authors))
+                                else:
+                                    parts.append(str(authors))
+                            if c.get("year"):
+                                parts.append(f"({c['year']})")
+                            if c.get("title"):
+                                parts.append(c["title"])
+                            formatted_list.append(" ".join(parts) if parts else str(c))
+                        else:
+                            formatted_list.append(str(c))
+                    return "\n".join(formatted_list)
                 elif result.get("success", True) and "formatted" in result:
                     return result["formatted"]
                 return f"Error formatting citation: {result.get('error', 'Unknown error')}"

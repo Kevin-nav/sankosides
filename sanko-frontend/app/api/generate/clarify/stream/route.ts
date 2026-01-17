@@ -10,7 +10,7 @@ export const runtime = 'nodejs';
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
-        const { session_id, answer } = body;
+        const { session_id, answer, file_hashes } = body;
 
         if (!session_id) {
             return NextResponse.json(
@@ -26,7 +26,10 @@ export async function POST(request: NextRequest) {
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ message: answer }),
+            body: JSON.stringify({
+                message: answer,
+                file_hashes: file_hashes || undefined,
+            }),
         });
 
         if (!response.ok) {
@@ -40,11 +43,24 @@ export async function POST(request: NextRequest) {
         const encoder = new TextEncoder();
         const stream = new ReadableStream({
             start(controller) {
+                // Determine content to display
+                // Priority: question (agent text) > message (system text) > default
+                const content = data.question || data.message || 'Got it! Let me process that...';
+
                 // Send content event with the response
-                const content = data.question || 'Got it! Let me process that...';
                 controller.enqueue(
                     encoder.encode(`event: content\ndata: ${JSON.stringify({ text: content })}\n\n`)
                 );
+
+                // Handle Confirmation requirement
+                if (data.needs_confirmation) {
+                    controller.enqueue(
+                        encoder.encode(`event: needs_confirmation\ndata: ${JSON.stringify({
+                            summary: data.summary,
+                            message: data.message
+                        })}\n\n`)
+                    );
+                }
 
                 // Send done event
                 controller.enqueue(

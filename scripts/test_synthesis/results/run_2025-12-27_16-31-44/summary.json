@@ -1,0 +1,102 @@
+{
+  "run_name": "run_2025-12-27_16-31-44",
+  "total_runs": 7,
+  "last_updated": "2025-12-27T16:57:48.918991",
+  "overall": {
+    "total": 7,
+    "successes": 4,
+    "failures": 3,
+    "success_rate": 57.14285714285714,
+    "avg_time_ms": 107009.89457500327,
+    "avg_sections": 10.0,
+    "error_types": {
+      "json_truncated": 1,
+      "api_error": 2
+    }
+  },
+  "by_strategy": {
+    "baseline": {
+      "total": 1,
+      "successes": 0,
+      "failures": 1,
+      "success_rate": 0.0,
+      "avg_time_ms": 0,
+      "avg_sections": 0,
+      "error_types": {
+        "json_truncated": 1
+      }
+    },
+    "baseline_t01": {
+      "total": 1,
+      "successes": 1,
+      "failures": 0,
+      "success_rate": 100.0,
+      "avg_time_ms": 227236.11850000452,
+      "avg_sections": 8.0,
+      "error_types": {}
+    },
+    "baseline_t02": {
+      "total": 1,
+      "successes": 0,
+      "failures": 1,
+      "success_rate": 0.0,
+      "avg_time_ms": 0,
+      "avg_sections": 0,
+      "error_types": {
+        "api_error": 1
+      }
+    },
+    "chunked_10": {
+      "total": 1,
+      "successes": 1,
+      "failures": 0,
+      "success_rate": 100.0,
+      "avg_time_ms": 0.0,
+      "avg_sections": 0.0,
+      "error_types": {}
+    },
+    "chunked_5": {
+      "total": 1,
+      "successes": 1,
+      "failures": 0,
+      "success_rate": 100.0,
+      "avg_time_ms": 0.0,
+      "avg_sections": 0.0,
+      "error_types": {}
+    },
+    "two_phase": {
+      "total": 1,
+      "successes": 0,
+      "failures": 1,
+      "success_rate": 0.0,
+      "avg_time_ms": 0,
+      "avg_sections": 0,
+      "error_types": {
+        "api_error": 1
+      }
+    },
+    "model_3_pro": {
+      "total": 1,
+      "successes": 1,
+      "failures": 0,
+      "success_rate": 100.0,
+      "avg_time_ms": 200803.45980000857,
+      "avg_sections": 32.0,
+      "error_types": {}
+    }
+  },
+  "by_pdf": {
+    "1S2.1 Str.O.Mat 152.pdf": {
+      "total": 7,
+      "successes": 4,
+      "failures": 3,
+      "success_rate": 57.14285714285714,
+      "avg_time_ms": 107009.89457500327,
+      "avg_sections": 10.0,
+      "error_types": {
+        "json_truncated": 1,
+        "api_error": 2
+      }
+    }
+  }
+}

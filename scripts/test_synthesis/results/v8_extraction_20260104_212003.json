@@ -1,0 +1,919 @@
+{
+  "pdf": "Basic Materials Science 2025.pdf",
+  "extracted_at": "2026-01-04T21:20:03.523157",
+  "mode": "v8.0_optimized",
+  "stats": {
+    "total_chunks": 15,
+    "success": 15,
+    "batch_direct": 15,
+    "repaired": 0,
+    "sync_retry": 0,
+    "total_sections": 123,
+    "time_minutes": 4.0,
+    "cost": 0.0885
+  },
+  "sections": [
+    {
+      "title": "Basic Materials Science",
+      "content": "Basic Materials Science\nCompiled by:\nDoreen Attom (Ms)\nUniversity of Mines & Technology\nMinerals Engineering Department\nSecond Semester, 2025.",
+      "visuals": [
+        "A graphic element on the left consisting of overlapping yellow, red, and blue squares with a black crosshair line."
+      ],
+      "page_range": "1"
+    },
+    {
+      "title": "Course Content",
+      "content": "Course Content\n1.0 INTRODUCTION AND SCOPE\n2.0 Structure of Atoms, Molecules and Crystals\n3.0 Metal Alloys\n4.0 Crystal Defects/ Imperfections in Solids\n5.0 Phase Diagrams\n6.0 Corrosion\n7.0 Diffusion in solids\n8.0 Mechanical properties of Materials\n9.0 Polymers",
+      "visuals": [
+        "A table listing course topics from 1.0 to 9.0 with alternating light green and white row backgrounds."
+      ],
+      "page_range": "2-3"
+    },
+    {
+      "title": "Learning Objectives",
+      "content": "Learning Objectives\n◼ Students are expected to understand:\n➢ The importance of materials science and various classification of materials\n➢ Concept and properties of materials;\n➢ Selection and manufacturing processes",
+      "visuals": [],
+      "page_range": "4"
+    },
+    {
+      "title": "Implementation Strategy",
+      "content": "Implementation Strategy\n❑ Lectures\n❑ Tutorials\n❑ Assignments\n❑ Discussion\n❑ Quizzes\n❑ Exam",
+      "visuals": [],
+      "page_range": "5"
+    },
+    {
+      "title": "Assessment",
+      "content": "Assessment\n❑ End of semester exam 60%\n❑ Continuous assessment 40%\n❑ Attendance 10%\n❑ Assignments / Quizzes 30%",
+      "visuals": [],
+      "page_range": "6"
+    },
+    {
+      "title": "Introduction",
+      "content": "Introduction\n◼ Material Science is the branch of science that investigates the relationship existing between structures of materials, their properties and applications to various areas of science and engineering.\n◼ Classification of Materials:\nMaterials are classified based on their physical and chemical properties.\nIntroduction Cont’d\n◼ Engineering materials may also be classified as;\n◼ Metals and alloys\n◼ Ceramics\n◼ Organic Polymers\n◼ Metals and Alloys\n◼ Metals are polycrystalline bodies consisting of a great number of fine crystals differently oriented with respect to one another\n◼ NB: Pure metals are of low strength\n◼ Usually do not possess the required physicochemical and technological properties for definite processes\n◼ Alloys are produced by melting or sintering two or more metals or metals and a non-metal together.\n◼ Ceramic materials: These are non-metallic solids made of inorganic compounds such as oxides, silicides, etc.\n◼ Traditional ceramics have been used in pottery, porcelain, cement\n◼ New ceramics possess exceptional characteristics and are extensively used in aerospace and nuclear industry, electronic control devices, computers, etc\n◼ Organic Materials are derived directly from carbon.\n◼ Carbon is usually chemically combined with hydrogen, oxygen or other non-metallic substances.\n◼ Polymers are usually termed as organic materials.\n◼ Engineering materials can be classified into:\n◼ Conductors\n◼ Semi-conductors\n◼ Insulators (Dielectric)\n◼ Magnetic: (Ferromagnetic, paramagnetic, Diamagnetic)\n◼ Biomaterials\n◼ Advanced Materials\n◼ Smart Materials\n▪ Biomaterials: Components applied in the human body for replacement of deceased or damaged body parts\n▪ Metals, ceramics, composites, polymers can all be used as biomaterials.\n◼ Advanced Materials: Used in high technology.\n◼ Operates using sophisticated principles\n◼ They are typically either traditional materials whose properties have been enhanced or newly developed\n◼ Egs. Fiberoptic system, VCRs and CDs, Aircraft, spacecraft, etc.\n◼ Materials of Future/Smart materials: A group of new or state- of-the- art materials being developed that will have significant influence on our technologies.\n◼ They are able to detect changes in their environment and respond accordingly.\n◼ Components of smart materials include sensors and actuators.",
+      "visuals": [
+        "Page 8: A 'Materials Tree' diagram classifying materials into Metals (Ferrous Alloys: Steels, Cast Irons; Aluminium Alloys: Al-Cu, Al-Mg; Copper Alloys: Brass-Cu-Zn, Bronze-Cu-Sn), Ceramics (Engineering Ceramics: Barium Titanate, PZT; Traditional Ceramics: Stone, Porcelain), Polymers (Thermosets: Melamine Formaldehyde, Polyimides; Thermoplastics: Polypropylene, Polyethylene, Nylon; Elastomers: Nitrile Rubber, Silicone rubber), and Composites (Metal Matrix Composites: Tungsten-Carbide Cobalt; Polymer Matrix Composites: Carbon-Fibre Reinforced Plastics; Ceramic Matrix Composites).",
+        "Page 9: A collage of images showing various material applications: metal cutlery and gears, aluminum soda cans, glass bottles, plastic milk jugs and soda bottles, a bicycle helmet, and plastic dice/balls."
+      ],
+      "page_range": "7-17"
+    },
+    {
+      "title": "Components of Materials Science and their Interactions",
+      "content": "Components of Materials Science and their Interactions\n◼ Aluminium oxide material\n◼ Left: Single crystal, transparent, low porosity, optical clarity\n◼ Center: numerous and small single crystals connected, semi-transparent, dense.\n◼ Right: interconnected crystals, but also of a large number of very small pores spaces, opaque, less dense",
+      "visuals": [
+        "A horizontal flowchart showing the relationship: Processing -> Structure -> Properties -> Performance.",
+        "A photograph showing three circular samples of Aluminium oxide placed over text to demonstrate transparency: the left sample is clear (single crystal), the center is translucent (polycrystalline), and the right is opaque (porous)."
+      ],
+      "page_range": "18"
+    },
+    {
+      "title": "Introduction Cont’d (Properties and Selection)",
+      "content": "Introduction Cont’d\n◼ Properties of materials\n◼ Physical (Melting and freezing point, boiling point, density, linear coefficient of expansion, thermal conductivity, electrical resistivity)\n◼ Mechanical (Strength, hardness, plasticity, ductility, malleability, elasticity, toughness, ductility, brittleness, fatigue, creep)\n◼ Electrical (resistivity, conductivity, dielectric strength, etc.)\n◼ Magnetic (magnetic hysteresis, coercive force, etc.)\n◼ Chemical (corrosion resistance, chemical composition, acidity of alkalinity)\nNB: Properties of materials arise from their structure\nIntroduction Cont’d\nGeneral selection of Materials\n◼ Mechanical strength\n◼ Ductility\n◼ Design\n◼ Stability\n◼ Corrosion resistance\n◼ Cost\n◼ Availability\n◼ Fabricability",
+      "visuals": [],
+      "page_range": "19-20"
+    },
+    {
+      "title": "Introduction Cont’d",
+      "content": "Properties of materials\n\nPhysical (Melting and freezing point, boiling point, density, linear coefficient of expansion, thermal conductivity, electrical resistivity)\n\nMechanical (Strength, hardness, plasticity, ductility, malleability, elasticity, toughness, ductility, brittleness, fatigue, creep)\n\nElectrical (resistivity, conductivity, dielectric strength, etc.)\n\nMagnetic (magnetic hysteresis, coercive force, etc.)\n\nChemical (corrosion resistance, chemical composition, acidity of alkalinity)\n\nNB: Properties of materials arise from their structure\n\nGeneral selection of Materials\n\nMechanical strength\nDuctility\nDesign\nStability\nCorrosion resistance\nCost\nAvailability\nFabricability\n\nManufacturing Processes\n\nCold working (bending, pressing, stamping, etc.)\nHot working (welding, rolling, etc.)\nForging (hand forging, machine forging)\nCasting (sand casting, die casting, etc.)",
+      "page_range": "19-21"
+    },
+    {
+      "title": "Assignment",
+      "content": "State the differences between metals and non-metals based on the following properties.\n\nStructure, State, Conductivity, Lustre, Malleability, Ductility, Hardness, Density",
+      "page_range": "22"
+    },
+    {
+      "title": "CHAPTER 2",
+      "content": "ATOMIC STRUCTURE AND BONDING",
+      "page_range": "23"
+    },
+    {
+      "title": "Atom",
+      "content": "To understand the structure of materials and its correlation to property, we have to start from the basic element of matter.\n\n-ATOM-\n\nAn atom is a smaller component of an element, having the chemical properties of the element.\n\nRemember that the atom is not the smallest thing that exist.\n\nThere are smaller subatomic particles, but these sub-atomic particles do not possess the chemical properties of the element.",
+      "page_range": "24-25"
+    },
+    {
+      "title": "Review of the atomic structure",
+      "content": "An atom is made up of a Nucleus (protons and neutrons) and electrons.\n\nProtons are (+ve) charged\n\nElectrons are (-ve) charged\n\nNeutrons are electrically neutral\n\nTeaser:\nWhat is the importance of neutrons in the nucleus of an atom?\n\nTherefore a neutral atom has no charge\n\nThis is because the charge of the proton and the electron cancel out\n\nAlmost all the mass of the atom is contained in the nucleus and the mass of the electrons is almost negligible compared to the mass of the protons and neutrons.\n\nEach atom consists of a very small nucleus composed of protons and neutrons, which is encircled by moving electrons.\n\nBoth electrons and protons are electrically charged, the charge magnitude is negative in sign for electrons and positive for protons; neutrons are electrically neutral.\n\nMasses for these subatomic particles are infinitesimally small; protons and neutrons have approximately the same mass, which is significantly larger than that of an electron\n\nEach element is characterized by the number of protons in the nucleus or its Atomic number (Z).\n\nFor an electrically neutral, the atomic number also equals the number of electrons.\n\nThe Atomic mass (A) of a specific atom = the sum of the masses of protons and neutrons within the nucleus.\n\nAlthough the number of protons is the same for all atoms of a given element, the number of neutrons (N) may be variable.\n\nAtoms of some elements have two or more different atomic masses, which are called isotopes.\n\nFrom this we can say that chlorine 37 is heavier than chlorine 35….\n\nWhy is that?\n\nIsotopes usually have similar chemical properties, but varying physical properties",
+      "visuals": [
+        "Diagram of a Carbon atom showing a central nucleus containing 6 protons and 6 neutrons, surrounded by two electron shells containing a total of 6 electrons.",
+        "Table of subatomic particles: Proton (mass: $1.67 \\times 10^{-27}$ kg, relative charge: +1), Neutron (mass: $1.67 \\times 10^{-27}$ kg, relative charge: 0), Electron (mass: $9.11 \\times 10^{-31}$ kg, relative charge: -1).",
+        "Table of Chlorine isotopes: Chlorine 35 (17 protons, mass number 35, 18 neutrons) and Chlorine 37 (17 protons, mass number 37, 20 neutrons)."
+      ],
+      "page_range": "26-30"
+    },
+    {
+      "title": "Atomic Models",
+      "content": "Several atomic models, tried to explain the sub-atomic structure and how electrons exist and interact with entities within the nucleus. Some of these models are:\n\nThompson’s plum pudding model\nRutherford’s nuclear model\nSommerfeld’s model\nVector model\nWave-mechanical model\n\nIn the context of this course, we will focus mostly on the Bohr model and the wave mechanical model.\n\nBohr’s atomic model\nElectrons in atoms are described in terms of both position (electron orbitals) and energy (quantized energy levels). This atomic model assumes that electrons revolve around the atomic nucleus in discrete orbitals, and the position of any particular electron is more or less well defined (fixed) in terms of its orbital. These orbits are called stationary orbits ($n = 1,2,3,4\\dots$)\n\nElectrons' positions are fixed; however, an electron can jump to a higher or lower energy level by absorption or emission of energy.\n\nThe Bohr model was found to have some significant limitations because of its inability to explain several phenomena involving electrons.\n\n(Class assignment: What are the limitations of Bohr’s atomic model?)\n\nWave-mechanical model\n\nElectrons have wavelike and particulate properties.\n\nThis means that electrons are in orbitals defined by a probability.\n\nEach orbital at discrete energy level is determined by quantum numbers\n\nQuantum numbers: the angular momentum of the electron is equal to an integral multiple $\\frac{nh}{2\\pi}$ where $n$ is an integer called Quantum number\n\nThe studies have revealed that four quantum numbers are necessary to fully explain the energy and location of electrons in an atom\n\nPrincipal Quantum number (n)\nOrbital or Azimuthal number (l)\nMagnetic quantum number ($m_l$)\nSpin quantum number ($m_s$)\n\nShells are specified by a principal quantum number n, which may take on integral values beginning with unity; sometimes these shells are designated by the letters K, L, M, N, O, and so on, which correspond, respectively, to $n = 1, 2, 3, 4, 5\\dots$\n\nNote also that this quantum number, and it only, is also associated with the Bohr model.\n\nThis quantum number is related to the distance of an electron from the nucleus, or its position\n\nThe second quantum number, orbital quantum number l, signifies the sub-shell, which is denoted by a lowercase letter an s, p, d, or f; it is related to the shape of the electron subshell.\n\nIn addition, the number of these subshells is restricted by the magnitude of n. Allowable subshells for the several n values are also presented in the Table.\n\nThe number of energy states for each subshell is determined by the third quantum number, magnetic quantum number, $m_l$.\n\nFor an s sub-shell, there is a single energy state, whereas for p, d, and f subshells, three, five, and seven states exist, respectively.\n\nIn the absence of an external magnetic field, the states within each subshell are identical.\n\nHowever, when a magnetic field is applied these subshell states split, each state assuming a slightly different energy.\n\nAssociated with each electron is a spin moment, $m_s$, which must be oriented either up or down. Related to this spin moment is the fourth quantum number, for which two values are possible ($+1/2$ and $-1/2$), one for each of the spin orientations.\n\nThus, the Bohr model was further refined by wave mechanics, in which the introduction of three new quantum numbers gives rise to electron subshells within each shell.",
+      "visuals": [
+        "Diagram of an atom showing a nucleus with 6 protons and 6 neutrons, an inner orbital with two 1s electrons, and an outer orbital with four $sp^3$ hybrid bonding electrons.",
+        "Bohr model diagram showing concentric electron orbits labeled $n=1, n=2, n=3$ around a nucleus $+Ze$. An arrow indicates an electron jumping between levels with an associated energy wave labeled $\\Delta E = hf$.",
+        "Visual representation of the wave-mechanical model showing a dense cloud of probability (purple dots) surrounding a central green nucleus."
+      ],
+      "page_range": "31-38"
+    },
+    {
+      "title": "Atomic Models",
+      "content": "Atomic Models\n▪ The second quantum number, orbital quantum number $l$, signifies the sub shell, which is denoted by a lowercase letter an s, p, d, or f; it is related to the shape of the electron subshell.\n▪ In addition, the number of these subshells is restricted by the magnitude of $n$. Allowable subshells for the several $n$ values are also presented in the Table.\n▪ The number of energy states for each subshell is determined by the third quantum number, magnetic quantum number, $m_l$.\n▪ For an s sub-shell, there is a single energy state, whereas for p, d, and f subshells, three, five, and seven states exist, respectively.\nAtomic Models\n▪ In the absence of an external magnetic field, the states within each subshell are identical.\n▪ However, when a magnetic field is applied these subshell states split, each state assuming a slightly different energy.\n▪ Associated with each electron is a spin moment, $m_s$, which must be oriented either up or down. Related to this spin moment is the fourth quantum number, for which two values are possible ($+1/2$ and $-1/2$), one for each of the spin orientations.\n▪ Thus, the Bohr model was further refined by wave mechanics, in which the introduction of three new quantum numbers gives rise to electron subshells within each shell.\nAtomic Models\nThe number of available electron states in some of the electron shells and subshells",
+      "visuals": [
+        "Table on page 39 titled 'The number of available electron states in some of the electron shells and subshells' listing Principal Quantum Number n (1 to 4), Shell Designation (K, L, M, N), Subshells (s, p, d, f), Number of States, and Number of Electrons per subshell and per shell."
+      ],
+      "page_range": "37-39"
+    },
+    {
+      "title": "Electronic configuration",
+      "content": "Electronic configuration\n▪ Distribution of electrons in various sub-shells around the nucleus.\n▪ Valence electrons are those that occupy the outermost shell.\n▪ These electrons are extremely important; as will be seen, they participate in the bonding between atoms to form atomic and molecular aggregates.\n▪ Many of the physical and chemical properties of solids are based on these valence electrons\nElectronic configuration\n▪ Some atoms have what are termed “stable electron configurations”; that is, the states within the outermost or valence electron shell are completely filled.\n▪ Normally this corresponds to the occupation of just the s and p states for the outermost shell by a total of eight electrons, as in neon, argon, and krypton; one exception is helium, which contains only two 1s electrons.\n▪ These elements (Ne, Ar, Kr, and He) are the inert, or noble, gases, which are virtually unreactive chemically.\n▪ Some atoms of the elements that have unfilled valence shells assume stable electron configurations by gaining or losing electrons to form charged ions, or by sharing electrons with other atoms\n▪ This is the basis for some chemical reactions, and also for atomic bonding in solids.\nElectronic configuration\nElectronic configuration\n• E.g., Sodium, ($^{23}Na_{11}$) has 11 electrons – the configuration is shown in the first figure.\n$^{23}Na_{11}$\nor $1s^2 2s^2 2p^6 3s^1$\n• The electrons in the outer most shell are known as valence electrons. Na has one valence electron (the 3s electron).\n• These valence electrons are responsible for chemical reaction and atomic bonding (Remember the question about isotopes?)",
+      "visuals": [
+        "Table on page 42 showing electronic configurations for elements from Hydrogen to Krypton, highlighting stable configurations for noble gases.",
+        "Orbital diagram on page 43 for Sodium (Na) showing electron filling in 1s, 2s, 2p, and 3s subshells using arrows in boxes."
+      ],
+      "page_range": "40-43"
+    },
+    {
+      "title": "The Periodic Table",
+      "content": "The Periodic Table\nThe Periodic Table\n▪ Ionisation Energy (IE): This is the energy required to remove the most weakly bound (usually the outermost) electron from an isolated gaseous atom.\n▪ The general trend in the periodic table is for the ionisation energy to increase from bottom to top and from left to right\n▪ $Atom (g) + IE \\rightarrow positive ion (g) + e^-$\n▪ Electron Affinity (EA): Electron affinity is the reverse process to the ionisation energy;\n▪ The energy change (often expressed in eV) associated with an isolated gaseous atom accepting one electron\nThe Periodic Table\n▪ Electron affinity of an atom or molecule is defined as the amount of energy released when an electron is added to a neutral atom or molecule in the gaseous state to form a negative ion\n$Atom (g) + e^- \\rightarrow negative ion (g)$\n▪ The EA is positive if energy is released upon formation of the negative ion. If energy is required, EA is negative.\n▪ The general trend in the periodic table is again toward an increase in EA as we go from the bottom to top, and left to right\nThe Periodic Table\n▪ Atomic and ionic radii: In general, positive ions are smaller than neutral atoms, while\n▪ negative ions are larger. The trend in ionic and atomic radii is opposite to that of IE and EA.\n▪ In general, there is an increase in radius from top to bottom, right to left.\nThe Periodic Table\n▪ Electronegativity: This describes the tendency of an atom to attract electrons (or electron density) towards itself. Electronegative atoms readily accept electrons to form negatively charged ions, or sometimes they share their valence electrons with other atoms.\n▪ As a general rule, electronegativity increases in moving from left to right and from bottom to top.\n▪ Atoms are more likely to accept electrons if their outer shells are almost full, and if they are less “shielded” from (i.e., closer to) the nucleus",
+      "visuals": [
+        "Full periodic table on page 44 color-coded by metal, nonmetal, and intermediate categories.",
+        "Four schematic diagrams on page 50 showing periodic trends for ionization energy, electron affinity, atomic and ionic radii, and electronegativity."
+      ],
+      "page_range": "44-48, 50"
+    },
+    {
+      "title": "Ionization Energy",
+      "content": "Ionization Energy",
+      "visuals": [
+        "Periodic table on page 49 with red arrows indicating that Ionization Energy increases from left to right and from bottom to top."
+      ],
+      "page_range": "49"
+    },
+    {
+      "title": "Atomic Bonding",
+      "content": "Atomic Bonding\nThere are two categories of atomic bonding\nPrimary bonds (strong bonds)\nSecondary bonds (weak bonds)\nPrimary bonds: Ionic bonds, Covalent bonds, Metallic bonds\nMajority of the engineering materials consist of primary bonds.\nMany properties of the materials depend on the specific kind of bond and the bond energy.",
+      "page_range": "51"
+    },
+    {
+      "title": "Ionic Bonding",
+      "content": "Ionic Bonding\n• Requires electron transfer.\n• Large difference in electronegativity required.\n• Example: NaCl\nIonic Bonding\nex: NaCl: Na $1s^2 2s^2 2p^6 3s^1$ Cl $1s^2 2s^2 2p^6 3s^2 3p^5$\nNa+ $1s^2 2s^2 2p^6$ [Ne] Cl- $1s^2 2s^2 2p^6 3s^2 3p^6$ [Ar]\nex: MgO: Mg $1s^2 2s^2 2p^6 3s^2$ O $1s^2 2s^2 2p^4$\nMg2+ $1s^2 2s^2 2p^6$ [Ne] O2- $1s^2 2s^2 2p^6$ [Ne]\nThe ions (+ve and –ve) formed are then held closely together by strong electrostatic forces",
+      "visuals": [
+        "Diagram on page 52 illustrating electron transfer from Sodium to Chlorine to form an ionic bond.",
+        "Diagram on page 53 showing electron configurations and transfer for NaCl and MgO."
+      ],
+      "page_range": "52-53"
+    },
+    {
+      "title": "Properties of ionic bonds",
+      "content": "Properties of ionic bonds\n• Ionic bonds possess high bond energy – 450 – 1000 kJ/mol\n• High melting point, high strength and hardness.\n• As the electrons are tightly bound to the atoms they are generally poor conductors of heat and electricity\n• They are brittle in nature",
+      "page_range": "54"
+    },
+    {
+      "title": "Covalent bonding",
+      "content": "Covalent bonding\n▪ Covalent bonds result when atoms share their valence electrons to complete their outermost subshells and to acquire more stability.\n▪ It occurs between atoms with similar electronegativities\n▪ Covalent bonds are stable, because the bonding atoms achieve noble gas configuration\n▪ Examples of covalent bonds include: $H_2, CH_4, O_2, HCl, NH_3$, Diamond, etc.",
+      "visuals": [
+        "Lewis dot diagram on page 55 of Methane (CH4) showing shared electron pairs between Carbon and Hydrogen."
+      ],
+      "page_range": "55"
+    },
+    {
+      "title": "Properties of Covalent Bonding",
+      "content": "Properties of Covalent Bonding\n• Very strong and hard\n• High melting temperatures\n• They are non-ductile (non-malleable)\n• They have very poor electrical conductivity (why?)",
+      "visuals": [
+        "Bohr model diagrams on page 56 for HCl and NH3 illustrating covalent bonding through shared electrons."
+      ],
+      "page_range": "56"
+    },
+    {
+      "title": "Covalent bonding",
+      "content": "Covalent bonding\n▪ Covalent bonds result when atoms share their valence electrons to complete their outermost subshells and to acquire more stability.\n▪ It occurs between atoms with similar electronegativities\n▪ Covalent bonds are stable, because the bonding atoms achieve noble gas configuration\n▪ Examples of covalent bonds include: H2, CH4, O2, HCl, NH3, Diamond, etc.",
+      "visuals": [
+        "Diagram of a methane (CH4) molecule showing a central carbon atom sharing electrons with four hydrogen atoms. Red dots represent electrons from hydrogen, and blue dots represent electrons from carbon."
+      ],
+      "page_range": "55"
+    },
+    {
+      "title": "Properties of Covalent Bonding",
+      "content": "Properties of Covalent Bonding\n• Very strong and hard\n• High melting temperatures\n• They are non-ductile (non-malleable)\n• They have very poor electrical conductivity (why?)",
+      "visuals": [
+        "Two diagrams illustrating covalent bonding: one for Hydrogen Chloride (HCl) showing overlapping electron shells, and one for Ammonia (NH3) showing a central Nitrogen atom bonded to three Hydrogen atoms."
+      ],
+      "page_range": "56"
+    },
+    {
+      "title": "Metallic bonding",
+      "content": "Metallic bonding\n• Metallic bonding is made of positively charged ions surrounded by a sea of their valence electrons\n• The positive ions are closely packed in crystalline structures\n• The valence electrons are free to move and can readily change their positions\n• The positive ions and the delocalized electrons are held together by strong electrostatic attractions",
+      "visuals": [
+        "Two diagrams illustrating metallic bonding. The top diagram shows a regular grid of positive ions (+) with small negative electrons (-) interspersed. The bottom diagram shows a similar grid of red positive ions labeled 'Ion core' surrounded by blue negative electrons labeled 'Electrons sea'."
+      ],
+      "page_range": "57"
+    },
+    {
+      "title": "Secondary Bonding",
+      "content": "Secondary Bonding\nClass assignment:\n• What are the different types of secondary atomic bonding?\n• Describe the bonding phenomena in these types of bonds and the characteristics of the bonds.\n• With the aid of examples, differentiate between polar and non-polar covalent bonding.",
+      "visuals": [],
+      "page_range": "58"
+    },
+    {
+      "title": "Crystal Structure",
+      "content": "Crystal Structure\n◼ Materials are classified as crystalline or amorphous according to how the atoms or molecules are arranged in the solid\nSolids are classified according to the arrangement of atoms or molecules\nSolid\nCrystalline Amorphous\nCrystalline solids:\nThe arrangement of atom is regular and repeated in 3D pattern throughout the entirety of the crystalline solid without interruption\n◼ Crystalline materials are said to have a long-range order.\nAtoms are situated in a repetitive or periodic array over large atomic distances\nExamples of crystalline materials are: diamonds, table salt, ice, sugar, and most metals.",
+      "visuals": [
+        "A flow chart showing 'Solid' branching into 'Crystalline' and 'Amorphous'.",
+        "Diagram (a) labeled 'Long-range order (LRO)' showing a periodic array of atoms with translation vectors $\\bar{b}$ and $a$ defining a unit cell, and a point $P_{(2,3)}$."
+      ],
+      "page_range": "59-62"
+    },
+    {
+      "title": "Non-crystalline (Amorphous) solids",
+      "content": "Non-crystalline (Amorphous) solids\n•Solids lack a systematic, repeated and regular arrangement of atoms\n•If the arrangement of atoms is just localised and does not repeat itself in three dimensions, the material is said to be amorphous (non-crystalline)\n•Has a short-range order.\nShort-Range Order\n◼ Examples of amorphous materials are: rubber, glass, gel, etc.\n◼ While most metals and alloys are ordinarily crystalline, some become amorphous when they are quenched very drastically from the liquid state.\n◼ Thus solids are not necessarily crystalline. For the same reason, while most liquids have short-range order, some exhibit long-range order and are crystalline as in liquid crystalline polymers",
+      "visuals": [
+        "Diagram labeled 'Short-Range Order' showing a disordered arrangement of atoms with small clusters of local order."
+      ],
+      "page_range": "63-65"
+    },
+    {
+      "title": "Crystalline and Non-crystalline solids",
+      "content": "Crystalline and Non-crystalline solids\n◼ NB: The distinction between a crystalline and an amorphous material is made using diffraction techniques.\n◼ A crystalline material will diffract and exhibit diffraction patterns, while an amorphous material does not.",
+      "visuals": [
+        "XRD Patterns of Crystalline Mt. Tokadeh Magnetite Ore: A graph of Intensity (Arbitrary units) vs Position [2$\\theta$] (Cobalt (Co)) showing sharp peaks labeled with mineral phases like $Fe_3O_4$ and $SiO_2$.",
+        "XRD Patterns of Amorphous Polystyrene: A graph of Intensity (arbitrary units) vs 2Thetha Deg. (Cu) showing a broad, diffuse 'hump' instead of sharp peaks."
+      ],
+      "page_range": "66-68"
+    },
+    {
+      "title": "Polymorphism and Allotropy",
+      "content": "Polymorphism and Allotropy\n◼ Some metals, as well as nonmetals, may have more than one crystal structure, a phenomenon known as polymorphism. When found in elemental solids, the condition is often termed allotropy.\n◼ The prevailing crystal structure depends on both the temperature and the external pressure. One familiar example is found in carbon: graphite is the stable allotrope at ambient conditions, whereas diamond is formed at extremely high pressures.\n◼ Also, pure iron has a BCC crystal structure at room temperature, which changes to FCC iron at $912^\\circ\\text{C}$ ($1674^\\circ\\text{F}$).\n◼ Most often a modification of the density and other physical properties accompanies a polymorphic transformation.",
+      "visuals": [],
+      "page_range": "69-70"
+    },
+    {
+      "title": "Crystal Structure - Unit Cells",
+      "content": "Crystal Structure\n◼ A unit cell is the most convenient smallest cell in a crystal structure, which carries the exact properties of the crystal\n◼ The repetitions of the unit cells in three-dimensions generates the whole crystal structure\n◼ Three translation vectors a, b, and c, and their angular relationships $\\alpha$, $\\beta$, and $\\gamma$ define the shape and crystal system",
+      "visuals": [
+        "Three diagrams of crystal structures: 1) A large lattice of spheres with a single cubic unit cell highlighted. 2) A geometric representation of a unit cell showing spheres at corners and faces. 3) A wireframe model of a cubic unit cell with atoms at corners and face centers."
+      ],
+      "page_range": "71-72"
+    },
+    {
+      "title": "Crystal Systems and Bravais Lattices",
+      "content": "Crystal Systems and Bravais Lattices\nSystem | Axial Lengths and Angles | Bravais Lattice\nCubic | Three equal axes at right angles $a=b=c; \\alpha=\\beta=\\gamma=90^\\circ$ | Simple, Body-Centred, Face-Centred\nTetragonal | Three axes at right angles, two equal $a=b\\neq c; \\alpha=\\beta=\\gamma=90^\\circ$ | Simple, Body-Centred\nOrthorhombic | Three unequal axes at right angles $a\\neq b\\neq c; \\alpha=\\beta=\\gamma=90^\\circ$ | Simple, Body-Centred, Base-Centred, Face-Centred\nRhombohedral | Three equal axes, equally inclined $a=b=c; \\alpha=\\beta=\\gamma\\neq 90^\\circ$ | Simple\nHexagonal | Two equal coplanar axes at $120^\\circ$ Third axis at right angles $a=b\\neq c; \\alpha=\\beta=90^\\circ; \\gamma=120^\\circ$ | Simple\nMonoclinic | Three unequal axes, one pair not at right angles; $a\\neq b\\neq c; \\alpha=\\gamma=90^\\circ\\neq \\beta$ | Simple, Base-Centred\nTriclinic | Three unequal axes, unequally inclined; none at right angles $a\\neq b\\neq c; \\alpha\\neq \\beta\\neq \\gamma\\neq 90^\\circ$ | Simple",
+      "visuals": [
+        "A table summarizing the seven crystal systems, their axial relationships, and their corresponding Bravais lattices.",
+        "Diagrams of the seven crystal systems: simple cubic, tetragonal, orthorhombic, rhombohedral, monoclinic, triclinic, and hexagonal, showing their respective axes (a, b, c) and angles ($\\alpha, \\beta, \\gamma$)."
+      ],
+      "page_range": "73-74"
+    },
+    {
+      "title": "Crystal Systems and Bravais Lattices",
+      "content": "Crystal Systems and Bravais Lattices\nSystem | Axial Lengths and Angles | Bravais Lattice\nCubic | Three equal axes at right angles $a=b=c; \\alpha=\\beta=\\gamma=90^\\circ$ | Simple, Body-Centred, Face-Centred\nTetragonal | Three axes at right angles, two equal $a=b\\neq c; \\alpha=\\beta=\\gamma=90^\\circ$ | Simple, Body-Centred\nOrthorhombic | Three unequal axes at right angles $a\\neq b\\neq c; \\alpha=\\beta=\\gamma=90^\\circ$ | Simple, Body-Centred, Base-Centred, Face-Centred\nRhombohedral | Three equal axes, equally inclined $a=b=c; \\alpha=\\beta=\\gamma\\neq 90^\\circ$ | Simple\nHexagonal | Two equal coplanar axes at $120^\\circ$ Third axis at right angles $a=b\\neq c; \\alpha=\\beta=90^\\circ; \\gamma=120^\\circ$ | Simple\nMonoclinic | Three unequal axes, one pair not at right angles; $a\\neq b\\neq c; \\alpha=\\gamma=90^\\circ\\neq \\beta$ | Simple, Base-Centred\nTriclinic | Three unequal axes, unequally inclined; none at right angles $a\\neq b\\neq c; \\alpha\\neq \\beta\\neq \\gamma\\neq 90^\\circ$ | Simple\n\nCrystal Systems\nsimple cubic $a=b=c$ $\\alpha=\\beta=\\gamma=90^\\circ$\ntetragonal $a=b\\neq c$ $\\alpha=\\beta=\\gamma=90^\\circ$\northorhombic $a\\neq b\\neq c$ $\\alpha=\\beta=\\gamma=90^\\circ$\nrhombohedral $a=b=c$ $\\alpha=\\beta=\\gamma\\neq 90^\\circ$\nmonoclinic $a\\neq b\\neq c$ $\\gamma\\neq \\alpha=\\beta=90^\\circ$\ntriclinic $a\\neq b\\neq c$ $\\alpha\\neq \\beta\\neq \\gamma\\neq 90^\\circ$\nhexagonal $a=b\\neq c$ $\\alpha=\\beta=90^\\circ, \\gamma=120^\\circ$",
+      "visuals": [
+        "Table of Crystal Systems and Bravais Lattices detailing axial lengths, angles, and lattice types.",
+        "Diagrams of the seven crystal systems: simple cubic, tetragonal, orthorhombic, rhombohedral, monoclinic, triclinic, and hexagonal with their respective lattice parameters."
+      ],
+      "page_range": "73-74"
+    },
+    {
+      "title": "Definition of terms",
+      "content": "Definition of terms\n• Lattice: a three-dimensional array of points coinciding with atomic sphere centres.\n• Unit cell: a small repeat entity representing the symmetry of the crystal structure.\n• Coordination number (Z): the number of nearest neighbour atoms surrounding each atom in a crystal structure\n• Atomic packing factor (APF): the volume fraction of atomic spheres in a unit cell\n\nDefinition of Terms\n◼ Body-Centred Cubic: There is one atom or ion in the centre of the unit cell in addition to the corner atom or ions.\n◼ Face-Centred Cubic: There are atoms or ions in the centre of each of the six faces of the unit cell.\n◼ Simple cubic: The atoms or ions are at the corners of the unit cell only.\n◼ Unit cell: The smallest portion of a crystal lattice that shows the three-dimensional pattern of the entire crystal.",
+      "visuals": [
+        "Three rows of diagrams for Simple Cubic, Face-centered cubic, and Body-centered cubic. The top row shows ball-and-stick models, the middle row shows space-filling models, and the bottom row shows unit cell models with atom fractions."
+      ],
+      "page_range": "75-77"
+    },
+    {
+      "title": "Crystal Structures for Metallic Elements",
+      "content": "Crystal Structures for Metallic Elements\n◼ 90% of metals have either Body Centered Cubic (BCC), Face Centered Cubic (FCC) or Hexagonal Close Packed (HCP) crystal structure.",
+      "visuals": [
+        "Ball-and-stick diagrams for BCC Structure, FCC Structure, and HCP Structure."
+      ],
+      "page_range": "78"
+    },
+    {
+      "title": "BCC Crystal Structure",
+      "content": "BCC Crystal Structure\n• Represented as one atom at each corner of a cube and one at the center of cube\n• Each atom has 8 nearest neighbours\n• Therefore, coordination number is 8\n\nBCC Crystal Structure\n• Each atom in the corner of the unit cell is shared by 8 different unit cells.\n• Therefore corner atom is 1/8 of an atom Total number of atoms: $(8 \\times 1/8) + 1 = 2$ atoms\n\nBCC crystal structure\n$APF = \\text{volume of atoms / volume of unit cell}$\nThe relationship between $a$ and $R$ for BCC is: $a = \\frac{4R}{\\sqrt{3}}$\nWhere $a$ is the cubic edge length\n$R$ is the radius of the atom\nCalculate the APF of a BCC material...\nE.g.: Chromium, Iron, Molybdenum",
+      "visuals": [
+        "Space-filling and ball-and-stick diagrams for the BCC crystal structure.",
+        "Space-filling model of a Body-centered cubic lattice.",
+        "Unit cell diagram for BCC showing the geometric relationship between the edge length $a$ and the atomic radius $R$ along the body diagonal."
+      ],
+      "page_range": "79-81"
+    },
+    {
+      "title": "FCC crystal structure",
+      "content": "FCC crystal structure\n• FCC structure has one atom at the corner of each unit cell and one at the center of each face\n• Each atom is surrounded by 12 adjacent atoms (coordination number = 12), whether the atom is located at a corner or at the center of the unit cell\n\nFCC Structure\n• Each unit cell has eight 1/8 atom at corners\n• Each unit cell has six 1/2 atoms at the center of six faces\nTherefore each unit cell has: $(8 \\times 1/8) + (6 \\times 1/2) = 4$ atoms\n\nFCC crystal structure\n$APF = \\text{volume of atoms / volume of unit cell}$\nThe relationship between $a$ and $R$ for FCC is: $a = 2R\\sqrt{2}$\nWhere $a$ is the cubic edge length\n$R$ is the radius of the atom\nCalculate the APF of an FCC material....\nFCC crystal structure is termed to be \"cubic closest packing\"...\nE.g.: Aluminum, copper, lead, silver, nickel",
+      "visuals": [
+        "Space-filling and ball-and-stick diagrams for the FCC crystal structure.",
+        "Space-filling model of a Face-centered cubic lattice.",
+        "Unit cell diagram for FCC showing the geometric relationship between the edge length $a$ and the atomic radius $R$ along the face diagonal."
+      ],
+      "page_range": "82-84"
+    },
+    {
+      "title": "HCP Crystal Structure",
+      "content": "HCP Crystal Structure\n▪ The HCP structure is represented as an atom at each of 12 corners of a hexagonal prism, 2 atoms at top and bottom face and 3 atoms in between top and bottom face.\n▪ Coordination number is 12\n▪ How many atoms has an HCP crystal structure?",
+      "visuals": [
+        "Three diagrams for HCP: (c) hexagonal close packing (space-filling), unit cell (ball-and-stick), and atom centres."
+      ],
+      "page_range": "85"
+    },
+    {
+      "title": "Atomic Packing Factor (A.P.F)",
+      "content": "Atomic Packing Factor (A.P.F)\nAtomic packing factor = $\\frac{\\text{Volume of Atoms per unit cell}}{\\text{Volume of the unit cell}}$\nCalculate the APF for the following;\n1. Simple Cube\n2. Body centered cube\n3. Face centered cube\n\nVolume Packing Fractions of Different Structures\nStructure | No. of atoms per unit cell | Volume Packing Fraction\nBCC | 2 | 0.68\nFCC | 4 | 0.74\nHCP (unit cell) | 2 | 0.74\nHCP (hexagon) | 6 (three unit cells) | 0.74\nDiamond Cubic | 8 | 0.34\nSimple Cubic | 1 | 0.524",
+      "visuals": [
+        "Table titled 'Volume Packing Fractions of Different Structures' listing BCC, FCC, HCP, Diamond Cubic, and Simple Cubic with their respective atom counts and packing fractions."
+      ],
+      "page_range": "86-87"
+    },
+    {
+      "title": "Determination of FCC Unit Cell Volume",
+      "content": "Determination of FCC Unit Cell Volume\nCalculate the volume of an FCC unit cell in terms of the atomic radius $R$.\nSolution\nIn the FCC unit cell illustrated,\nthe atoms touch one another across a face-diagonal the length of which is $4R$. Since the unit cell is a cube, its volume is $a^3$, where $a$ is the cell edge length. From the right triangle on the face,\n$a^2 + a^2 = (4R)^2$\nor, solving for $a$,\n$a = 2R\\sqrt{2}$ (3.1)\nThe FCC unit cell volume $V_C$ may be computed from\n$V_C = a^3 = (2R\\sqrt{2})^3 = 16R^3\\sqrt{2}$ (3.4)",
+      "visuals": [
+        "Unit cell diagram for FCC showing the face diagonal $4R$ and edge length $a$."
+      ],
+      "page_range": "88"
+    },
+    {
+      "title": "Computation of the Atomic Packing Factor for FCC",
+      "content": "Computation of the Atomic Packing Factor for FCC\nShow that the atomic packing factor for the FCC crystal structure is 0.74.\nSolution\nThe APF is defined as the fraction of solid sphere volume in a unit cell, or\n$$APF = \\frac{\\text{volume of atoms in a unit cell}}{\\text{total unit cell volume}} = \\frac{V_S}{V_C}$$\nBoth the total atom and unit cell volumes may be calculated in terms of the atomic radius $R$. The volume for a sphere is $\\frac{4}{3}\\pi R^3$, and since there are four atoms per FCC unit cell, the total FCC atom (or sphere) volume is\n$$V_S = (4)\\frac{4}{3}\\pi R^3 = \\frac{16}{3}\\pi R^3$$\nFrom Example Problem 3.1, the total unit cell volume is\n$$V_C = 16R^3\\sqrt{2}$$\nTherefore, the atomic packing factor is\n$$APF = \\frac{V_S}{V_C} = \\frac{(\\frac{16}{3})\\pi R^3}{16R^3\\sqrt{2}} = 0.74$$",
+      "visuals": [],
+      "page_range": "89-90"
+    },
+    {
+      "title": "Density Computations",
+      "content": "Density Computations\nA knowledge of the crystal structure of a metallic solid permits computation of its theoretical density through the relationship\n$$\\rho = \\frac{nA}{V_C N_A}$$\nwhere\n$n = \\text{number of atoms associated with each unit cell}$\n$A = \\text{atomic weight}$\n$V_C = \\text{volume of the unit cell}$\n$N_A = \\text{Avogadro's number } (6.023 \\times 10^{23} \\text{ atoms/mol})$\n\nTheoretical Density Computation for Copper\nCopper has an atomic radius of 0.128 nm, an FCC crystal structure, and an atomic weight of 63.5 g/mol. Compute its theoretical density and compare the answer with its measured density.\nSolution\nEquation 3.5 is employed in the solution of this problem. Since the crystal structure is FCC, $n$, the number of atoms per unit cell, is 4. Furthermore, the atomic weight $A_{Cu}$ is given as 63.5 g/mol. The unit cell volume $V_C$ for FCC was determined in Example Problem 3.1 as $16R^3\\sqrt{2}$, where $R$, the atomic radius, is 0.128 nm.\nSubstitution for the various parameters into Equation 3.5 yields\n$$\\rho = \\frac{n A_{Cu}}{V_C N_A} = \\frac{n A_{Cu}}{(16R^3\\sqrt{2}) N_A}$$\n$$= \\frac{(4 \\text{ atoms/unit cell})(63.5 \\text{ g/mol})}{[16\\sqrt{2}(1.28 \\times 10^{-8} \\text{ cm})^3/\\text{unit cell}](6.023 \\times 10^{23} \\text{ atoms/mol})}$$\n$$= 8.89 \\text{ g/cm}^3$$",
+      "visuals": [],
+      "page_range": "91-92"
+    },
+    {
+      "title": "Density Computations",
+      "content": "A knowledge of the crystal structure of a metallic solid permits computation of its theoretical density through the relationship\n$$\\rho = \\frac{nA}{V_C N_A}$$\nwhere\n$n$ = number of atoms associated with each unit cell\n$A$ = atomic weight\n$V_C$ = volume of the unit cell\n$N_A$ = Avogadro's number ($6.023 \\times 10^{23}$ atoms/mol)\n\nTheoretical Density Computation for Copper\nCopper has an atomic radius of 0.128 nm, an FCC crystal structure, and an atomic weight of 63.5 g/mol. Compute its theoretical density and compare the answer with its measured density.\nSolution\nEquation 3.5 is employed in the solution of this problem. Since the crystal structure is FCC, $n$, the number of atoms per unit cell, is 4. Furthermore, the atomic weight $A_{Cu}$ is given as 63.5 g/mol. The unit cell volume $V_C$ for FCC was determined in Example Problem 3.1 as $16R^3 \\sqrt{2}$, where $R$, the atomic radius, is 0.128 nm.\nSubstitution for the various parameters into Equation 3.5 yields\n$$\\rho = \\frac{n A_{Cu}}{V_C N_A} = \\frac{n A_{Cu}}{(16R^3 \\sqrt{2}) N_A}$$\n$$= \\frac{(4 \\text{ atoms/unit cell})(63.5 \\text{ g/mol})}{[16\\sqrt{2}(1.28 \\times 10^{-8} \\text{ cm})^3/\\text{unit cell}](6.023 \\times 10^{23} \\text{ atoms/mol})}$$\n$$= 8.89 \\text{ g/cm}^3$$",
+      "visuals": [
+        "Formula for density $\\rho = \\frac{nA}{V_C N_A}$ with variable definitions.",
+        "Step-by-step calculation of the theoretical density of copper."
+      ],
+      "page_range": "91-92"
+    },
+    {
+      "title": "Metal Alloys",
+      "content": "An alloy is defined as a substance that contains a mixture of elements and has metallic properties.\nAlloys can be classified into two types, viz., substitutional alloys and interstitial alloys.",
+      "visuals": [
+        "A flow chart showing the classification of Steel into Carbon Steel (Low Carbon Steel/Mild Steel, Medium Carbon Steel, High Carbon Steel), Alloy Steel, Stainless Steel (Ferritic, Martensitic, Austenitic, Duplex, Precipitation Hardening (PH)), and Tool Steel."
+      ],
+      "page_range": "93-94"
+    },
+    {
+      "title": "Substitutional Alloys",
+      "content": "In this alloys, some of the host metal atoms are replaced by other metal atoms of similar size. For example, in brass zinc atoms replace approximately one-third of the atoms in the host copper metal.\nBrass is an example of a substitutional alloy\nSterling silver (93% silver and 7% copper), pewter (85% tin, 7% copper, 6% bismuth, and 2% antimony) and plumber’s solder (67% lead and 33% tin) are other examples of substitutional alloys",
+      "visuals": [
+        "Diagram showing a lattice of copper atoms (brown) with some replaced by zinc atoms (white/silver) to form brass. A legend identifies the brown circles as Copper and the white/silver circles as Zinc."
+      ],
+      "page_range": "95-96"
+    },
+    {
+      "title": "Interstitial Alloys",
+      "content": "An interstitial alloy is formed when some of the interstices (holes) in the closest-packed metal structure are occupied by small atoms.\nSteel is the best-known as interstitial alloy, and it contains carbon atoms in the holes of an iron crystal.\nThe presence of the interstitial atoms changes the properties of the host metal.\nSteel is an example of an interstitial alloys",
+      "visuals": [
+        "Diagram showing a lattice of iron atoms (grey) with smaller carbon atoms (black dots) occupying the spaces between them. A legend identifies the black dots as Carbon and the grey circles as Iron."
+      ],
+      "page_range": "97"
+    },
+    {
+      "title": "Imperfections in Solids",
+      "content": "A perfect crystal, with every atom of the same type in the correct position, does not exist.\nThere always exist crystalline defects, which can be point defects occurring at a single lattice point; line defects occurring along a row of atoms; or planar/area/interfacial defects occurring over a two-dimensional surface in the crystal.\nThere can also be three dimensional defects such as voids\nAny deviation from the perfect atomic arrangement in a crystal is said to contain imperfections or defects.\nCrystalline defect is a lattice irregularity having one or more of its dimensions on the order of an atomic dimension.\nThere are 4 major categories of crystalline defects:\n• Zero dimensional: Point defects occurring at a single lattice point.\n• One-dimensional: Linear defects (dislocations) occurring along a row of atoms.\n• Two-dimensional: Planar (surface) defects occurring over a two-dimensional surface in the crystal.\n• Three-dimensional: Volume (bulk) (void) defects\nDefects influence the electrical and mechanical properties of solids. Almost, or perhaps all, technology involving materials depends on the existence of some kind of defects.\nAdding alloying elements to a metal is one way of introducing a crystal defect. Crystal imperfections have strong influence upon many properties of crystals, such as strength, electrical conductivity and hysteresis loss of ferromagnetism.\nThus, some important properties of crystals are controlled by as much as by imperfections and by the nature of the host crystals.\nThe conductivity of some semiconductors is due to entirely trace amount of chemical impurities.\nColor, luminescence of many crystals arise from impurities and imperfections\nAtomic diffusion may be accelerated enormously by impurities or imperfections\nMechanical and plastic properties are usually controlled by imperfections.",
+      "visuals": [],
+      "page_range": "98-101"
+    },
+    {
+      "title": "Crystal Defects Classification",
+      "content": "1. Point defects:\na. Vacancy\nb. Schottky\nc. Self-interstitial\nd. Frenkel\n2. Line defects\na. Edge dislocation\nb. Screw dislocation\n3. Planer/area/interfacial defects\na. Grain boundaries\nb. External surfaces\nc. Tilt boundaries\nd. Twin boundaries\n4. Volume defects\na. Inclusions\nb. Voids\nc. Cracks\nd. Foreign inclusions\ne. Other phases",
+      "visuals": [],
+      "page_range": "102"
+    },
+    {
+      "title": "Point Defects",
+      "content": "A self-interstitial is an atom from the crystal that is crowded into an interstitial site, a small void space that under ordinary circumstances is not occupied.\nPoint Defects:\nPoint defects are where an atom is missing or is in an irregular place in the lattice structure.\nVacancies\nThe most common defects are point defects. This is especially true at high temperatures when atoms are frequently and randomly change their positions leaving behind empty lattice sites, called vacancies.\nVacancies are empty spaces where an atom should be, but is missing. In most cases diffusion (mass transport by atomic motion) - can only occur because of vacancies\nPoint defects in ceramics (ionic crystals)\nSCHOTTKY DEFECTS\nElectrical neutrality is maintained\nFRENKEL DEFECT\nElectrical neutrality\nStoichiometry\nElectrical neutrality as well as the stoichiometry of the compound are maintained, this type of dislocation is called Frenkel defect and also called as dislocation defect.\nThis defect is a combination of vacancy defect and interstitial defect. It is a vacancy defect at its original site and an interstitial defect at its new location.\nPoint Deffect\nNote: AgBr shows both Frenkel and Schottky defect.",
+      "visuals": [
+        "Diagram of a lattice showing a 'Self-interstitial' atom and a 'Vacancy'.",
+        "Diagram showing 'distortion of planes' around a 'Vacancy' in a lattice.",
+        "Diagram of an ionic crystal lattice showing a 'Schottky Defect' (missing pair of cation and anion) and a 'Frenkel Defect' (cation moved to an interstitial site).",
+        "Detailed illustration of Schottky defects in an ionic lattice with the caption 'Electrical neutrality is maintained'.",
+        "Detailed illustration of a Frenkel defect in an ionic lattice with captions 'Electrical neutrality' and 'Stoichiometry'."
+      ],
+      "page_range": "103-110"
+    },
+    {
+      "title": "FRENKEL DEFECT",
+      "content": "This defect is a combination of vacancy defect and interstitial defect. It is a vacancy defect at its original site and an interstitial defect at its new location.",
+      "visuals": [
+        "A diagram showing a crystal lattice of positive (red) and negative (blue) ions. One positive ion is shown to have moved from its original lattice position, leaving a vacancy, to an interstitial site within the lattice."
+      ],
+      "page_range": "109"
+    },
+    {
+      "title": "Point Deffect",
+      "content": "Note: AgBr shows both Frenkel and \nSchottky defect.",
+      "page_range": "110"
+    },
+    {
+      "title": "Assignment",
+      "content": "1.Explain the other types of Defects.\n2.Differentiate between Schottky and \nFrenkel defects.\n1.State the differences between \nSchottky and Frenkel defects",
+      "page_range": "111"
+    },
+    {
+      "title": "Microscopic Examinations",
+      "content": "it is necessary or desirable to examine the structural elements and defects that influence the properties of materials. \nSome structural elements are of macroscopic dimensions; that is, they are large enough to be observed with the unaided eye. \nFor example, the shape and average size or diameter of the grains for a polycrystalline specimen are important structural characteristics. \nMacroscopic grains are often evident on aluminum streetlight posts and also on highway guardrails.\nMost materials constituent grains are of microscopic dimensions, having diameters that may be on the order of microns, and their details must be investigated using some type of microscope. \nGrain size and shape are only two features of what is termed the microstructure;\nOptical, electron, and scanning probe microscopes are commonly used in microscopy. These instruments aid in investigations of the microstructural features of all material types. \nSome of these techniques employ photographic equipment in conjunction with the microscope;\nMicroscopic tools are used \nto ensure that the associations between the properties and structure (and defects) are properly understood, to predict the properties of materials\nonce these relationships have been established, one can design alloys with new property combinations, to determine whether or not a material has been correctly heat treated, and to ascertain the mode of mechanical fracture.\nExamples of Microscopic Examinations:",
+      "visuals": [
+        "A chart titled 'Useful resolution ranges (nm)' comparing the resolution capabilities of various instruments: Scanning probe microscopes, Transmission electron microscopes, Scanning electron microscopes, Optical microscopes, and the Naked eye. The scale ranges from $10^{-2}$ to $10^8$ nanometers."
+      ],
+      "page_range": "112-115"
+    },
+    {
+      "title": "Phase/Equilibrium Diagrams",
+      "content": "Many of the engineering materials possess mixtures of phases, eg, steel, paints, and composites. \nThe mixture of two or more phases may permit interaction between different phases, resulting in properties that are usually different from the properties of individual phases\nDifferent components can be combined into a single material using solutions or mixtures.\nMost of the alloy systems and composites are heterogeneous.\nPhase diagrams provide a convenient way of representing which state of aggregation (phase or phases) is stable for a particular set of conditions. \nIn addition, phase diagrams provide valuable information about melting, casting, crystallization, and other phenomena\nUseful terminology\nComponents: are either pure metal and/or compounds of which an alloy is composed. The components of a system may be elements, ions or compounds. They refer to the independent chemical species that comprise the system.\nSystem: it can either refer to a specific body of material under consideration or it may relate to the series of possible alloys consisting of the same components but without regard to alloy composition.\nSolute: denotes an element or compound present in a minor concentration.\nSolvent: represents the element or compound that is present in the greatest amount; on occasion, solvent atoms are also called host atoms.\nSolid solution: it consists of atoms of at least two different types where solute atoms occupy either substitutional or interstitial positions in the solvent lattice and the crystal structure of the solvent is maintained.\nSolubility limit: for almost all alloy systems, at a specific temperature, a maximum of solute atoms can dissolve in solvent phase to form a solid solution. The limit is known as solubility limit. In general, solubility limit changes with temperature. If solute available is more than the solubility limit that may lead to formation of different phase, either a solid solution or compound.\nPhase equilibrium: it refers to the set of conditions where more than one phase may exist. It can be reflected by constancy with time in the phase characteristics of a system. In most metallurgical and materials systems, phase equilibrium involves just solid phases. However, the state of equilibrium is never completely achieved because of very slow rate of approach of equilibrium in solid systems. This leads to non-equilibrium or meta-stable state, which may persist indefinitely and of course, has more practical significance than equilibrium phases.\nPhase diagrams are constructed by the combination of three externally controllable parameters: temperature, pressure and composition. \nIn metal alloy systems, temperature is plotted against composition, while hold pressure constant (at 1 atm). \nIn unary (one component) systems, temperature is plotted against pressure, and composition is held constant. Unary systems are usually called pressure–temperature (P–T) diagrams.\nOne-component phase diagram (H2O)\nIn these systems there is no composition change (C=1), thus only variables are temperature and pressure. Thus in region of single-phase two variables (temperature and pressure) can be varied independently. Upon crossing a boundary (as temperature and/or pressure is altered), one phase transforms to another. For example, at one atmosphere pressure, during heating the solid phase transforms to the liquid phase (i.e., melting occurs) as shown on the figure above; this point corresponds to a temperature of 0°C. The reverse transformation (liquid-to-solid, or solidification) takes place at the same point upon cooling.\nAt triple points, three phases can coexist at a particular set of temperature and pressure. At these points, neither temperature nor the pressure can be changed without disrupting the equilibrium i.e. one of the phases may disappear.",
+      "visuals": [
+        "A pressure-temperature (P-T) phase diagram for water ($H_2O$). The y-axis represents Pressure (P atm) and the x-axis represents Temperature ($T ^\\circ C$). The diagram shows the phase boundaries between ice, water, and water vapor. It marks the triple point at 0.006 atm and 0.01 $^\\circ C$, and the critical point at 218 atm and 374 $^\\circ C$."
+      ],
+      "page_range": "116-122"
+    },
+    {
+      "title": "Assignment",
+      "content": "Read on the other type of phase diagrams and phase transformation in metals\nWhat are the applications of phase diagrams?",
+      "page_range": "123"
+    },
+    {
+      "title": "Metal Fabrication Techniques",
+      "content": "Metal fabrication techniques are normally preceded by refining, alloying, and often heat-treating processes that produce alloys with the desired characteristics\noften two or more of them must be used before a piece is finished. \nThe methods chosen depend on several factors;\nthe most important are the properties of the metal, the size and shape of the finished piece, cost.\nForming operations are those in which the shape of a metal piece is changed by plastic deformation; for example, forging, rolling, extrusion, and drawing are common. The deformation must be induced by an externa force or stress, the magnitude of which must exceed the yield strength of the material. \nMost metallic materials are amenable to these procedures\nWhen deformation is achieved at a temperature above that at which recrystallization occurs, the process is termed hot working; otherwise, it is cold working. \nFor hot-working operations, large deformations are possible, which may be successively repeated because the metal remains soft and ductile. Also, deformation energy requirements are less than for cold working.\nHowever, most metals experience some surface oxidation, which results in material loss and a poor final surface finish. Cold working produces an increase in strength with the attendant decrease in ductility, since the metal strain hardens;",
+      "visuals": [
+        "A hierarchical flowchart of 'Metal fabrication techniques'. It is divided into three main categories: 'Forming operations' (Forging, Rolling, Extrusion, Drawing), 'Casting' (Sand, Die, Investment, Lost foam, Continuous), and 'Miscellaneous' (Powder metallurgy, Welding)."
+      ],
+      "page_range": "124-127"
+    },
+    {
+      "title": "Assignment",
+      "content": "Advantages of Cold working over Hot working",
+      "page_range": "128"
+    },
+    {
+      "title": "Metal Fabrication Techniques",
+      "content": "Metal Fabrication Techniques ◼ For hot-working operations, large deformations are possible, which may be successively repeated because the metal remains soft and ductile. Also, deformation energy requirements are less than for cold working. ◼ However, most metals experience some surface oxidation, which results in material loss and a poor final surface finish. Cold working produces an increase in strength with the attendant decrease in ductility, since the metal strain hardens; 127",
+      "visuals": [],
+      "page_range": "127"
+    },
+    {
+      "title": "Assignment",
+      "content": "Assignment ◼ Advantages of Cold working over Hot working 128",
+      "visuals": [],
+      "page_range": "128"
+    },
+    {
+      "title": "Corrosion and Degradation of Materials",
+      "content": "Corrosion and Degradation of Materials Deteriorative mechanisms are different for the three material types. In metals, there is actual material loss either by dissolution (corrosion) or by the formation of nonmetallic scale or film (oxidation). Ceramic materials are relatively resistant to deterioration, which usually occurs at elevated temperatures or in rather extreme environments; the process is frequently also called corrosion. For polymers, mechanisms and consequences differ from those for metals and ceramics, and the term degradation is most frequently used. Polymers may dissolve when exposed to a liquid solvent, 129",
+      "visuals": [],
+      "page_range": "129"
+    },
+    {
+      "title": "Corrosion of Metals",
+      "content": "Corrosion of Metals ▪ Corrosion is defined as the destructive and unintentional attack of a metal; it is electrochemical and ordinarily begins at the surface ▪ The consequences of corrosion are all too common. Familiar examples include the rusting of automotive body panels and radiator and exhaust components. ▪ Corrosion processes are occasionally used to advantage. For example, etching procedures, make use of the selective chemical reactivity of grain boundaries or various microstructural constituents. 130",
+      "visuals": [],
+      "page_range": "130"
+    },
+    {
+      "title": "Corrosion and Degradation of Materials",
+      "content": "Corrosion and Degradation of Materials ▪ Deteriorative mechanisms are different for the three material types. In metals, there is actual material loss either by dissolution (corrosion) or by the formation of nonmetallic scale or film (oxidation). ▪ Ceramic materials are relatively resistant to deterioration, which usually occurs at elevated temperatures or in rather extreme environments; the process is frequently also called corrosion. ▪ For polymers, mechanisms and consequences differ from those for metals and ceramics, and the term degradation is most frequently used. ▪ Polymers may dissolve when exposed to a liquid solvent, 131",
+      "visuals": [],
+      "page_range": "131"
+    },
+    {
+      "title": "Electrochemical Considerations",
+      "content": "Electrochemical Considerations ▪ For metallic materials, the corrosion process is normally electrochemical, that is, a chemical reaction in which there is transfer of electrons from one chemical species to another. ▪ Metal atoms lose or give up electrons in what is called an oxidation reaction. For example, the hypothetical metal M that has a valence of n (or n valence electrons) may experience oxidation according to the reaction $$M \\longrightarrow M^{n+} + ne^-$$ in which M becomes an n+ positively charged ion and in the process loses its n valence electrons $e^-$; $e^-$ is used to symbolize an electron. Examples in which metals oxidize are $$Fe \\longrightarrow Fe^{2+} + 2e^-$$ $$Al \\longrightarrow Al^{3+} + 3e^-$$ ▪ The site at which oxidation takes place is called the anode; oxidation is sometimes called an anodic reaction ▪ The electrons generated from each metal atom that is oxidized must be transferred to and become a part of another chemical species in what is termed a reduction reaction. ▪ Some metals undergo corrosion in acid solutions, which have a high concentration of hydrogen (H+) ions; the H+ Ions are reduced as $$2H^+ + 2e^- \\longrightarrow H_2$$ 133 The electrochemical reactions associated with the corrosion of zinc in an acid solution. The location at which reduction occurs is called the cathode. Furthermore, it is possible for two or more of the reduction reactions above to occur simultaneously. 134 ELECTROCHEMICAL CONSIDERATIONS ▪ An overall electrochemical reaction must consist of at least one oxidation and one reduction reaction, and will be the sum of them; ▪ Often the individual oxidation and reduction reactions are termed half reactions. Consider zinc metal immersed in an acid solution containing H+ ions. At some regions on the metal surface, zinc will experience oxidation or corrosion …according to the reaction $$Zn \\longrightarrow Zn^{2+} + 2e^-$$ Since zinc is a metal, and therefore a good electrical conductor, these electrons may be transferred to an adjacent region at which the H+ ions are reduced according to $$2H^+ + 2e^- \\longrightarrow H_2 (gas)$$ 135 Electrochemical Considerations If no other oxidation or reduction reactions occur, the total electrochemical reaction is just the sum of reactions 17.8 and 17.9, or $$Zn \\longrightarrow Zn^{2+} + 2e^-$$ $$2H^+ + 2e^- \\longrightarrow H_2 (gas)$$ $$\\overline{Zn + 2H^+ \\longrightarrow Zn^{2+} + H_2 (gas)}$$ (17.10) 136 137 Electrode Potentials Not all metallic materials oxidize to form ions with the same degree of ease. Consider the electrochemical cell shown in Figure 17.2. On the left-hand side is a piece of pure iron immersed in a solution containing $Fe^{2+}$ ions of $1M$ concentration. The other side of the cell consists of a pure copper electrode in a $1M$ solution of $Cu^{2+}$ ions. The cell halves are separated by a membrane, which limits the mixing of the two solutions. If the iron and copper electrodes are connected electrically, reduction will occur for copper at the expense of the oxidation of iron, as follows: $$Cu^{2+} + Fe \\longrightarrow Cu + Fe^{2+}$$ (17.13) or $Cu^{2+}$ ions will deposit (electrodeposit) as metallic copper on the copper electrode, while iron dissolves (corrodes) on the other side of the cell and goes into solution as $Fe^{2+}$ ions. Thus, the two half-cell reactions are represented by the relations $$Fe \\longrightarrow Fe^{2+} + 2e^-$$ (17.14a) $$Cu^{2+} + 2e^- \\longrightarrow Cu$$ (17.14b) When a current passes through the external circuit, electrons generated from the oxidation of iron flow to the copper cell in order that $Cu^{2+}$ be reduced. In addition, there 138 will be some net ion motion from each cell to the other across the membrane. This is called a galvanic couple—two metals electrically connected in a liquid electrolyte wherein one metal becomes an anode and corrodes, while the other acts as a cathode. 139",
+      "visuals": [
+        "Diagram showing the electrochemical reactions associated with the corrosion of zinc in an acid solution. Zinc atoms leave the metal surface as Zn2+ ions, releasing electrons that travel through the metal to sites where H+ ions from the solution combine with them to form H2 gas bubbles.",
+        "Figure 17.2: An electrochemical cell consisting of iron and copper electrodes, each of which is immersed in a 1M solution of its ion. Iron corrodes while copper electrodeposits. A voltmeter shows 0.780 V. Electrons flow from the Fe electrode (anode) to the Cu electrode (cathode).",
+        "Figure 17.3: An electrochemical cell consisting of iron and zinc electrodes, each of which is immersed in a 1M solution of its ion. The iron electrodeposits while the zinc corrodes. A voltmeter shows 0.323 V. Electrons flow from the Zn electrode (anode) to the Fe electrode (cathode)."
+      ],
+      "page_range": "132-139"
+    },
+    {
+      "title": "The Standard emf Series",
+      "content": "The Standard emf Series These measured cell voltages represent only differences in electrical potential, and convenient to establish a reference point, or reference cell, to which other cell halves may be compared. This reference cell, arbitrarily chosen, is the standard hydrogen electrode 140 141",
+      "visuals": [
+        "Table 17.1: The Standard emf Series. Lists electrode reactions and their standard electrode potentials V0(V). Examples include Au3+ + 3e- -> Au (+1.420 V), 2H+ + 2e- -> H2 (0.000 V), and K+ + e- -> K (-2.924 V). The table indicates 'Increasingly inert (cathodic)' towards the top and 'Increasingly active (anodic)' towards the bottom."
+      ],
+      "page_range": "140-141"
+    },
+    {
+      "title": "Forms Of Corrosion",
+      "content": "Forms Of Corrosion ◼ Uniform attack ◼ Galvanic corrosion ◼ Crevice corrosion, ◼ Pitting ◼ Inter-granular corrosion ◼ Selective leaching ◼ Erosion corrosion ◼ stress corrosion. 142 143 Crevice Corrosion ◼ Pitting corrosion 144 ◼ Erosion Corrosion ◼ Stress Corrosion 145 ◼ Intergranular Corrosion 146",
+      "visuals": [
+        "Micrograph of galvanic corrosion showing a steel core surrounded by a heavily corroded magnesium shell.",
+        "Photographs of crevice corrosion (around holes in a metal plate) and pitting corrosion (numerous small pits on a metal surface).",
+        "Photographs of erosion corrosion (a hole in a pipe elbow) and stress corrosion (cracking in a U-bend specimen).",
+        "Photograph of intergranular corrosion in a welded plate, showing attack in the heat-affected zones adjacent to the weld."
+      ],
+      "page_range": "142-146"
+    },
+    {
+      "title": "Forms of Corrosion",
+      "content": "Forms of Corrosion\n◼ Erosion Corrosion ◼ Stress Corrosion\n◼ Intergranular Corrosion",
+      "visuals": [
+        "Black and white photograph of a corroded pipe elbow illustrating erosion corrosion.",
+        "Black and white photograph of a U-shaped metal bar with a bolt through it illustrating stress corrosion.",
+        "Black and white photograph of a metal surface with a weld, showing intergranular corrosion at the boundaries of the weld."
+      ],
+      "page_range": "145-146"
+    },
+    {
+      "title": "Corrosion Environments",
+      "content": "Corrosion Environments\nCorrosive environments include the atmosphere, \naqueous solutions, soils, acids, bases,\ninorganic solvents, molten salts, liquid metals",
+      "visuals": [],
+      "page_range": "147"
+    },
+    {
+      "title": "Corrosion Prevention",
+      "content": "Corrosion Prevention\n◼ Inhibitors\n◼ Modifying the \ncorrosive \nenvironment\n◼ Protection by design \nand fabrication\n◼ Cathodic protection\n◼ Alloying\n◼ Application of \nprotective coatings\n◼ Cathodic protection",
+      "visuals": [
+        "Diagram of cathodic protection using a zinc coating (anode) on a steel substrate. It shows the cathode region in a pit, electrons ($e^-$) flowing from the zinc to the steel, and $Zn^{2+}$ ions being released into the corrosive environment.",
+        "Diagram of cathodic protection for an underground steel pipe. A coated copper wire connects the pipe to a magnesium (Mg) anode buried in backfill. Arrows indicate the direction of current flow from the anode to the pipe through the earth environment."
+      ],
+      "page_range": "148-149"
+    },
+    {
+      "title": "Corrosion Monitoring and Measurement",
+      "content": "Corrosion Monitoring and Measurement\n▪ Direct Method: \nVisual/Optical measurement, \nCoupon testing\n▪ Electrochemical method- Linear Polarisation\nResistance (LPR)\n▪ Electrical Resistance Equipment\n▪ NDT(Non-Destructive technique)\nThe ultrasonic technique\nRadiography\nEddy current inspection\nThermography",
+      "visuals": [],
+      "page_range": "150"
+    },
+    {
+      "title": "Oxidation Resisting Materials",
+      "content": "Oxidation Resisting Materials\n▪ In order to control oxidation, the primary \nrequirement is to form a protective layer of \noxide on the surface of the metal. \n▪ Most common alloying elements added to iron \nfor corrosion control rate ;\nChromium\nAluminium\nNickel",
+      "visuals": [],
+      "page_range": "151"
+    },
+    {
+      "title": "Diffusion in Solids",
+      "content": "Diffusion in Solids\nMany reactions and processes that are important in the treatment of \nmaterials rely on the transfer of mass either within a specific solid \n(ordinarily on a microscopic level) or from a liquid, a gas, or another \nsolid phase. This is necessarily accomplished by diffusion, the \nphenomenon of material transport by atomic motion\nThe phenomenon of diffusion may be demonstrated with the use of a \ndiffusion couple, which is formed by joining bars of two different metals \ntogether so that there is intimate contact between the two faces; this is \nillustrated for copper and nickel below\nFigure 5.1 (a) A copper–nickel diffusion couple before a high-temperature heat treatment. (b) Schematic representations of Cu (red circles) and Ni (blue circles) atom locations within the diffusion couple. (c) Concentrations of copper and nickel as a function of position across the couple.\nThis couple is heated \nfor an extended period \nat\nan elevated \ntemperature (but \nbelow the melting \ntemperature of both \nmetals), and cooled to \nroom temperature\nFigure 5.2 (a) A copper–nickel diffusion couple after a high-temperature heat treatment, showing the alloyed diffusion zone. (b) Schematic representations of Cu (red circles) and Ni (blue circles) atom locations within the couple. (c) Concentrations of copper and nickel as a function of position across the couple.\nChemical analysis will reveal a condition similar to that \nrepresented in Figure 5.2—namely, pure copper and nickel at the \ntwo extremities\nof the couple, separated by an alloyed region. Concentrations of \nboth metals\nvary with position as shown in Figure 5.2c. This result indicates \nthat copper atoms have migrated or diffused into the nickel, and \nthat nickel has diffused into copper. This process, whereby atoms \nof one metal diffuse into another, is termed interdiffusion, or \nimpurity diffusion.",
+      "visuals": [
+        "Figure 5.1: (a) Block diagram of a Cu-Ni diffusion couple. (b) Atomic model showing red (Cu) and blue (Ni) atoms separated by a vertical interface. (c) Step-function graph showing 100% Cu concentration on the left and 100% Ni concentration on the right.",
+        "Figure 5.2: (a) Block diagram of the Cu-Ni couple after heating, showing an alloyed zone in the middle with arrows indicating diffusion directions. (b) Atomic model showing intermixed red and blue atoms in the central region. (c) Graph showing the gradual change in concentration of Cu and Ni across the interface (S-shaped curves)."
+      ],
+      "page_range": "152-155"
+    },
+    {
+      "title": "Diffusion Mechanisms",
+      "content": "Diffusion Mechanisms\n▪ Vacancy mechanism\n▪ Interstitial mechanism\n▪ Direct Interchange mechanism\nFigure 5.3 Schematic representations of (a) vacancy diffusion and (b) interstitial diffusion.",
+      "visuals": [
+        "Figure 5.3: (a) Diagram showing a host or substitutional atom (green) moving into an adjacent vacancy in a lattice of blue atoms. (b) Diagram showing a small interstitial atom (orange) moving between positions in a lattice of blue atoms."
+      ],
+      "page_range": "156-157"
+    },
+    {
+      "title": "Steady-state Diffusion",
+      "content": "Steady-state Diffusion\nDiffusion is a time-dependent process—that is, in a macroscopic sense, the \nquantity\nof an element that is transported within another is a function of time\nis necessary to know how fast diffusion occurs, or the rate of mass \ntransfer. This\nrate is frequently expressed as a diffusion flux (J), defined as the \nmass (or, equivalently,\nthe number of atoms) M diffusing through and perpendicular to a unit\ncross-sectional area of solid per unit of time. In mathematical form, \nthis may be represented as \n$$J = \\frac{M}{At}$$\nwhere A denotes the area across which \ndiffusion is occurring and t is the elapsed\ndiffusion time. In differential form, this \nexpression becomes\n$$J = \\frac{1}{A} \\frac{dM}{dt}$$\nThe units for J are kilograms or atoms per meter squared per second \n($\\text{kg/m}^2\\text{-s}$ or $\\text{atoms/m}^2\\text{-s}$).\nIf the diffusion flux does not change with time, a steady-state condition \nexists. One common example of steady-state diffusion is the diffusion of \natoms of a gas through a plate of metal for which the concentrations (or \npressures) of the diffusing species on both surfaces of the plate are held \nconstant. This is represented schematically\nFigure 5.4 (a) Steady-state diffusion across a thin plate. (b) A linear concentration profile for the diffusion situation in (a).\nFor diffusion problems, it is sometimes convenient to express concentration in terms of\nmass of diffusing species per unit volume of solid ($\\text{kg/m}^3$ or $\\text{g/cm}^3$).¹\nThe mathematics of steady-state diffusion in a single (x) direction is relatively\nsimple, in that the flux is proportional to the concentration gradient through the\nexpression\n$$J = -D \\frac{dC}{dx}$$ (5.3)\nThe constant of proportionality D is called the diffusion coefficient, which is ex-\npressed in square meters per second. The negative sign in this expression indicates\nthat the direction of diffusion is down the concentration gradient, from a high to a\nlow concentration. Equation 5.3 is sometimes called Fick’s first law.\nSometimes the term driving force is used in the context of what compels a re-\naction to occur. For diffusion reactions, several such forces are possible; but when\ndiffusion is according to Equation 5.3, the concentration gradient is the driving force.\nOne practical example of steady-state diffusion is found in the purification of\nhydrogen gas. One side of a thin sheet of palladium metal is exposed to the impure\ngas composed of hydrogen and other gaseous species such as nitrogen, oxygen, and\nwater vapor. The hydrogen selectively diffuses through the sheet to the opposite\nside, which is maintained at a constant and lower hydrogen pressure.\nDiffusion Flux Computation\nA plate of iron is exposed to a carburizing (carbon-rich) atmosphere on one\nside and a decarburizing (carbon-deficient) atmosphere on the other side at\n700°C (1300°F). If a condition of steady state is achieved, calculate the diffu-\nsion flux of carbon through the plate if the concentrations of carbon at positions\nof 5 and 10 mm ($5 \\times 10^{-3}$ and $10^{-2}$ m) beneath the carburizing surface are 1.2\nand 0.8 $\\text{kg/m}^3$, respectively. Assume a diffusion coefficient of $3 \\times 10^{-11} \\text{ m}^2/\\text{s}$\nat this temperature.\nSolution\nFick’s first law, Equation 5.3, is utilized to determine the diffusion flux. Sub-\nstitution of the values above into this expression yields\n$$J = -D \\frac{C_A - C_B}{x_A - x_B} = -(3 \\times 10^{-11} \\text{ m}^2/\\text{s}) \\frac{(1.2 - 0.8) \\text{ kg/m}^3}{(5 \\times 10^{-3} - 10^{-2}) \\text{ m}} = 2.4 \\times 10^{-9} \\text{ kg/m}^2\\text{-s}$$",
+      "visuals": [
+        "Figure 5.4: (a) Schematic of a thin metal plate of area A with gas at pressure $P_A$ on the left and $P_B$ on the right ($P_A > P_B$). An arrow shows the direction of diffusion through the plate. (b) Graph of concentration C versus position x, showing a linear decrease from $C_A$ at $x_A$ to $C_B$ at $x_B$."
+      ],
+      "page_range": "158-163"
+    },
+    {
+      "title": "Non-Steady-State Diffusion",
+      "content": "Non-Steady-State Diffusion\nMost practical diffusion situations are nonsteady-state ones. \nThat is, the diffusion flux and the concentration gradient at some \nparticular point in a solid vary with time, with a net accumulation or \ndepletion of the resulting diffusing species.",
+      "visuals": [],
+      "page_range": "164"
+    },
+    {
+      "title": "Steady-State Diffusion",
+      "content": "Diffusion Flux Computation\\nA plate of iron is exposed to a carburizing (carbon-rich) atmosphere on one side and a decarburizing (carbon-deficient) atmosphere on the other side at $700^{\\circ}C$ ($1300^{\\circ}F$). If a condition of steady state is achieved, calculate the diffusion flux of carbon through the plate if the concentrations of carbon at positions of 5 and 10 mm ($5 \\times 10^{-3}$ and $10^{-2}$ m) beneath the carburizing surface are 1.2 and $0.8 \\text{ kg/m}^3$, respectively. Assume a diffusion coefficient of $3 \\times 10^{-11} \\text{ m}^2/\\text{s}$ at this temperature.\\nSolution\\nFick’s first law, Equation 5.3, is utilized to determine the diffusion flux. Substitution of the values above into this expression yields\\n$$J = -D \\frac{C_A - C_B}{x_A - x_B} = -(3 \\times 10^{-11} \\text{ m}^2/\\text{s}) \\frac{(1.2 - 0.8) \\text{ kg/m}^3}{(5 \\times 10^{-3} - 10^{-2}) \\text{ m}}$$\\n$$= 2.4 \\times 10^{-9} \\text{ kg/m}^2\\text{-s}$$",
+      "visuals": [
+        "A colored header bar with 'Steady-State Diffusion' and a small graphic of overlapping squares."
+      ],
+      "page_range": "163"
+    },
+    {
+      "title": "Non-Steady-State Diffusion",
+      "content": "Most practical diffusion situations are nonsteady-state ones. That is, the diffusion flux and the concentration gradient at some particular point in a solid vary with time, with a net accumulation or depletion of the resulting diffusing species.\\nFigure 5.5 Concentration profiles for nonsteady-state diffusion taken at three different times, $t_1$, $t_2$, and $t_3$.\\ndiffusion times. Under conditions of nonsteady state, use of Equation 5.3 is no longer convenient; instead, the partial differential equation\\n$$\\frac{\\partial C}{\\partial t} = \\frac{\\partial}{\\partial x} \\left( D \\frac{\\partial C}{\\partial x} \\right)$$ (5.4a)\\nknown as Fick’s second law, is used. If the diffusion coefficient is independent of composition (which should be verified for each particular diffusion situation), Equation 5.4a simplifies to\\n$$\\frac{\\partial C}{\\partial t} = D \\frac{\\partial^2 C}{\\partial x^2}$$ (5.4b)\\nUnsteady-state diffusion describes processes where the diffusion flux and the concentrations change with time. Unsteady state diffusion is also encountered with diffusion of materials into a Si surface (doping to form semiconductors) or the surface of a machine tool (case hardening). The former allows alteration of the electrical properties of Si, and the latter allows hardening of the surface of cutting tools. This is encountered more often than steady-state diffusion.\\nThere are several solutions to Fick’s second law, however the most practical and mostly used is to consider the solvent as a semi-infinite. A bar of solid is considered to be semi-infinite if none of the diffusing atoms reaches the bar end during the time over which diffusion takes place.\\nThe following assumptions are made:\\n• Before diffusion, any of the diffusing solute atoms in the solid are uniformly distributed with concentration of $C_0$\\n• The value of $x$ at the surface is zero and increases with distance into the solid.\\n• The time is taken to be zero the instant before the diffusion process begins.\\nThese boundary conditions are simply stated as\\nFor $t = 0, C = C_0$ at $0 \\le x \\le \\infty$\\nFor $t > 0, C = C_s$ (the constant surface concentration) at $x = 0$\\n$C = C_0$ at $x = \\infty$\\nApplication of these boundary conditions to Equation 5.4b yields the solution\\n$$\\frac{C_x - C_0}{C_s - C_0} = 1 - \\text{erf} \\left( \\frac{x}{2\\sqrt{Dt}} \\right)$$ (5.5)\\nwhere $C_s$ is the surface concentration of the diffusing specie, $C_x$ is the concentration at depth $x$ into the host material, $C_0$ is the initial concentration of the diffusing species in the solid prior to diffusion, $D$ is the diffusion coefficient, $t$ is the time taken for diffusion, $x$ is the depth of the diffused species in the host material, and $\\text{erf}(x/2\\sqrt{Dt})$ is the Gaussian error function which results after the partial differential equation is solved. The table below gives the error functions of several values of $z$.\\nTable 5.1 Tabulation of Error Function Values\\nNonsteady-State Diffusion Time Computation I\\nFor some applications, it is necessary to harden the surface of a steel (or iron-carbon alloy) above that of its interior. One way this may be accomplished is by increasing the surface concentration of carbon in a process termed carburizing; the steel piece is exposed, at an elevated temperature, to an atmosphere rich in a hydrocarbon gas, such as methane ($CH_4$).\\nConsider one such alloy that initially has a uniform carbon concentration of 0.25 wt% and is to be treated at $950^{\\circ}C$ ($1750^{\\circ}F$). If the concentration of carbon at the surface is suddenly brought to and maintained at 1.20 wt%, how long will it take to achieve a carbon content of 0.80 wt% at a position 0.5 mm below the surface? The diffusion coefficient for carbon in iron at this temperature is $1.6 \\times 10^{-11} \\text{ m}^2/\\text{s}$; assume that the steel piece is semi-infinite.",
+      "visuals": [
+        "Figure 5.5: A graph showing 'Concentration of diffusing species' vs 'Distance'. Three curves are shown for times t1, t2, and t3, where t3 > t2 > t1. The curves show concentration decreasing with distance.",
+        "A graph on page 169 showing 'Concentration, C' vs 'Distance from interface, x'. It illustrates Cs, Cx, and C0 on the y-axis and the corresponding distances. The curve represents the error function solution.",
+        "Table 5.1: Tabulation of Error Function Values. Columns for z and erf(z). Values range from z=0 to z=2.8."
+      ],
+      "page_range": "164-172"
+    },
+    {
+      "title": "Factors That Affect Diffusion",
+      "content": "Diffusing species\\nThe magnitude of the diffusion coefficient $D$ is indicative of the rate at which atoms diffuse. Coefficients, both self- and interdiffusion, for several metallic systems are listed in the Table below. The diffusing species as well as the host material influence the diffusion coefficient. For example, there is a significant difference in magnitude between self-diffusion and carbon interdiffusion in iron at $500^{\\circ}C$, the $D$ value being greater for the carbon interdiffusion ($3.0 \\times 10^{-21}$ vs. $2.4 \\times 10^{-12} \\text{ m}^2/\\text{s}$). This comparison also provides a contrast between rates of diffusion via vacancy and interstitial modes as discussed above. Self-diffusion occurs by a vacancy mechanism, whereas carbon diffusion in iron is interstitial.\\nTable 5.2 A Tabulation of Diffusion Data\\nthe diffusion coefficients is\\n$$D = D_0 \\exp \\left( -\\frac{Q_d}{RT} \\right)$$ (5.8)\\nwhere\\n$D_0$ = a temperature-independent preexponential ($\\text{m}^2/\\text{s}$)\\n$Q_d$ = the activation energy for diffusion (J/mol or eV/atom)\\n$R$ = the gas constant, 8.31 J/mol-K or $8.62 \\times 10^{-5}$ eV/atom-K\\n$T$ = absolute temperature (K)\\nThe activation energy may be thought of as that energy required to produce the diffusive motion of one mole of atoms. A large activation energy results in a relatively small diffusion coefficient. Table 5.2 also contains a listing of $D_0$ and $Q_d$ values for several diffusion systems.\\nCrystal structure\\nThe ease of diffusion with atoms having a fairly well-defined radius increases with decreasing density of packing. Crystal structures having high Atomic Packing Factor have lower diffusion coefficients compared with low packing crystal structures.\\nGrain boundaries and dislocations\\nDiffusivity in grain boundaries is higher than in bulk crystal. This is because there are usually fewer atoms within the grain boundaries, allowing for diffusing atoms to easily occupy those voids.\\nGrain size\\nSince grain boundary diffusion is faster than diffusion within the bulk (grains) it is expected that the overall diffusion rate would be higher in fine-grained materials.\\nTemperature\\nTemperature has a most profound influence on the coefficients and diffusion rates. For example, for the self-diffusion of Fe in BCC-Fe, the diffusion coefficient increases approximately six orders of magnitude (from $3.0 \\times 10^{-21}$ to $1.8 \\times 10^{-15} \\text{ m}^2/\\text{s}$) in rising temperature from 500 to $900^{\\circ}C$ (Table above). The temperature dependence of the diffusion coefficients is;\\n$$D = D_0 \\exp \\left( -\\frac{Q_d}{RT} \\right)$$\\nwhere $D_0$ is the temperature-independent pre-exponential ($\\text{m}^2/\\text{s}$)\\n$Q_d$ is the activation energy (J/mol)\\n$T$ is absolute temperature ($^{\\circ}K$)\\n$R$ is the gas constant (8.31 J/mol)",
+      "visuals": [
+        "Table 5.2: A Tabulation of Diffusion Data. Columns: Diffusing Species, Host Metal, D0 (m^2/s), Activation Energy Qd (kJ/mol, eV/atom), and Calculated Values D (m^2/s) at specific temperatures T (C). Includes data for Fe, C, Cu, Zn, Al, Mg in various hosts."
+      ],
+      "page_range": "173-178"
+    },
+    {
+      "title": "Applications Of Fick’s Second Law",
+      "content": "▪ Experimental determination of diffusion coefficient\\n▪ Case hardening (Carburizing, nitriding, galvanizing processes\\n▪ Doping of semi conductors\\n▪ Study of isothermal diffusion",
+      "visuals": [],
+      "page_range": "179"
+    },
+    {
+      "title": "Applications Of Diffusion",
+      "content": "• Phase changes\\n• Metal bonding\\n• Homogenizing treatment\\n• Oxidation of metals\\n• Surface treatment of steels\\n• Recovery and Recrystallization",
+      "visuals": [],
+      "page_range": "180"
+    },
+    {
+      "title": "MECHANICAL PROPERTIES OF MATERIALS",
+      "content": "The mechanical behavior of a material reflects the relationship between its response or deformation to an applied load or force. \\nImportant mechanical properties are strength, hardness,\\nductility, and stiffness.\\nTo determine the mechanical properties of materials, certain \\nlaboratory tests are carefully performed; \\nthese tests must be able to replicate the exact or nearly, the actual \\nconditions in real applications. \\nThese tests must be standardized and universally accepted.\\nFactors to be considered include the nature of the applied load on the material \\nand its duration, as well as the environmental conditions. \\nThe applied load can be tensile, compressive, or shear, and its magnitude may be \\nconstant with time, or it may fluctuate continuously. \\nApplication time may be only a fraction of a second, or it may extend over\\na period of many years.",
+      "visuals": [],
+      "page_range": "181-182"
+    },
+    {
+      "title": "MECHANICAL PROPERTIES OF MATERIALS",
+      "content": "The mechanical behavior of a material reflects the relationship between its response or deformation to an applied load or force. Important mechanical properties are strength, hardness, ductility, and stiffness. To determine the mechanical properties of materials, certain laboratory tests are carefully performed; these tests must be able to replicate the exact or nearly, the actual conditions in real applications. These tests must be standardized and universally accepted. Factors to be considered include the nature of the applied load on the material and its duration, as well as the environmental conditions. The applied load can be tensile, compressive, or shear, and its magnitude may be constant with time, or it may fluctuate continuously. Application time may be only a fraction of a second, or it may extend over a period of many years.",
+      "visuals": [
+        "Decorative graphic with colored squares (yellow, red, blue) and a black crosshair-like line."
+      ],
+      "page_range": "181-182"
+    },
+    {
+      "title": "CONCEPTS OF STRESS AND STRAIN",
+      "content": "If a load is static or changes relatively slowly with time and is applied uniformly over a cross section or surface of a member, the mechanical behavior may be ascertained by a simple stress–strain test; these are most commonly conducted for metals at room temperature. If a load is static or changes relatively slowly with time and is applied uniformly over a cross section or surface of a member, the mechanical behaviour may be ascertained by a simple stress–strain test; these are most commonly conducted for metals at room temperature. There are three principal ways in which a load may be applied: tension, compression, and shear. In most engineering practices though, many loads are torsional rather than pure shear. Schematic illustrations of tensile load, compressive load, shear strain and torsional deformation. Dashed lines represent the shape before deformation; solid lines, after deformation.",
+      "visuals": [
+        "Four schematic diagrams showing: 1) Tensile load on a cylinder with force $F$, area $A_0$, and lengths $l_0$ and $l$. 2) Compressive load on a cylinder with force $F$, area $A_0$, and lengths $l_0$ and $l$. 3) Shear strain on a rectangular block with force $F$, area $A_0$, and angle $\\theta$. 4) Torsional deformation on a cylinder with torque $T$ and angle $\\phi$."
+      ],
+      "page_range": "183-185"
+    },
+    {
+      "title": "Tension tests",
+      "content": "Tension test is a very important material engineering procedure. It is used to ascertain important mechanical and design properties such as strength and ductility of the material. Tensile tests are usually conducted by inserting a piece of the material under study (specimen) into a setup where the material is pulled apart (tensile load applied) until fracture occurs (permanent deformation). The specimen is initially designed to have a uniform cross-section before the test commences. Schematic of the apparatus used to conduct tensile stress–strain test. \u0001 The tensile testing machine is designed to elongate the specimen at a constant rate, and to continuously and simultaneously measure the instantaneous applied load (with a load cell) and the resulting elongations (using an extensometer). A stress–strain test typically takes several minutes to perform and is destructive. From the tensile test conducted, stress and strain can be calculated as follows: $$stress (\\sigma) = \\frac{F}{A_0}$$ where $F$ is the load applied in Newton (N) and $A_0$ is the original cross-sectional area ($m^2$) of the specimen. The unit for stress is MPa. When the original area of the specimen is used, the resulting stress is known as engineering stress. $$strain (\\epsilon) = \\frac{l - l_0}{l_0}$$ where $l_0$ is the original length of the specimen before the applied load, and $l$ is the length of the specimen after the load is applied. It must be noted that strain is unitless.",
+      "visuals": [
+        "Schematic of the apparatus used to conduct tensile stress–strain test, showing a load cell, extensometer, specimen, and moving crosshead."
+      ],
+      "page_range": "186-189"
+    },
+    {
+      "title": "Stress-strain Curve for tensile tests",
+      "content": "Stress-strain curve for tensile tests",
+      "visuals": [
+        "Stress-strain curve for tensile tests. The graph plots Stress, $\\sigma_e$ (lb/in.$^2$) against Strain, $e$. Key points labeled include the Elastic region, 0.2% Offset, Yield point $Y$, Plastic region, Maximum load (Tensile Strength $TS$), and Fracture."
+      ],
+      "page_range": "190"
+    },
+    {
+      "title": "Elastic Deformation",
+      "content": "The word elastic implies a springing back behaviour, which is readily observable in springs and rubber bands. An ideal elastic deformation takes place instantaneously when the load is removed. For most metals that are stressed in tension and at relatively low levels, stress and strain are proportional to each other through the relationship: $$\\sigma = E\\epsilon$$ Where $E$ is the Young’s modulus or modulus of elasticity. This relationship is also known as the Hook’s law. The modulus of elastic is a measure of the inherent stiffness of a material and its value differs for different materials. A deformation in which the stress is proportional to the strain is called Elastic deformation. Elastic deformations are not permanent. The modulus of elasticity defines the stiffness or the material’s resistance to elastic deformation. Room-Temperature Elastic and Shear Moduli, and Poisson’s Ratio for Various Metal Alloys",
+      "visuals": [
+        "Table titled 'Room-Temperature Elastic and Shear Moduli, and Poisson’s Ratio for Various Metal Alloys' listing properties for Aluminum, Brass, Copper, Magnesium, Nickel, Steel, Titanium, and Tungsten."
+      ],
+      "page_range": "191-192"
+    },
+    {
+      "title": "PROBLEM",
+      "content": "A piece of copper originally 305 mm long is pulled in tension with a stress of 276 MPa. If the deformation is entirely elastic, what will be the resultant elongation? (modulus of elasticity, E of copper is 110 GPa)",
+      "visuals": [],
+      "page_range": "193"
+    },
+    {
+      "title": "ELASTIC DEFORMATION",
+      "content": "Beyond the stress value indicated $Y$ (yield point/yield stress/yield strength) on the figure above, any more addition of stress causes Plastic deformation. This is a non-recoverable deformation, and the material does not spring back to its original shape or form. Beyond the yield point, the relationship between stress and strain is no more linear, and the young’s modulus does no longer apply. In some case, when the load is taken off in a tensile test within the elastic limit, the material does not spring back to its original form or shape immediately. It takes a considerable amount of time for the recovery. Deformations, which depend on time for recovery, are termed Anelastic deformation or Anelasticity. In metals anelasticity is less prominent. It is most prominent in polymeric materials. In the case of polymeric materials, this phenomenon is termed viscoelastic behaviour.",
+      "visuals": [],
+      "page_range": "194"
+    },
+    {
+      "title": "TENSILE STRESS",
+      "content": "Tensile strength (Ultimate/maximum strength) corresponds to the maximum stress that can be applied on a material in tension. If stress continues to be applied and maintained, the material will eventually fracture. This point is marked TS on the stress-strain diagram. At the maximum stress, a small constriction or neck begins to form at some point, and all subsequent deformation is confined at this neck, as shown in the figure below. This phenomenon is termed “necking,” and fracture ultimately occurs at the neck. The fracture/rupture strength corresponds to the stress at fracture. $$Tensile strength (TS) = \\frac{F_{max}}{A_0}$$ where $F_{max}$ is the maximum load and $A_0$ has been defined previously. In most engineering applications, the yield strength is of much significance compared to the tensile strength. The fracture/rupture strength is determined by dividing the load at the time of fracture by the original cross-sectional area of the specimen.",
+      "visuals": [
+        "Stress-strain curve showing the progression of deformation in a tensile specimen. It illustrates the specimen at four stages: initial state, uniform deformation, maximum stress (point M/TS) where necking starts, and final fracture at point $F$."
+      ],
+      "page_range": "195-197"
+    },
+    {
+      "title": "Elongation/Ductility",
+      "content": "Elongation/Ductility: This may be defined as the ability of a material to plastically strain immediately before fracture. It may be determined by placing the parts of the broken specimen closely held together by a device and measuring the distance between the gauge marks. $$\\text{\\%EL} = \\frac{L_f - L_o}{L_o} \\times 100$$ where $L_f$ is the final length of the specimen and the $L_o$ is the initial length of the specimen. Elongation is a very important property of materials, because it indicates the ductility or the ability of the material to appreciably deform without fracture. A ductile material exhibits high fracture strain, that is, it undergoes significant plastic deformation before fracture. We can also calculate the percent reduction in cross-sectional area at the point of fracture. This is calculated by finding the difference between the final cross-sectional area and the initial cross-sectional area, and dividing it by the original cross-sectional area. $$\\text{\\%RA} = \\frac{A_o - A_f}{A_o} \\times 100$$",
+      "visuals": [],
+      "page_range": "198-199"
+    },
+    {
+      "title": "Resilience and Toughness",
+      "content": "Resilience: The ability of a material to absorb energy in the elastic region. This is the area under the elastic region as shown below. Toughness: Ability to absorb energy in the plastic range. This is given by the total area under the stress-strain curve.",
+      "visuals": [],
+      "page_range": "200"
+    },
+    {
+      "title": "Elongation/Ductility",
+      "content": "We can also calculate the percent reduction in cross-sectional area at the point of fracture.\n\nThis is calculated by finding the difference between the final cross-sectional area and the initial cross-sectional area, and dividing it by the original cross-sectional area.\n\n$$\\%RA = \\frac{A_o - A_f}{A_o} \\times 100$$\n\nResilience: The ability of a material to absorb energy in the elastic region. This is the area under the elastic region as shown below.\n\nToughness: Ability to absorb energy in the plastic range. This is given by the total area under the stress-strain curve.\n\nA brittle material is the one, which exhibits little or no plastic deformation before fracture.\n\nBrittle materials such as ceramics and concretes fracture at or immediately after the yield point.\n\nBrittle materials are tested by bending test (also called flexure test). A specimen of rectangular cross-section is positioned between two supports, and a load is applied at its center. Bending of a rectangular cross-section results in both tensile and compressive stresses in the material: (1) initial loading; (2) highly stressed and strained specimen and (3) bent part.",
+      "visuals": [
+        "Formula for percent reduction in area: %RA = (Ao - Af) / Ao * 100",
+        "Stress-strain curve comparing two materials. One curve has 'High Resilience Lower Toughness' with a steep elastic region and a smaller total area. The other curve has 'High Toughness Lower Resilience' with a less steep elastic region but a much larger total area under the curve.",
+        "Stress-strain plot comparing 'Brittle' and 'Ductile' materials. The brittle material curve ends abruptly with an 'X' at a high stress and low strain. The ductile material curve shows significant plastic deformation (a long curve after the yield point)."
+      ],
+      "page_range": "199-203"
+    },
+    {
+      "title": "True stress",
+      "content": "True stress is defined as the load at any elongation divided by the cross-sectional area at that elongation. The true stress aids us to determine the actual stress applied to the material at any point in the experiment. In this case, we consider the decreasing cross-sectional area of the specimen as the load increase, unlike in engineering stress where, we only consider the original cross-sectional area of the specimen. True can be calculated as follows:\n\n$$stress (\\sigma) = \\frac{F}{A}$$\n\nwhere A is the actual (instantaneous) area resisting the load.",
+      "visuals": [],
+      "page_range": "204"
+    },
+    {
+      "title": "True strain",
+      "content": "True strain is defined as the change in length with reference to the instantaneous gauge length rather than the original length. The true strain equation is given as:\n\n$$\\epsilon = \\int_{L_0}^{L} \\frac{dL}{L} = ln \\frac{L}{L_0}$$\n\nA plot of true tress against true strain give a stress-strain relationship different from what we have looked at previously. We will however, not consider it in this chapter.",
+      "visuals": [],
+      "page_range": "205"
+    },
+    {
+      "title": "Compression tests",
+      "content": "Compression tests are conducted in a manner similar to the tensile tests, except that the force is compressive and the specimen contracts along the direction of the stress.\n\nThe stress and strain equations above are used to compute compressive stress and strain, respectively. By convention, a compressive force is taken to be negative, which yields a negative stress.\n\nFurthermore, since lo is greater than l, compressive strains computed are also negative. Below is the stress-strain relationship for a compressive test.",
+      "visuals": [
+        "Stress-strain plot for a compression test. It shows an 'Elastic region: $\\sigma = Ee$' followed by a 'Yield point, start of plastic region'. The curve slopes upwards after the yield point."
+      ],
+      "page_range": "206-207"
+    },
+    {
+      "title": "Poisson’s ratio",
+      "content": "If a body is subjected to a load, it length changes; the ratio of this change in length to the original length is known as linear or primary strain.\n\nDue to this load, the dimensions of the body in all directions change; the strain that is produced is called lateral or secondary strain.\n\nFor example if the load is tensile, there will be an increase in… the length and a corresponding decrease in the cross-sectional area of the body. In this case, the linear or primary strain will be tensile and the secondary or lateral strain will be compressive.\n\nThe ratio of the lateral strain to the linear strain in known as the Poisson’s ratio.\n\n$$Poisson's ratio, \\mu = -\\frac{\\epsilon_x}{\\epsilon_z} = -\\frac{\\epsilon_y}{\\epsilon_z}$$\n\nShear stress and strain\n\nApplication of stresses in opposite directions on either side of an element. The deformation in the element results in change in the initial angle between any two lines. The angular change is known as the shear strain, $\\gamma$, which is produced by a shear stress, $\\tau$. Shear stress and shear strain are calculated using the expressions below, respectively:\n\n$$Shear stress, \\tau = \\frac{F}{A}$$\n\nwhere F is the applied load, and A is the area over which the deflection occurs as shown in the diagram above.\n\n$$Shear strain, \\gamma = \\frac{\\delta}{b}$$\n\nwhere $\\delta$ is the deflection, and b is the distance over which the deflection occurs. When the shear stress and shear strain relationship is linear, they are proportional to each other with a constant of proportionality G, known as the shear modulus or shear modulus of elasticity.\n\n$$\\tau = G\\gamma$$",
+      "visuals": [
+        "Diagram showing a coordinate system with x, y, and z axes. Next to it, two rectangular specimens under tensile load P. The first specimen has original width W and length $L_0$. The second specimen shows the effect of the load: it has elongated to length L and narrowed to width W, illustrating lateral contraction.",
+        "Diagram (a) shows a rectangular block with opposing forces F applied to the top and bottom surfaces. Diagram (b) shows the block deformed into a parallelogram shape by the shear forces. The height is b, the lateral deflection is $\\delta$."
+      ],
+      "page_range": "208-212"
+    },
+    {
+      "title": "Hardness tests",
+      "content": "Hardness may be defined as the resistance to permanent indentation, or resistance to scratching or wear.\n\nHardness tests are about the simplest among the tests previously discussed.\n\nThey are relative cheaper and convenient to conduct.\n\nThere are a variety of hardness tests that are employed in determining the hardness of materials.\n\nSome of these are Brinell, Vicker’s, Rockwell, Knoop, Durometer, Scleroscope and so on\n\nBrinell Hardness test\n\nThis test involves pressing a standard steel ball into the surface of the specimen by a gradually applied load that is maintained on the specimen for a defined time. The loads applied can vary between 500 kg, 1500 kg and 3000 kg depending on the hardness of the material in question. The indentation formed on the surface of the specimen is measured to determine the Brinell Hardness Number (B.H.N). The following expression in used.",
+      "visuals": [
+        "Diagram of the Brinell Hardness test. A 10-mm ball (indenter) of steel or cemented carbide is pressed into a specimen with force F. The ball diameter is $D_b$. The resulting indentation has diameter $D_i$."
+      ],
+      "page_range": "213-214"
+    },
+    {
+      "title": "Brinell Hardness Test",
+      "content": "$$B.H.N = \\frac{2F}{\\pi D_b (D_b - \\sqrt{D_b^2 - D_i^2})}$$\n\nwhere F = indentation load, kg;\n\n$D_b$ = diameter of ball, mm,\n\nand $D_i$ = diameter of indentation, mm",
+      "visuals": [],
+      "page_range": "215"
+    },
+    {
+      "title": "Rockwell Hardness test",
+      "content": "A cone shaped indenter is pressed into specimen using a minor load of 10 kg, thus seating indenter in material. Then, a major load of 150 kg is applied, causing indenter to penetrate beyond its initial position. Additional penetration distance d is converted into a Rockwell hardness reading by the testing machine.",
+      "visuals": [
+        "Diagram of the Rockwell Hardness test. (1) Initial position: A cone-shaped indenter with a 120-degree angle is pressed with a minor force F. (2) Final position: A major force F is applied, resulting in an additional penetration depth d."
+      ],
+      "page_range": "216"
+    },
+    {
+      "title": "Torsional tests",
+      "content": "(Read about torsional tests)",
+      "visuals": [],
+      "page_range": "217"
+    },
+    {
+      "title": "POLYMERS",
+      "content": "Introduction\n\nPolymers are a large class of materials consisting of many small molecules (called monomers) that can be linked together to form long chains, thus they are known as macromolecules. A typical polymer may include tens of thousands of monomers. Because of their large size, polymers are classified as macromolecules.\n\nHumans have taken advantage of the versatility of polymers for centuries in the form of oils, tars, resins, and gums. However, it was not until the industrial revolution that the modern polymer industry began to develop. In the late 1830s, Charles Goodyear succeeded in producing a useful form of natural rubber through a process known as \"vulcanization.\" Some 40 years later, Celluloid (a hard plastic formed from nitrocellulose) was successfully commercialized. Despite these advances, progress in polymer science was slow until the 1930s, when materials such as vinyl, neoprene, polystyrene, and nylon were developed. The introduction of these revolutionary materials began an explosion in polymer research that is still going on today.",
+      "visuals": [],
+      "page_range": "218"
+    },
+    {
+      "title": "(Read about torsional tests)",
+      "content": "(Read about torsional tests)",
+      "visuals": [],
+      "page_range": "217"
+    },
+    {
+      "title": "Introduction to Polymers",
+      "content": "Introduction\n\nPolymers are a large class of materials consisting of many small molecules (called monomers) that can be linked together to form long chains, thus they are known as macromolecules. A typical polymer may include tens of thousands of monomers. Because of their large size, polymers are classified as macromolecules.\n\nHumans have taken advantage of the versatility of polymers for centuries in the form of oils, tars, resins, and gums. However, it was not until the industrial revolution that the modern polymer industry began to develop. In the late 1830s, Charles Goodyear succeeded in producing a useful form of natural rubber through a process known as \"vulcanization.\" Some 40 years later, Celluloid (a hard plastic formed from nitrocellulose) was successfully commercialized. Despite these advances, progress in polymer science was slow until the 1930s, when materials such as vinyl, neoprene, polystyrene, and nylon were developed. The introduction of these revolutionary materials began an explosion in polymer research that is still going on today.\n\nUnmatched in the diversity of their properties, polymers such as cotton, wool, rubber, Teflon(tm), and all plastics are used in nearly every industry. Natural and synthetic polymers can be produced with a wide range of stiffness, strength, heat resistance, density, and even price. With continued research into the science and applications of polymers, they are playing an ever-increasing role in society. The following sections provide an introduction to the science of macromolecules.",
+      "visuals": [],
+      "page_range": "218-219"
+    },
+    {
+      "title": "Polymeric materials classification",
+      "content": "",
+      "visuals": [
+        "A hierarchical tree diagram titled 'Polymeric materials'. The top level is 'Polymeric materials'. The second level branches into: 'Plastics', 'Elastomers', 'Adhesives', 'Coatings', 'Fibers', 'Natural Polymers', and 'Biosystems'. 'Plastics' further branches into 'Thermoplastic' and 'Thermosetting'. 'Thermoplastic' branches into 'Commodity plastic' (Polyethylene, Polypropylenes, Polyethylene, Polystyrene, Polyvinyl chloride) and 'Engineering plastics' (Ethemic, Polyamides, Cellulosics, Acetals, Polycarbonates, Polyimides, Polyesters, Others). 'Thermosetting' branches into 'Commodity plastics' (Phenolics, Unsaturated Polyesters, Urea) and 'Engineering plastics' (Silicones, Polyamides, Urethanes, Melemines, Epoxides, Others)."
+      ],
+      "page_range": "220"
+    },
+    {
+      "title": "Grouping of Polymers",
+      "content": "Polymers can be grouped as follows:\n\n▪ Elastomers\n▪ Thermoplastics\n▪ Thermosets",
+      "visuals": [],
+      "page_range": "221"
+    },
+    {
+      "title": "Thermoplastics",
+      "content": "Thermoplastics\n\nThermoplastics are polymers, which soften (becomes pliable and plastic) and melt when heated. In the melted conditions thermoplastics may be formed by various methods (injection molding, extrusion, Thermoforming).\n\nNo new cross-links form (no chemical curing) when a thermoplastic cools and harden.\n\nThermoplastics may be reprocessed (re-melt) many times. Molecules of most of thermoplastics combine long polymer chains alternating with monomer units.\n\nThermoplastic materials may contain filler materials in form of powder or fibers, providing improvement of specific material properties (strength, stiffness, lubricity, color etc.).\n\nThermoplastic groups:\n\n• Polyolefines: Low Density Polyethylene (LDPE), High Density Polyethylene (HDPE), Polypropylene (PP).\n• Styrenics: Polysterene (PS), Acrylonitrile-Butadiene-Styrene (ABS), Styrene Acrylonitrile (SAN), Styrene/Acrylic (S/A), Styrene-Maleic Anhydride (SMA).\n• Vinyls: Polyvinyl Chloride (PVC), Chlorinated Polyvinyl Chloride (CPVC).\n• Acrylics: Polymethylmethacrylate (PMMA), Polyvinilchloride-Acrylic Blend (PVC/MA).\n• Fluoropolymers: Polychlorotrifluoroethylene (CTFE), Polytetrafluoroethylene (PTFE), Polyvinylidene Fluoride (PVDF).\n• Polyesters: Polyethylene Terephtalate (PET), Polyester PETG (PETG), Polybutylene Terephtalate (PBT), Polyarilate (PAR), Liquid Crystal Polyester (LCP).\n• Polyamides (Nylons): Nylon 6 (N6), Nylon 66 (N66), Nylon 11 (N11), Nylon 12 (N12), Polyphtalamide (PPA), Polyamidemide (PAI).\n\nThermoplastic groups cont’d:\n▪ Polyamides (Nylons): Nylon 6 (N6), Nylon 66 (N66), Nylon 11 (N11), Nylon 12 (N12), Polyphtalamide (PPA), Polyamidemide (PAI).\n▪ Polyimides: Polyimide (PI), Polyetherimide (PEI).\n▪ Polyethers: Polyacetal (POM), Polycarbonate (PC), Polyphenylene Oxide Blend (PPO), Polyaryletherketone (PAEK), Polyetheretherketone.\n▪ Sulfur Containing Polymers: Polyphenylene Sulfide (PPS), Polysulfone (PSF), Polyethersulfone (PES), Polyarylsulfone (PAS).",
+      "visuals": [],
+      "page_range": "222-224"
+    },
+    {
+      "title": "Thermosets",
+      "content": "Thermosets\n\nThermosets are Polymers that do not melt when heated. Thermosets molecules are cross-linked by strong covalent intermolecular bonds, forming one giant molecule. Cross-linking is irreversible therefore thermosets cannot be reprocessed (re-melt). Cross-linking is achieved in curing process initiated by heat, chemical agents or radiation. Before curing processing thermoset materials are stored in partially polymerized condition. Vulcanization (cross-linking, curing) results in sharp increase of strength, elasticity and stability of thermosets. Thermosets are stronger and stiffer than Thermoplastics. Stiffness of thermosets is even higher than some metals (aluminum). Thermosets also have higher thermal, chemical and creep resistance than thermoplastics.\n\nThermoset materials may contain filler materials in form of powder or fibers, providing improvement of specific material properties (strength, stiffness, Modulus of Elasticity, thermal resistance, lubricity). Common filler materials are glass in various forms, metal powders, Graphite or molybdenum disulfide powder.\n\nThermoset groups:\n\n• Epoxies (EP)\n• Unsaturated Polyesters (UP)\n• Phenolics (PF)\n• Amino Resins\n• Urea Formaldehyde (UF)\n• Melamine Formaldehyde (MF)\n• Alkyds (AMC)",
+      "visuals": [],
+      "page_range": "225-226"
+    },
+    {
+      "title": "Elastomers",
+      "content": "Elastomers\n\nElastomers are polymers possessing high elasticity - may be reversibly stretched at high degree.\n\nElastomers consist of long lightly cross-linked molecules. Common elastomers are:\n▪ Polyisoprene (natural rubber)\n▪ Butyl\n▪ Nitrile\n▪ Neoprene\n▪ Ethylene-Propylene\n▪ Hypalon\n▪ Silicone\n\nElastomers may be strengthened by vulcanization process (heat treatment in presence of chemical agents). Vulcanization results in increase of cross-linking of the molecules. Vulcanized elastomers are elastic for small deformations. Vulcanization produces cross-links, which make impossible shaping material. Therefore most of elastomers are shaped before cross-linking.\n\nHowever there are some elastomer materials, which are not cross-linked when heated.\n\nThese elastomers may be reversibly remolded by heating many times (like Thermoplastics). Such kind of elastomers is called Thermoplastic Elastomers.\n\nThermoplastic elastomers are manufactured by copolymerization of two or more monomers forming block polymers or graft polymers.\n\nCommon thermoplastic elastomers are:\n\n• Polyurethanes\n• Polyester Copolymers\n• Styrene-Butadiene\n\nProperties and applications of some elastomers\n\n• Elastomer Polyisoprene (natural rubber)\n• Elastomer Butyl (Isobutene-Isoprene)\n• Elastomer Nitrile\n• Elastomer Neoprene (Chloroprene)\n• Elastomer Ethylene-Propylene (EPDM)\n• Elastomer Hypalon (CSM, Chlor-Sulfonated Polyethylene)\n• Elastomer Silicone\n• Thermoplastic elastomer Polyurethane\n• Thermoplastic elastomer Styrene-Butadiene",
+      "visuals": [],
+      "page_range": "227-229"
+    },
+    {
+      "title": "Polymer structure",
+      "content": "Polymer structure\n\nPolymer is a substance (natural or synthetic), molecules of which consist of numerous small repeated chemical units (monomers) linked to each other in a regular pattern. Polymers usually combine crystalline and amorphous structures (semi-crystalline). Degree of polymerization is an average number of monomers (mers) in a polymer molecule. Polymer molecules may combine up to million of monomers (mers) forming a one-dimensional structure (chain), two-dimensional structure (planar molecules) or three-dimensional structure. One-dimensional structure is common for organic polymers.\n\nOrganic polymer is a polymer compound built of hydrocarbon base monomer units. Besides carbon and Hydrogen the following atoms may be incorporated in polymer molecules: Oxygen, Nitrogen, chorine, fluorine, silicon, phosphorous, and sulfur. Atoms of a polymer molecule are held by covalent bonding. Neighboring chains may form secondary bonds between them (cross-links), which are less strong than covalent bonding between the atoms within the molecules.\n\nCross-links provide elasticity to the polymer, preventing sliding of the neighboring chains when the material is stretched.\n\nBranched polymer consists of molecules having side chains (branches) attached to the main chain.\n\nCopolymer is a polymer molecule of which contains more than one kind of monomers. Nylon is a common copolymer. Its molecules consist of two alternating monomers: diacid and diamine.\n\nGraft copolymer is a kind of branch polymer, side chains of which are made of monomers differing from the monomer of the main chain.\n\nBlock copolymer is a polymer molecule of which built from alternating polymeric blocks of two or more different polymers.",
+      "visuals": [],
+      "page_range": "230-231"
+    },
+    {
+      "title": "Structure parameters affecting polymer properties:",
+      "content": "Structure parameters affecting polymer properties:\n\nIncrease of the chain length.\n\nEffect: increase of tensile strength and Modulus of Elasticity (stiffness).\n\nIncrease of number and length of side chains.\n\nEffect: increase of tensile strength and stiffness.\n\nIntroduction of large monomers in molecules.\n\nEffect: increase of stiffness.\n\nIncrease of number and strength of cross-links.\n\nEffect: increase of tensile strength and stiffness.\n\nOrientation of the molecules as a result of deformation during manufacturing.\n\nEffect: anisotropy of the material properties (properties along the deformation differ from those in other directions).",
+      "visuals": [],
+      "page_range": "232"
+    },
+    {
+      "title": "Glass transition temperature",
+      "content": "Glass transition temperature\n\nEvery polymer is characterized by the temperature below of which mobility of its molecules sharply decreases and the material becomes brittle and glassy. In the study of polymers and their applications, it is important to understand the concept of the glass transition temperature, $T_g$. As the temperature of a polymer drops below $T_g$, it behaves in an increasingly brittle manner. As the temperature rises above the $T_g$, the polymer becomes more rubber-like. Thus, knowledge of $T_g$ is essential in the selection of materials for various applications. In general, values of $T_g$ well below room temperature define the domain of elastomers and values above room temperature define rigid, structural polymers.\n\nMonomer molecular structures of different polymers are presented in the picture:",
+      "visuals": [
+        "Diagram titled 'Monomer structures of different polymers' showing chemical structures for: Polyethylene(PE) [two carbons with four hydrogens], Polyvinyl chloride (PVC) [two carbons with three hydrogens and one chlorine], Polypropylene(PP) [two carbons with three hydrogens and one CH3 group], Polytetrafluoroethylene (PTFE) [two carbons with four fluorines], Polystyrene (PS) [two carbons with three hydrogens and one benzene ring], and Polymethyl metacrylate (PMMA) [complex structure with ester and methyl groups]."
+      ],
+      "page_range": "233-234"
+    },
+    {
+      "title": "Vulcanization of rubber",
+      "content": "Vulcanization of rubber\n\nVulcanization of rubber is a process of improvement of the rubber elasticity and strength by heating it in the presence of sulfur, which results in three-dimensional cross-linking of the chain rubber molecules (polyisoprene) bonded to each other by sulfur atoms.\n\nThere are two general types of rubber:\n\n• Natural rubber is produced from latex - milky emulsion drawn from the rubber tree (Hevea brasiliensis) or some other plants. When coagulated latex transforms into soft, plastic and sticky substance (crude rubber), which is then vulcanized (cured). Natural rubber is composed of polyisoprene molecules.\n\n• Synthetic rubbers are Elastomers, elastic properties of which are similar to those of the natural rubber. Synthetic rubber may have chemical composition similar to the natural rubber (synthetic polyisoprene). Other kinds of synthetic rubbers are: polybutadiene, poly(styrene-butadiene-styrene), polychloroprene (Neoprene), polyisobutylene (Butyl rubber), silicone.\n\nVulcanization technique comprises the following principal stages:",
+      "visuals": [],
+      "page_range": "235-236"
+    },
+    {
+      "title": "Vulcanization of rubber",
+      "content": "Vulcanization of rubber is a process of improvement of the rubber elasticity and strength by heating it in the presence of sulfur, which results in three-dimensional cross-linking of the chain rubber molecules (polyisoprene) bonded to each other by sulfur atoms.\n\nThere are two general types of rubber:\n\n* Natural rubber is produced from latex - milky emulsion drawn from the rubber tree (Hevea brasiliensis) or some other plants. When coagulated latex transforms into soft, plastic and sticky substance (crude rubber), which is then vulcanized (cured). Natural rubber is composed of polyisoprene molecules.\n* Synthetic rubbers are Elastomers, elastic properties of which are similar to those of the natural rubber. Synthetic rubber may have chemical composition similar to the natural rubber (synthetic polyisoprene). Other kinds of synthetic rubbers are: polybutadiene, poly(styrene-butadiene-styrene), polychloroprene (Neoprene), polyisobutylene (Butyl rubber), silicone.\n\nVulcanization technique comprises the following principal stages:\n\n* Mixing of crude rubber with about $5-30\\%$ of sulfur (cross-linking agent) and other additives such as:\n    * Activator (commonly zinc oxide or stearic acid),\n    * Accelerator (guanidines, thiazoles, dithiocarbamates, xanthates, thiurams),\n    * Coagulants (acetic acid, calcium chloride),\n    * Anti-oxidants (amines, phenolics, phosphites),\n    * Color pigments,\n    * Surfactants,\n    * Softeners (oils),\n    * Anti-foaming agents,\n    * Anti-tack agents (Rosin derivates, coumarone-indene resins, aliphatic\n    * Petroleum resins, alkyl-modified phenol-formaldehyde resins).\nSlow cross-linking starts at this stage. It is necessary to avoid active vulcanization during mixing, which may cause cracks formation at the molding stage.\n\n* Molding (shaping) the rubber mixture. The rubber must be shaped prior to heating stage since cross-linking makes shaping impossible.\n* Heating the mixture to $250-400^{\\circ}F$ ($120-200^{\\circ}C$). Increased temperature speeds up the vulcanization process resulting in fast and complete cross-linking. C-S bonds replace C-H bonds linking chain polyisoprene molecules. Each link is formed by one to seven sulfur atoms.\n\nDensity of cross-links must be controlled in order to prevent formation of brittle rubber.\n\nProperties of rubber improved by vulcanization:\n\n* Tensile strength;\n* Elasticity;\n* Hardness;\n* Tear strength;\n* Abrasion resistance;\n* Resistance to Solvents.",
+      "visuals": [],
+      "page_range": "235-239"
+    },
+    {
+      "title": "Methods of polymers fabrication",
+      "content": "* Thermoforming\n* Extrusion of polymers\n* Injection molding of polymers\n* Blow molding\n* Compression molding of polymers\n* Transfer molding of polymers",
+      "visuals": [],
+      "page_range": "240"
+    },
+    {
+      "title": "Thermoforming",
+      "content": "Thermoforming is a process of shaping flat thermoplastic sheet, which includes two stages: softening the sheet by heating, followed by forming it in the mold cavity. Elastomers and Thermosets cannot be formed by the Thermoforming methods because of their cross-linked structure – they do not soften when heated.\n\nThermoplastics, which may be processed by the thermoforming method, are:\n\n* Polypropylene (PP)\n* Polystyrene (PS)\n* Polyvinyl Chloride (PVC)\n* Low Density Polyethylene (LDPE)\n* High Density Polyethylene (HDPE)\n* Cellulose Acetate\n* Polymethylmethacrylate (PMMA)\n* Acrylonitrile-Butadiene-Styrene (ABS)\n\nThermoforming is widely used in the food packaging industry for manufacturing ice cream and margarine tubs, meat trays microwave containers, snack tubs sandwich packs etc.\n\nThermoforming is also used for manufacturing some pharmaceutical and electronic articles, small tools, fasteners, toys, boat hulls, blister and skin packs. There are three thermoforming methods, differing in the technique used for the forming stage:\n\n* Vacuum Thermoforming\n* Pressure Thermoforming\n* Mechanical Thermoforming",
+      "visuals": [],
+      "page_range": "241-243"
+    },
+    {
+      "title": "Vacuum Thermoforming",
+      "content": "The process involves shaping a preheated thermoplastic sheet by means of vacuum produced in the mold cavity space. The atmospheric pressure forces the soft sheet to deform in conformity with the cavity shape. When the plastic comes into the contact with the mold surface it cools down and hardens.",
+      "visuals": [
+        "Diagram titled 'Vacuum Thermoforming' illustrating the process in three steps: heating the plastic sheet with a heater while held by clamps, placing the sheet over the mold with a vacuum pump attached, and the final stage where the vacuum pulls the sheet into the mold cavity."
+      ],
+      "page_range": "244-245"
+    },
+    {
+      "title": "Pressure Thermoforming",
+      "content": "The process involves shaping a preheated thermoplastic sheet by means of air pressure. The air pressure forces the soft sheet to deform in conformity with the cavity shape. When the plastic comes into the contact with the mold surface it cools down and hardens.",
+      "visuals": [
+        "Diagram titled 'Pressure Thermoforming' showing the process: a preheated plastic sheet is clamped over a mold, a pressure box is applied from above with air pressure, and a vacuum pump operates from below to pull the sheet into the mold cavity."
+      ],
+      "page_range": "246-247"
+    },
+    {
+      "title": "Mechanical Thermoforming",
+      "content": "The process involves shaping a preheated thermoplastic sheet by means of a direct mechanical force. A core plug (positive mold) forces the soft sheet to fill the space between the plug and the negative mold. The process provides precise dimensional tolerance and surface detailing.",
+      "visuals": [
+        "Diagram titled 'Mechanical Thermoforming' showing two steps: a preheated plastic sheet is clamped between a plug and a mold, and then the plug is forced down into the mold to shape the sheet."
+      ],
+      "page_range": "248-249"
+    },
+    {
+      "title": "Extrusion of polymers",
+      "content": "Extrusion is a process of manufacturing long products of constant cross-section (rods, sheets, pipes, films, wire insulation coating) forcing soften polymer through a die with an opening. Polymer material in form of pellets is fed into an extruder through a hopper. The material is then conveyed forward by a feeding screw and forced through a die, converting to continuous polymer product.\n\nHeating elements, placed over the barrel, soften and melt the polymer. The temperature of the material is controlled by thermocouples. The product going out of the die is cooled by blown air or in water bath.\n\nExtrusion is used mainly for Thermoplastics, but Elastomers and Thermosets are also may be extruded. In this case cross-linking forms during heating and melting of the material in the extruder.\n\nThe thermoplastic extruded products may be further formed by the Thermoforming method.\n\nA principal scheme of an extruder is shown in the picture.",
+      "visuals": [
+        "Diagram titled 'Extrusion of polymers' showing the components of an extruder: hopper for pellets, rotating screw inside a barrel with heaters, thermocouple near the nozzle, and the polymer product exiting the nozzle."
+      ],
+      "page_range": "250-251"
+    },
+    {
+      "title": "Injection molding of polymers",
+      "content": "Injection Molding is a process in which molten polymer is forced under high pressure into a mold cavity through an opening (sprue).\n\nPolymer material in form of pellets is fed into an Injection Molding machine through a hopper. The material is then conveyed forward by a feeding screw and forced into a split mold, filling its cavity through a feeding system with sprue gate and runners.\n\nInjection Molding machine is similar to Extruder. The main difference between the two machines is in screw operation. In extruder screw rotates continuously providing output of continuous long product (pipe, rod, sheet). Screw of injection molding machine is called reciprocating screw since it not only rotates but also moves forward and backward according to the steps of the molding cycle. It acts as a ram in the filling step when the molten polymer is injected into the mold and then it retracts backward in the molding step.\n\nHeating elements, placed over the barrel, soften and melt the polymer. The mold is equipped with a cooling system providing controlled cooling and solidification of the material.\n\nThe polymer is held in the mold until solidification and then the mold opens and the part is removed from the mold by ejector pins.\n\nInjection Molding is used mainly for Thermoplastics, but Elastomers and Thermosets are also may be extruded. In this case cross-linking occurs during heating and melting of the material in the heated barrel.\n\nA principal scheme of an Injection Molding Machine is shown in the picture.\n\nInjection Molding is highly productive method providing high accuracy and control of shape of the manufactured parts. The method is profitable in mass production of large number of identical parts.",
+      "visuals": [
+        "Diagram titled 'Injection Molding' showing the machine components: hopper, reciprocating screw with motion arrows, heaters, barrel, nozzle, sprue, split mold, and ejector pins."
+      ],
+      "page_range": "252-254"
+    },
+    {
+      "title": "Injection Molding",
+      "content": "Heating elements, placed over the barrel, soften and melt the polymer. The mold is equipped with a cooling system providing controlled cooling and solidification of the material.\n\nThe polymer is held in the mold until solidification and then the mold opens and the part is removed from the mold by ejector pins.\n\nInjection Molding is used mainly for Thermoplastics, but Elastomers and Thermosets are also may be extruded. In this case cross-linking occurs during heating and melting of the material in the heated barrel.\n\nA principal scheme of an Injection Molding Machine is shown in the picture.\n\nInjection Molding is highly productive method providing high accuracy and control of shape of the manufactured parts. The method is profitable in mass production of large number of identical parts.\n\nThermoplastics commonly used in Injection Molding are as follows:\n\n• Polypropylene (PP)\n• Polycarbonate (PC)\n• Acrylonitrile-Butadiene-Styrene (ABS)\n• Nylon 6 (N6)\n\nInjection Molding is used for manufacturing DVDs, pipe fittings, battery casings, toothbrush bases, bottle lids, disposable razors, automobile bumpers and dash boards, power-tool housing, television cabinets, electrical switches, telephone handsets, automotive power brake, automotive fascias, transmission, and electrical parts, mirror housings, steam irons, washer pumps, spoilers, butter tubs, moisture vaporizers, yogurt containers, toilet seats, cell-phone housings, cradles or bases for personal digital assistants, case of a notebook-computer, computer mouse, electrical connector housings, lawn chairs, automotive ashtrays, and cookware appliance handles and knobs, aerosol caps, household items, bottle caps, toys.",
+      "visuals": [
+        "Diagram titled 'Injection Molding' showing a principal scheme of an Injection Molding Machine. Labeled components include: Pellets, Hopper, Screw motions, Screw, Heaters, Barrel, Nozzle, Sprue, Split mold, and Ejector pins. The diagram illustrates the process of pellets entering from a hopper into a heated barrel where a screw moves the molten material through a nozzle and sprue into a split mold."
+      ],
+      "page_range": "253-255"
+    },
+    {
+      "title": "Blow molding",
+      "content": "Blow Molding is a process in which a heated hollow thermoplastic tube (parison) is inflated into a closed mold conforming the shape of the mold cavity.\n\nThe most widely used materials for Blow Molding are:\n\n• Low Density Polyethylene (LDPE), High Density Polyethylene (HDPE)\n• Polypropylene (PP)\n• Polyvinyl Chloride (PVC)\n• Polyethylene Terephtalate (PET)\n\nDisposable containers of various sizes and shapes, drums, recyclable bottles, automotive fuel tanks, storage tanks, globe light fixtures, toys, tubs, small boats are produced by Blow Molding method.",
+      "visuals": [],
+      "page_range": "256"
+    },
+    {
+      "title": "ASSIGNMENT",
+      "content": "Read on the principal techniques of Blow molding",
+      "visuals": [
+        "A decorative graphic in the top left corner consisting of overlapping yellow, red, and blue squares with a black crosshair."
+      ],
+      "page_range": "257"
+    }
+  ]
+}

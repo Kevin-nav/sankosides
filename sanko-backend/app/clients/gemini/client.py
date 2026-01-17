@@ -29,6 +29,11 @@ from app.clients.gemini.helpers import (
     extract_thinking_from_response,
     extract_text_from_response,
 )
+from app.clients.gemini.retry import (
+    is_retryable_gemini_error,
+    gemini_retry_async,
+    retry_gemini_call_async,
+)
 
 logger = get_logger(__name__)
 
@@ -106,9 +111,15 @@ class GeminiInteractionsClient:
             if previous_interaction_id:
                 create_kwargs["previous_interaction_id"] = previous_interaction_id
             
-            interaction = await loop.run_in_executor(
+            # Define the API call function for retry
+            def make_api_call():
+                return self.client.interactions.create(**create_kwargs)
+            
+            # Execute with retry for transient errors
+            interaction = await retry_gemini_call_async(
+                asyncio.get_event_loop().run_in_executor,
                 None,
-                lambda: self.client.interactions.create(**create_kwargs)
+                make_api_call,
             )
             
             # Extract response text from outputs
@@ -200,13 +211,19 @@ class GeminiInteractionsClient:
         try:
             loop = asyncio.get_event_loop()
             
-            response = await loop.run_in_executor(
-                None,
-                lambda: self.client.models.generate_content(
+            # Define the API call function for retry
+            def make_api_call():
+                return self.client.models.generate_content(
                     model=model,
                     contents=prompt,
                     config=config,
                 )
+            
+            # Execute with retry for transient errors
+            response = await retry_gemini_call_async(
+                loop.run_in_executor,
+                None,
+                make_api_call,
             )
             
             response_text = extract_text_from_response(response)
@@ -263,13 +280,19 @@ class GeminiInteractionsClient:
         try:
             loop = asyncio.get_event_loop()
             
-            response = await loop.run_in_executor(
-                None,
-                lambda: self.client.models.generate_content(
+            # Define the API call function for retry
+            def make_api_call():
+                return self.client.models.generate_content(
                     model=model,
                     contents=contents,
                     config=config,
                 )
+            
+            # Execute with retry for transient errors
+            response = await retry_gemini_call_async(
+                loop.run_in_executor,
+                None,
+                make_api_call,
             )
             
             response_text = extract_text_from_response(response)

@@ -166,6 +166,7 @@ def create_planning_task(
     agent: Agent,
     skeleton: Skeleton,
     order_form: OrderForm,
+    university_context: Optional["UniversityContext"] = None,
 ) -> Task:
     """
     Create a task for the Planner to generate content.
@@ -174,6 +175,7 @@ def create_planning_task(
         agent: The Planner agent
         skeleton: Approved presentation structure
         order_form: User preferences from Clarifier
+        university_context: Optional university context for formatting rules
         
     Returns:
         CrewAI Task for content planning
@@ -188,6 +190,22 @@ def create_planning_task(
         + f"\n  - Needs image: {s.needs_image}" + (f" - {s.image_description}" if s.image_description else "")
         for s in skeleton.slides
     ])
+    
+    # Build university formatting rules if available
+    formatting_rules = ""
+    department_suggestions = ""
+    if university_context:
+        formatting_rules = university_context.get_agent_prompt_injection()
+        
+        # Add department-specific suggestions
+        if university_context.department:
+            dept = university_context.department
+            if dept.common_diagram_types:
+                diagram_types = ", ".join(dept.common_diagram_types[:5])
+                department_suggestions += f"\n**Suggested Diagrams for {dept.name}:** {diagram_types}"
+            if dept.common_equation_domains:
+                equation_domains = ", ".join(dept.common_equation_domains[:5])
+                department_suggestions += f"\n**Common Equation Domains:** {equation_domains}"
     
     return Task(
         description=f"""Create COMPLETE slide content for this presentation.
@@ -208,6 +226,8 @@ Narrative: {skeleton.narrative_arc}
 - **References Placement**: {order_form.references_placement}
 - **Include Speaker Notes**: {order_form.include_speaker_notes}
 - **Special Requests**: {order_form.special_requests or 'None'}
+{formatting_rules}
+{department_suggestions}
 
 ## YOUR TASK
 1. Write FULL content for EVERY slide (not just outlines!)
@@ -216,16 +236,39 @@ Narrative: {skeleton.narrative_arc}
 4. Add placeholders for assets that the Refiner will fill
 5. Suggest template_type for each slide
 6. Add speaker_notes if requested
+7. Follow all institution formatting rules above (if specified)
 
-Return a complete PlannedContent object.""",
-        expected_output="""A PlannedContent JSON with:
-- presentation_title
-- target_audience  
-- theme_id
-- citation_style
-- slides: Array of PlannedSlide objects with full content""",
+## OUTPUT FORMAT
+Return ONLY a valid JSON object (no schema, no explanation) with this structure:
+{{
+  "presentation_title": "string",
+  "target_audience": "string",
+  "theme_id": "string",
+  "citation_style": "string",
+  "slides": [
+    {{
+      "order": 1,
+      "title": "Slide Title",
+      "content_type": "content|title|diagram|equation|image|quote|two_column|section|overview|conclusion",
+      "bullet_points": ["Full bullet point 1", "Full bullet point 2"],
+      "equation_placeholder": "Description of equation needed or null",
+      "diagram_placeholder": "Description of diagram needed or null",
+      "citation_queries": ["search term 1", "search term 2"],
+      "image_query": "image search term or null",
+      "speaker_notes": "Speaker notes or null",
+      "template_type": "content|title|diagram|equation|image|two_column|quote|conclusion"
+    }}
+  ]
+}}
+
+IMPORTANT: Output ONLY the JSON object. Do not include any schema definition, explanation, or markdown formatting.""",
+        expected_output="""A JSON object with presentation_title, target_audience, theme_id, citation_style, and slides array. 
+Each slide has: order, title, content_type, bullet_points (with full content), and optional placeholders.
+Output ONLY the JSON - no explanation, no schema, no markdown.""",
         agent=agent,
-        output_pydantic=PlannedContent,
+        # Note: We intentionally do NOT use output_pydantic here because it causes
+        # some LLMs (especially Gemini) to output the schema definition before the actual data.
+        # Our _parse_planned_content function handles robust JSON extraction instead.
     )
 
 

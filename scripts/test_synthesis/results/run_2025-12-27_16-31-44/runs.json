@@ -1,0 +1,349 @@
+[
+  {
+    "run_id": "run_0001",
+    "pdf_name": "1S2.1 Str.O.Mat 152.pdf",
+    "pdf_size_bytes": 1096626,
+    "strategy_name": "baseline",
+    "timestamp": "2025-12-27T16:31:45.355114",
+    "performance": {
+      "total_time_ms": 0.0,
+      "api_latency_ms": 333516.890400002,
+      "json_parse_time_ms": 0.08569999772589654,
+      "validation_time_ms": 0.0,
+      "chunk_times_ms": []
+    },
+    "quality": {
+      "sections_count": 0,
+      "total_content_chars": 0,
+      "avg_section_chars": 0.0,
+      "min_section_chars": 0,
+      "max_section_chars": 0,
+      "sections_with_visuals": 0,
+      "sections_with_latex": 0,
+      "sections_with_page_range": 0,
+      "empty_sections": 0,
+      "potential_split_sections": 0,
+      "merged_sections": 0
+    },
+    "response": {
+      "raw_response_chars": 9875,
+      "valid_json": false,
+      "json_parse_error": "Unterminated string starting at: line 69 column 9 (char 9865)",
+      "response_tokens_estimate": 2468,
+      "appears_truncated": true,
+      "truncation_indicators": [
+        "unclosed_braces:2",
+        "unclosed_brackets:2",
+        "unclosed_string"
+      ]
+    },
+    "failure": {
+      "success": false,
+      "error_type": "json_truncated",
+      "error_message": "Unterminated string starting at: line 69 column 9 (char 9865)",
+      "retry_count": 0,
+      "failed_at_stage": "json_parse"
+    },
+    "strategy_params": {
+      "model": "gemini-3-flash-preview",
+      "temperature": 0.0
+    },
+    "chunks_processed": 0
+  },
+  {
+    "run_id": "run_0002",
+    "pdf_name": "1S2.1 Str.O.Mat 152.pdf",
+    "pdf_size_bytes": 1096626,
+    "strategy_name": "baseline_t01",
+    "timestamp": "2025-12-27T16:37:19.669801",
+    "performance": {
+      "total_time_ms": 227236.11850000452,
+      "api_latency_ms": 227233.95679998794,
+      "json_parse_time_ms": 1.1307000095257536,
+      "validation_time_ms": 0.16959999629762024,
+      "chunk_times_ms": []
+    },
+    "quality": {
+      "sections_count": 8,
+      "total_content_chars": 104903,
+      "avg_section_chars": 13112.875,
+      "min_section_chars": 6356,
+      "max_section_chars": 29756,
+      "sections_with_visuals": 7,
+      "sections_with_latex": 7,
+      "sections_with_page_range": 8,
+      "empty_sections": 0,
+      "potential_split_sections": 0,
+      "merged_sections": 0
+    },
+    "response": {
+      "raw_response_chars": 113160,
+      "valid_json": true,
+      "json_parse_error": null,
+      "response_tokens_estimate": 28290,
+      "appears_truncated": true,
+      "truncation_indicators": [
+        "pattern:...",
+        "pattern:..."
+      ]
+    },
+    "failure": {
+      "success": true,
+      "error_type": "success",
+      "error_message": null,
+      "retry_count": 0,
+      "failed_at_stage": null
+    },
+    "strategy_params": {
+      "model": "gemini-3-flash-preview",
+      "temperature": 0.1
+    },
+    "chunks_processed": 0
+  },
+  {
+    "run_id": "run_0003",
+    "pdf_name": "1S2.1 Str.O.Mat 152.pdf",
+    "pdf_size_bytes": 1096626,
+    "strategy_name": "baseline_t02",
+    "timestamp": "2025-12-27T16:41:07.747485",
+    "performance": {
+      "total_time_ms": 0.0,
+      "api_latency_ms": 89978.72590000043,
+      "json_parse_time_ms": 0.09320001117885113,
+      "validation_time_ms": 0.0,
+      "chunk_times_ms": []
+    },
+    "quality": {
+      "sections_count": 0,
+      "total_content_chars": 0,
+      "avg_section_chars": 0.0,
+      "min_section_chars": 0,
+      "max_section_chars": 0,
+      "sections_with_visuals": 0,
+      "sections_with_latex": 0,
+      "sections_with_page_range": 0,
+      "empty_sections": 0,
+      "potential_split_sections": 0,
+      "merged_sections": 0
+    },
+    "response": {
+      "raw_response_chars": 34906,
+      "valid_json": true,
+      "json_parse_error": null,
+      "response_tokens_estimate": 8726,
+      "appears_truncated": false,
+      "truncation_indicators": []
+    },
+    "failure": {
+      "success": false,
+      "error_type": "api_error",
+      "error_message": "'list' object has no attribute 'get'",
+      "retry_count": 0,
+      "failed_at_stage": "api_call"
+    },
+    "strategy_params": {
+      "model": "gemini-3-flash-preview",
+      "temperature": 0.2
+    },
+    "chunks_processed": 0
+  },
+  {
+    "run_id": "run_0004",
+    "pdf_name": "1S2.1 Str.O.Mat 152.pdf",
+    "pdf_size_bytes": 1096626,
+    "strategy_name": "chunked_10",
+    "timestamp": "2025-12-27T16:42:38.419556",
+    "performance": {
+      "total_time_ms": 0.0,
+      "api_latency_ms": 0.0,
+      "json_parse_time_ms": 0.0,
+      "validation_time_ms": 0.0,
+      "chunk_times_ms": []
+    },
+    "quality": {
+      "sections_count": 0,
+      "total_content_chars": 0,
+      "avg_section_chars": 0.0,
+      "min_section_chars": 0,
+      "max_section_chars": 0,
+      "sections_with_visuals": 0,
+      "sections_with_latex": 0,
+      "sections_with_page_range": 0,
+      "empty_sections": 0,
+      "potential_split_sections": 0,
+      "merged_sections": 0
+    },
+    "response": {
+      "raw_response_chars": 0,
+      "valid_json": false,
+      "json_parse_error": null,
+      "response_tokens_estimate": 0,
+      "appears_truncated": false,
+      "truncation_indicators": []
+    },
+    "failure": {
+      "success": true,
+      "error_type": "success",
+      "error_message": null,
+      "retry_count": 0,
+      "failed_at_stage": null
+    },
+    "strategy_params": {
+      "model": "gemini-3-flash-preview",
+      "pages_per_chunk": 10,
+      "overlap_pages": 2
+    },
+    "chunks_processed": 12
+  },
+  {
+    "run_id": "run_0005",
+    "pdf_name": "1S2.1 Str.O.Mat 152.pdf",
+    "pdf_size_bytes": 1096626,
+    "strategy_name": "chunked_5",
+    "timestamp": "2025-12-27T16:42:39.245998",
+    "performance": {
+      "total_time_ms": 0.0,
+      "api_latency_ms": 0.0,
+      "json_parse_time_ms": 0.0,
+      "validation_time_ms": 0.0,
+      "chunk_times_ms": []
+    },
+    "quality": {
+      "sections_count": 0,
+      "total_content_chars": 0,
+      "avg_section_chars": 0.0,
+      "min_section_chars": 0,
+      "max_section_chars": 0,
+      "sections_with_visuals": 0,
+      "sections_with_latex": 0,
+      "sections_with_page_range": 0,
+      "empty_sections": 0,
+      "potential_split_sections": 0,
+      "merged_sections": 0
+    },
+    "response": {
+      "raw_response_chars": 0,
+      "valid_json": false,
+      "json_parse_error": null,
+      "response_tokens_estimate": 0,
+      "appears_truncated": false,
+      "truncation_indicators": []
+    },
+    "failure": {
+      "success": true,
+      "error_type": "success",
+      "error_message": null,
+      "retry_count": 0,
+      "failed_at_stage": null
+    },
+    "strategy_params": {
+      "model": "gemini-3-flash-preview",
+      "pages_per_chunk": 5,
+      "overlap_pages": 1
+    },
+    "chunks_processed": 24
+  },
+  {
+    "run_id": "run_0006",
+    "pdf_name": "1S2.1 Str.O.Mat 152.pdf",
+    "pdf_size_bytes": 1096626,
+    "strategy_name": "two_phase",
+    "timestamp": "2025-12-27T16:42:39.988088",
+    "performance": {
+      "total_time_ms": 0.0,
+      "api_latency_ms": 0.0,
+      "json_parse_time_ms": 0.0,
+      "validation_time_ms": 0.0,
+      "chunk_times_ms": [
+        51940.063500005635,
+        95547.77449999528,
+        56633.29110000632,
+        323238.77739999443,
+        49934.69720000576,
+        75237.10479999136,
+        23958.065899991198,
+        30932.254800005467
+      ]
+    },
+    "quality": {
+      "sections_count": 6,
+      "total_content_chars": 0,
+      "avg_section_chars": 0.0,
+      "min_section_chars": 0,
+      "max_section_chars": 0,
+      "sections_with_visuals": 0,
+      "sections_with_latex": 0,
+      "sections_with_page_range": 0,
+      "empty_sections": 0,
+      "potential_split_sections": 0,
+      "merged_sections": 0
+    },
+    "response": {
+      "raw_response_chars": 0,
+      "valid_json": false,
+      "json_parse_error": null,
+      "response_tokens_estimate": 0,
+      "appears_truncated": false,
+      "truncation_indicators": []
+    },
+    "failure": {
+      "success": false,
+      "error_type": "api_error",
+      "error_message": "'list' object has no attribute 'get'",
+      "retry_count": 0,
+      "failed_at_stage": null
+    },
+    "strategy_params": {
+      "model": "gemini-3-flash-preview",
+      "phases": 2
+    },
+    "chunks_processed": 8
+  },
+  {
+    "run_id": "run_0007",
+    "pdf_name": "1S2.1 Str.O.Mat 152.pdf",
+    "pdf_size_bytes": 1096626,
+    "strategy_name": "model_3_pro",
+    "timestamp": "2025-12-27T16:54:28.107637",
+    "performance": {
+      "total_time_ms": 200803.45980000857,
+      "api_latency_ms": 200802.84009999014,
+      "json_parse_time_ms": 0.43089999235235155,
+      "validation_time_ms": 0.04339999577496201,
+      "chunk_times_ms": []
+    },
+    "quality": {
+      "sections_count": 32,
+      "total_content_chars": 72905,
+      "avg_section_chars": 2278.28125,
+      "min_section_chars": 243,
+      "max_section_chars": 6736,
+      "sections_with_visuals": 24,
+      "sections_with_latex": 31,
+      "sections_with_page_range": 32,
+      "empty_sections": 0,
+      "potential_split_sections": 0,
+      "merged_sections": 0
+    },
+    "response": {
+      "raw_response_chars": 84979,
+      "valid_json": true,
+      "json_parse_error": null,
+      "response_tokens_estimate": 21244,
+      "appears_truncated": false,
+      "truncation_indicators": []
+    },
+    "failure": {
+      "success": true,
+      "error_type": "success",
+      "error_message": null,
+      "retry_count": 0,
+      "failed_at_stage": null
+    },
+    "strategy_params": {
+      "model": "gemini-3-pro-preview",
+      "temperature": 0.0
+    },
+    "chunks_processed": 0
+  }
+]

@@ -1,0 +1,354 @@
+"use client";
+
+import { useState, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { File as FileIcon, X, Loader2, Check, AlertCircle, Database } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+// File status types
+type FileStatus = 'hashing' | 'uploading' | 'checking' | 'processing' | 'ready' | 'cached' | 'error';
+
+export interface AttachedFile {
+    id: string;
+    file: File;
+    hash?: string;
+    status: FileStatus;
+    error?: string;
+    r2Key?: string;
+    sectionsCount?: number;
+}
+
+interface FileAttachmentBarProps {
+    files: AttachedFile[];
+    onRemove: (id: string) => void;
+    disabled?: boolean;
+    className?: string;
+}
+
+const statusConfig: Record<FileStatus, { icon: React.ReactNode; color: string; label: string }> = {
+    hashing: {
+        icon: <Loader2 className="h-3 w-3 animate-spin" />,
+        color: "text-blue-400",
+        label: "Preparing...",
+    },
+    uploading: {
+        icon: <Loader2 className="h-3 w-3 animate-spin" />,
+        color: "text-amber-400",
+        label: "Uploading...",
+    },
+    checking: {
+        icon: <Loader2 className="h-3 w-3 animate-spin" />,
+        color: "text-purple-400",
+        label: "Checking...",
+    },
+    processing: {
+        icon: <Loader2 className="h-3 w-3 animate-spin" />,
+        color: "text-orange-400",
+        label: "Processing...",
+    },
+    ready: {
+        icon: <Check className="h-3 w-3" />,
+        color: "text-emerald-400",
+        label: "Ready",
+    },
+    cached: {
+        icon: <Database className="h-3 w-3" />,
+        color: "text-cyan-400",
+        label: "Cached",
+    },
+    error: {
+        icon: <AlertCircle className="h-3 w-3" />,
+        color: "text-red-400",
+        label: "Error",
+    },
+};
+
+export function FileAttachmentBar({ files, onRemove, disabled = false, className }: FileAttachmentBarProps) {
+    if (files.length === 0) return null;
+
+    return (
+        <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className={cn("mb-3 flex flex-wrap gap-2 overflow-hidden", className)}
+        >
+            <AnimatePresence mode="popLayout">
+                {files.map((file) => {
+                    const config = statusConfig[file.status];
+                    const isProcessing = ['hashing', 'uploading', 'checking', 'processing'].includes(file.status);
+
+                    return (
+                        <motion.div
+                            key={file.id}
+                            layout
+                            initial={{ opacity: 0, scale: 0.8 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.15 } }}
+                            className={cn(
+                                "group flex items-center gap-2 rounded-lg px-3 py-2 text-xs border transition-all",
+                                file.status === 'error'
+                                    ? "bg-red-500/10 border-red-500/30 text-red-300"
+                                    : file.status === 'cached'
+                                        ? "bg-cyan-500/10 border-cyan-500/30 text-cyan-300"
+                                        : file.status === 'ready'
+                                            ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
+                                            : "bg-neutral-900 border-neutral-800 text-neutral-300"
+                            )}
+                        >
+                            {/* File Icon */}
+                            <FileIcon className="h-3.5 w-3.5 text-neutral-400 shrink-0" />
+
+                            {/* Filename */}
+                            <span className="max-w-[150px] truncate font-medium">
+                                {file.file.name}
+                            </span>
+
+                            {/* Status */}
+                            <span className={cn("flex items-center gap-1 text-[10px]", config.color)}>
+                                {config.icon}
+                                {file.status === 'cached' && file.sectionsCount && (
+                                    <span className="opacity-70">({file.sectionsCount})</span>
+                                )}
+                            </span>
+
+                            {/* Error message tooltip */}
+                            {file.status === 'error' && file.error && (
+                                <span className="text-[10px] text-red-400 max-w-[100px] truncate" title={file.error}>
+                                    {file.error}
+                                </span>
+                            )}
+
+                            {/* Remove button - only show if not processing and not disabled */}
+                            {!isProcessing && !disabled && (
+                                <button
+                                    onClick={() => onRemove(file.id)}
+                                    className={cn(
+                                        "ml-1 rounded-full p-0.5 transition-colors",
+                                        "opacity-0 group-hover:opacity-100",
+                                        "hover:bg-neutral-800 text-neutral-500 hover:text-white"
+                                    )}
+                                >
+                                    <X className="h-3 w-3" />
+                                </button>
+                            )}
+                        </motion.div>
+                    );
+                })}
+            </AnimatePresence>
+        </motion.div>
+    );
+}
+
+// Helper hook for managing file uploads
+export function useFileUpload() {
+    const [files, setFiles] = useState<AttachedFile[]>([]);
+    const [isUploading, setIsUploading] = useState(false);
+
+    // Compute SHA-256 hash client-side
+    const computeHash = async (file: File): Promise<string> => {
+        const buffer = await file.arrayBuffer();
+        const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    };
+
+    // Check for duplicate by hash
+    const isDuplicate = useCallback((hash: string): boolean => {
+        return files.some(f => f.hash === hash);
+    }, [files]);
+
+    // Add files and start upload
+    const addFiles = useCallback(async (newFiles: File[]) => {
+        for (const file of newFiles) {
+            // Validate file type
+            if (!file.type.includes('pdf') && !file.name.toLowerCase().endsWith('.pdf')) {
+                continue; // Skip non-PDFs silently
+            }
+
+            // Validate size (20MB)
+            if (file.size > 20 * 1024 * 1024) {
+                const id = crypto.randomUUID();
+                setFiles(prev => [...prev, {
+                    id,
+                    file,
+                    status: 'error',
+                    error: 'File exceeds 20MB limit',
+                }]);
+                continue;
+            }
+
+            const id = crypto.randomUUID();
+
+            // Add file in hashing state
+            setFiles(prev => [...prev, { id, file, status: 'hashing' }]);
+
+            try {
+                // Compute hash
+                const hash = await computeHash(file);
+
+                // Check for duplicate
+                if (isDuplicate(hash)) {
+                    setFiles(prev => prev.filter(f => f.id !== id));
+                    // Could show toast here: "File already attached"
+                    continue;
+                }
+
+                // Update status to uploading
+                setFiles(prev => prev.map(f =>
+                    f.id === id ? { ...f, hash, status: 'uploading' } : f
+                ));
+
+                setIsUploading(true);
+
+                // Upload to backend
+                const formData = new FormData();
+                formData.append('files', file);
+
+                const response = await fetch('/api/generate/upload', {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Upload failed');
+                }
+
+                const data = await response.json();
+                const uploadedFile = data.files[0];
+
+                if (uploadedFile.cached) {
+                    // Already processed - immediately ready
+                    setFiles(prev => prev.map(f =>
+                        f.id === id ? {
+                            ...f,
+                            status: 'cached',
+                            r2Key: uploadedFile.r2_key,
+                            sectionsCount: uploadedFile.sections_count,
+                        } : f
+                    ));
+                } else {
+                    // Not cached - background processing started, poll for status
+                    setFiles(prev => prev.map(f =>
+                        f.id === id ? {
+                            ...f,
+                            status: 'processing',
+                            r2Key: uploadedFile.r2_key,
+                        } : f
+                    ));
+
+                    // Start polling for processing status
+                    pollProcessingStatus(id, hash);
+                }
+
+            } catch (error) {
+                setFiles(prev => prev.map(f =>
+                    f.id === id ? {
+                        ...f,
+                        status: 'error',
+                        error: error instanceof Error ? error.message : 'Upload failed',
+                    } : f
+                ));
+            } finally {
+                setIsUploading(false);
+            }
+        }
+    }, [files, isDuplicate]);
+
+    // Poll for processing status
+    const pollProcessingStatus = useCallback(async (fileId: string, fileHash: string) => {
+        const maxAttempts = 120;  // 10 minutes max (5s intervals)
+        let attempts = 0;
+
+        const poll = async () => {
+            try {
+                const response = await fetch(`/api/generate/processing-status/${fileHash}`);
+
+                if (!response.ok) {
+                    if (attempts > 5) {
+                        // After 5 failed attempts, assume error
+                        setFiles(prev => prev.map(f =>
+                            f.id === fileId ? { ...f, status: 'error', error: 'Status check failed' } : f
+                        ));
+                        return;
+                    }
+                    attempts++;
+                    setTimeout(poll, 5000);
+                    return;
+                }
+
+                const data = await response.json();
+
+                if (data.status === 'completed') {
+                    setFiles(prev => prev.map(f =>
+                        f.id === fileId ? {
+                            ...f,
+                            status: 'cached',
+                            sectionsCount: data.sections_count,
+                        } : f
+                    ));
+                } else if (data.status === 'failed') {
+                    setFiles(prev => prev.map(f =>
+                        f.id === fileId ? {
+                            ...f,
+                            status: 'error',
+                            error: data.error_message || 'Processing failed',
+                        } : f
+                    ));
+                } else if (data.status === 'processing' || data.status === 'queued') {
+                    // Still processing, poll again
+                    attempts++;
+                    if (attempts < maxAttempts) {
+                        setTimeout(poll, 5000);  // Poll every 5 seconds
+                    } else {
+                        setFiles(prev => prev.map(f =>
+                            f.id === fileId ? { ...f, status: 'error', error: 'Processing timeout' } : f
+                        ));
+                    }
+                }
+            } catch (error) {
+                attempts++;
+                if (attempts < maxAttempts) {
+                    setTimeout(poll, 5000);
+                }
+            }
+        };
+
+        // Start polling after a short delay
+        setTimeout(poll, 2000);
+    }, []);
+
+    // Remove file
+    const removeFile = useCallback((id: string) => {
+        setFiles(prev => prev.filter(f => f.id !== id));
+    }, []);
+
+    // Get file hashes ready for sending
+    const getReadyHashes = useCallback((): string[] => {
+        return files
+            .filter(f => (f.status === 'ready' || f.status === 'cached' || f.status === 'processing') && f.hash)
+            .map(f => f.hash!);
+    }, [files]);
+
+    // Check if all files are ready
+    const allReady = useCallback((): boolean => {
+        if (files.length === 0) return true;
+        return files.every(f => f.status === 'ready' || f.status === 'cached' || f.status === 'error' || f.status === 'processing');
+    }, [files]);
+
+    // Clear all files (after message sent)
+    const clearFiles = useCallback(() => {
+        setFiles([]);
+    }, []);
+
+    return {
+        files,
+        addFiles,
+        removeFile,
+        getReadyHashes,
+        allReady,
+        clearFiles,
+        isUploading,
+    };
+}

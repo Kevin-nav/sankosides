@@ -13,108 +13,16 @@ This agent is "The Architect":
 Native PDF: Gemini 3 Flash handles PDF parsing directly - no external libs needed.
 """
 
-from crewai import Agent
-from typing import Optional, List
+from crewai import Agent, Task
+from crewai.tools import BaseTool
+from typing import Optional, List, TYPE_CHECKING
 from pydantic import BaseModel, Field
 
+if TYPE_CHECKING:
+    from app.models.schemas import OrderForm, KnowledgeBase
 
-class SkeletonSlide(BaseModel):
-    """
-    A single slide in the structural skeleton.
-    
-    This captures WHAT should be on each slide, not HOW it should look.
-    The Generator agent handles the visual mapping later.
-    """
-    order: int = Field(..., ge=1, description="Slide order (1-indexed)")
-    title: str = Field(..., max_length=100, description="Slide title")
-    
-    # Content - limited to prevent "wall of text" failure mode
-    bullet_points: List[str] = Field(
-        default_factory=list,
-        max_length=5,  # Max 5 bullets per slide
-        description="Key points (max 5 to prevent overcrowding)"
-    )
-    
-    # Content type hint for the Generator
-    content_type: str = Field(
-        default="content",
-        description="title, overview, content, diagram, equation, conclusion"
-    )
-    
-    # Placeholders for enrichment by Planner
-    needs_diagram: bool = Field(default=False)
-    diagram_description: Optional[str] = Field(
-        None,
-        description="What diagram is needed (e.g., 'flowchart of process')"
-    )
-    
-    needs_equation: bool = Field(default=False)
-    equation_description: Optional[str] = Field(
-        None,
-        description="What equation/math is needed"
-    )
-    equation_latex: Optional[str] = Field(
-        None,
-        description="LaTeX if already known (from document)"
-    )
-    
-    needs_citation: bool = Field(default=False)
-    citation_topic: Optional[str] = Field(
-        None,
-        description="What claim needs citation (for Planner to find)"
-    )
-    
-    needs_image: bool = Field(default=False)
-    image_description: Optional[str] = Field(
-        None,
-        description="What image is needed"
-    )
-    
-    # Speaker notes hint
-    speaker_notes_hint: Optional[str] = Field(
-        None,
-        max_length=500,
-        description="What the speaker should say about this slide"
-    )
-
-
-class Skeleton(BaseModel):
-    """
-    Complete presentation skeleton (structural outline).
-    
-    This is the output of the Outliner agent - a logical structure
-    that the Planner will enrich with real content.
-    """
-    presentation_title: str = Field(..., description="Main title")
-    target_audience: str = Field(..., description="Who this is for")
-    narrative_arc: str = Field(
-        default="",
-        description="Brief description of the story flow"
-    )
-    
-    slides: List[SkeletonSlide] = Field(
-        default_factory=list,
-        description="Ordered list of slides"
-    )
-    
-    # Quality metrics
-    total_slides: int = Field(default=0)
-    slides_with_diagrams: int = Field(default=0)
-    slides_with_equations: int = Field(default=0)
-    slides_needing_citations: int = Field(default=0)
-    
-    # Source information
-    source_documents: List[str] = Field(
-        default_factory=list,
-        description="Names of source documents processed"
-    )
-    
-    def update_metrics(self):
-        """Update quality metrics based on slides."""
-        self.total_slides = len(self.slides)
-        self.slides_with_diagrams = sum(1 for s in self.slides if s.needs_diagram)
-        self.slides_with_equations = sum(1 for s in self.slides if s.needs_equation)
-        self.slides_needing_citations = sum(1 for s in self.slides if s.needs_citation)
+# Import Skeleton models from schemas.py (canonical source)
+from app.models.schemas import Skeleton, SkeletonSlide
 
 
 # System prompt for the outliner
@@ -153,7 +61,7 @@ NEVER:
 - Skip the narrative flow (intro → body → conclusion)"""
 
 
-def create_outliner_agent(llm) -> Agent:
+def create_outliner_agent(llm=None, tools: Optional[List[BaseTool]] = None, max_iter: int = 5) -> Agent:
     """
     Create the Outliner Agent (The Architect).
     
@@ -165,26 +73,216 @@ def create_outliner_agent(llm) -> Agent:
     
     Args:
         llm: The LLM instance (should be Gemini Flash with MEDIUM thinking)
+             Defaults to OUTLINER_LLM if not provided
+        tools: Optional list of tools (e.g., ListSectionsTool, ReadSectionTool)
+        max_iter: Maximum internal iterations to prevent infinite loops (default=5)
         
     Returns:
         Configured CrewAI Agent
     """
-    return Agent(
-        role="Presentation Structure Architect",
-        goal="""Read source documents and create a logical slide skeleton.
+    if llm is None:
+        from app.clients.gemini.llm import OUTLINER_LLM
+        llm = OUTLINER_LLM()
+    
+    agent_kwargs = {
+        "role": "Presentation Structure Architect",
+        "goal": """Read source documents and create a logical slide skeleton.
         Structure the content with clear narrative flow (intro → body → conclusion).
         Mark where diagrams, equations, and citations are needed.
         NEVER exceed 5 bullet points per slide.""",
-        backstory="""You are a PhD-level researcher and presentation expert.
+        "backstory": """You are a PhD-level researcher and presentation expert.
         You've synthesized thousands of academic papers into clear, compelling
         presentations. You understand narrative structure, visual learning,
         and information density. You're ruthless about cutting excess content
         and know exactly when a diagram would explain things better than words.
         You never create slides that look like walls of text.""",
-        llm=llm,
-        verbose=True,
-        allow_delegation=False,
-        memory=True,
+        "llm": llm,
+        "verbose": True,
+        "allow_delegation": False,
+        "memory": True,
+        "max_iter": max_iter,  # Limit internal iterations to prevent infinite loops
+    }
+    
+    if tools:
+        agent_kwargs["tools"] = tools
+    
+    return Agent(**agent_kwargs)
+
+
+def create_outliner_task(
+    agent: Agent,
+    order_form: "OrderForm",
+    knowledge_base: Optional["KnowledgeBase"] = None,
+    university_context: Optional["UniversityContext"] = None,
+) -> Task:
+    """
+    Create a task for the Outliner to build a presentation skeleton.
+    
+    The Outliner will:
+    1. Read the KnowledgeBase sections (if provided) to understand actual content
+    2. Map sections to logical slides based on user's focus_areas
+    3. Identify which slides need diagrams, equations, citations, images
+    4. Create a narrative arc with proper flow
+    5. Limit to max 5 bullet points per slide
+    
+    Args:
+        agent: The Outliner agent
+        order_form: User preferences from Clarifier (title, audience, focus_areas, etc.)
+        knowledge_base: Optional extracted content from user documents
+        university_context: Optional university context for formatting rules
+        
+    Returns:
+        CrewAI Task configured for skeleton generation
+    """
+    from app.models.schemas import Skeleton
+    
+    # Build document context if KnowledgeBase is provided
+    document_context = ""
+    if knowledge_base and knowledge_base.sections:
+        sections_summary = []
+        for section in knowledge_base.sections:
+            # Include title, content preview, and what visuals exist
+            visuals_note = f" (Contains visuals: {', '.join(section.visuals[:3])})" if section.visuals else ""
+            page_note = f" [Pages {section.page_range}]" if section.page_range else ""
+            
+            # Check for equations (LaTeX patterns)
+            has_equations = any(marker in section.content for marker in ['$', '\\frac', '\\int', '\\sum', '\\alpha', '\\beta'])
+            equation_note = " [CONTAINS EQUATIONS]" if has_equations else ""
+            
+            # Create a preview (first 300 chars)
+            content_preview = section.content[:300].replace('\n', ' ').strip()
+            if len(section.content) > 300:
+                content_preview += "..."
+            
+            sections_summary.append(
+                f"### {section.title}{page_note}{equation_note}{visuals_note}\n"
+                f"{content_preview}"
+            )
+        
+        document_context = f"""
+## DOCUMENT CONTENT (Use this to inform your outline)
+
+The user has uploaded documents. Here are the key sections:
+
+{chr(10).join(sections_summary)}
+
+**Your job is to analyze this content and decide:**
+- Which sections should become slides
+- Which slides need diagrams (complex processes, relationships)
+- Which slides need equations (mathematical content marked above)
+- Which slides need citations (claims, statistics, research findings)
+- How to best organize the narrative flow
+"""
+    else:
+        document_context = """
+## NO DOCUMENT PROVIDED
+
+The user has not uploaded any documents. Create a logical outline based on:
+- The key_topics they specified
+- Their focus_areas
+- Standard presentation structure for the topic
+
+Mark slides that would typically need diagrams, equations, or citations.
+"""
+    
+    # Build focus areas guidance
+    focus_guidance = ""
+    if order_form.focus_areas:
+        focus_list = ", ".join(order_form.focus_areas)
+        focus_guidance = f"""
+## FOCUS AREAS (Give these topics MORE attention)
+
+The user wants to emphasize: **{focus_list}**
+
+For these topics:
+- Allocate more slides
+- Mark as needing diagrams where helpful
+- Add more detailed bullet points
+"""
+    
+    # Build emphasis style guidance
+    emphasis_guidance = {
+        "detailed": "Use 4-5 bullet points per slide with substantive explanations.",
+        "concise": "Use 2-3 tight bullet points per slide. Be brief.",
+        "visual-heavy": "Use 1-2 bullets per slide. Prioritize diagrams and images over text.",
+    }.get(order_form.emphasis_style, "")
+    
+    # University context injection
+    university_injection = ""
+    if university_context:
+        university_injection = f"""
+## UNIVERSITY CONTEXT
+
+Institution: {university_context.university.name}
+Citation style: {university_context.university.default_citation_style}
+Apply academic formatting standards appropriate for this institution.
+"""
+
+    task_description = f"""Create a structured presentation outline (Skeleton) for this presentation.
+
+## USER REQUIREMENTS
+
+- **Title**: {order_form.presentation_title}
+- **Audience**: {order_form.target_audience}
+- **Target Slides**: {order_form.target_slides}
+- **Key Topics**: {', '.join(order_form.key_topics) if order_form.key_topics else 'Based on document content'}
+- **Tone**: {order_form.tone}
+- **Emphasis Style**: {order_form.emphasis_style} ({emphasis_guidance})
+{focus_guidance}
+{document_context}
+{university_injection}
+
+## YOUR TASK
+
+1. **Analyze the content** to understand the logical structure
+2. **Create {order_form.target_slides} slides** with clear purpose each
+3. **Structure as**: Title → Overview (optional) → Body slides → Conclusion
+4. **Mark asset needs**:
+   - `needs_diagram: true` for processes, architectures, relationships
+   - `needs_equation: true` for mathematical content (look for [CONTAINS EQUATIONS] markers)
+   - `needs_citation: true` for claims, statistics, research findings
+   - `needs_image: true` for concepts that benefit from visual examples
+5. **Write a narrative_arc** describing the flow of the presentation
+6. **Max 5 bullet points per slide** - split complex topics across slides
+
+## OUTPUT FORMAT
+
+Return a valid Skeleton JSON matching this structure:
+```json
+{{
+  "presentation_title": "...",
+  "target_audience": "...",
+  "narrative_arc": "Brief description of the story flow",
+  "slides": [
+    {{
+      "order": 1,
+      "title": "...",
+      "content_type": "title|overview|content|diagram|equation|conclusion",
+      "description": "One-sentence purpose of this slide",
+      "bullet_points": ["point 1", "point 2"],
+      "needs_diagram": false,
+      "diagram_description": null,
+      "needs_equation": false,
+      "equation_description": null,
+      "needs_citation": false,
+      "citation_topic": null,
+      "needs_image": false,
+      "image_description": null
+    }}
+  ]
+}}
+```
+"""
+
+    return Task(
+        description=task_description,
+        expected_output="""A complete Skeleton JSON with:
+- presentation_title, target_audience, narrative_arc
+- slides array with all required fields filled
+- Appropriate needs_diagram, needs_equation, needs_citation, needs_image flags
+- Max 5 bullet points per slide""",
+        agent=agent,
+        output_pydantic=Skeleton,
     )
 
 

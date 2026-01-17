@@ -27,14 +27,27 @@ class Settings(BaseSettings):
     
     # Server
     host: str = "0.0.0.0"
-    port: int = 8000
+    port: int = 8080
     debug: bool = True
     
     # Render Service
     render_service_url: str = "http://localhost:3001"
     
+    # Cloudflare R2 Storage
+    r2_account_id: str = ""
+    r2_access_key_id: str = ""
+    r2_secret_access_key: str = ""
+    r2_bucket_name: str = "duotrak"
+    r2_public_url: Optional[str] = None  # Optional: Custom domain for public access
+    
+    # Upstash Redis (for caching)
+    redis_url: Optional[str] = None  # Upstash Redis URL (rediss://...)
+    
     # Optional Firebase (for JWT verification)
     firebase_project_id: Optional[str] = None
+    
+    # Academic Search APIs
+    semantic_scholar_api_key: Optional[str] = None  # Get from semanticscholar.org/product/api
     
     # Gemini 3 Model Names (December 2025)
     model_flash: str = "gemini-3-flash-preview"  # Fast, multimodal, native PDF support
@@ -56,6 +69,15 @@ class Settings(BaseSettings):
     # Set to False in production to hide internal metrics
     dev_mode: bool = True  # Toggle via DEV_MODE env var
     expose_metrics: bool = True  # Toggle via EXPOSE_METRICS env var
+    
+    # Agent Execution Timeouts (seconds)
+    # These control how long to wait for AI agents before timing out
+    agent_timeout_outliner: int = 170  # Outliner agent timeout
+    agent_timeout_planner: int = 200   # Planner agent timeout
+    agent_timeout_refiner: int = 200   # Refiner agent timeout
+    agent_timeout_generator: int = 140  # Generator agent timeout
+    agent_timeout_visual_qa: int = 140  # Visual QA agent timeout
+    agent_max_retries: int = 3         # Max retries for agent execution
     
     class Config:
         env_file = ".env"

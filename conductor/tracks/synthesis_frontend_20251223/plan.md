@@ -1,8 +1,7 @@
 # Plan: Synthesis Engine - Frontend Integration
 
-## Phase 1: Backend Endpoint Update (FastAPI)
-*NOTE: We need to update the backend API endpoint to receive the files first.*
-- [x] Task: Update `sanko-backend/app/api/routers/generation.py` to handle `UploadFile`. (3c876b8)
+## Phase 1: Backend Endpoint Update (FastAPI) [checkpoint: 3c876b8]
+- [~] Task: Update `sanko-backend/app/api/routers/generation.py` to handle `UploadFile`. (3c876b8)
     *   *Details:* Update the `/start` endpoint to accept `multipart/form-data`.
     *   *Logic:* If files are present, call `flow.run_synthesis(files)`.
 - [ ] Task: Conductor - User Manual Verification 'Backend Endpoint' (Protocol in workflow.md)

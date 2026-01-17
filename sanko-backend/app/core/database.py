@@ -90,6 +90,169 @@ class FailureReport(Base):
     session = relationship("PlaygroundSession", back_populates="failure_reports")
 
 
+class BetaSignup(Base):
+    """
+    Beta program signup records.
+    
+    This table is managed by the beta-landing frontend (Next.js/Drizzle).
+    We define it here so Alembic is aware of it and won't drop it
+    during autogenerate migrations.
+    """
+    __tablename__ = "beta_signups"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    
+    # Contact Info (Step 1)
+    full_name = Column(String(255), nullable=False)
+    email = Column(String(255), nullable=False, unique=True)
+    whatsapp = Column(String(50), nullable=True)
+    
+    # University Info (Step 2)
+    university = Column(String(100), nullable=False)
+    campus = Column(String(100), nullable=True)
+    other_university = Column(String(255), nullable=True)
+    academic_level = Column(String(50), nullable=False)
+    department = Column(String(255), nullable=True)
+    
+    # Preferences (Step 3)
+    frequency = Column(String(50), nullable=True)
+    tools = Column(Text, nullable=True)  # JSON array stored as text
+    pain_points = Column(Text, nullable=True)
+    expectations = Column(Text, nullable=True)
+    referral = Column(String(100), nullable=True)
+    
+    # Metadata
+    created_at = Column(DateTime, default=datetime.utcnow)
+    ip_address = Column(String(45), nullable=True)
+    email_sent_at = Column(DateTime, nullable=True)  # Track when welcome email was sent
+
+
+class PDFCache(Base):
+    """
+    Cache PDF file hash → KnowledgeBase mappings.
+    
+    This is session-independent: the same file produces the same
+    KnowledgeBase regardless of which user/session uploads it.
+    This saves API costs by avoiding duplicate Gemini processing.
+    """
+    __tablename__ = "pdf_cache"
+    
+    # SHA-256 hash of file content (primary key)
+    file_hash = Column(String(64), primary_key=True)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Original filename (for reference only)
+    original_filename = Column(String(255), nullable=True)
+    
+    # R2 storage key for the PDF file
+    r2_key = Column(String(500), nullable=False)
+    
+    # Cached KnowledgeBase (the extraction result)
+    knowledge_base = Column(JSONB, nullable=False)
+    
+    # Processing metadata
+    sections_count = Column(Integer, default=0)
+    file_size_bytes = Column(Integer, nullable=True)
+    processing_time_ms = Column(Integer, nullable=True)
+    
+    # Model used for extraction (for cache invalidation if we upgrade)
+    model_version = Column(String(50), default="gemini-3-flash-preview")
+
+
+class CachedCitation(Base):
+    """
+    Permanent cache for academic citations.
+    
+    Stores citations by normalized query and DOI to avoid repeated API calls.
+    Part of the 2-tier cache system (Redis for hot cache, PostgreSQL for permanent).
+    """
+    __tablename__ = "cached_citations"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    
+    # Search/lookup keys
+    normalized_query = Column(String(500), nullable=False, index=True)
+    doi = Column(String(255), nullable=True, index=True, unique=True)
+    arxiv_id = Column(String(50), nullable=True, index=True)
+    
+    # Full citation data as JSON
+    citation_data = Column(JSONB, nullable=False)
+    
+    # Source tracking
+    provider = Column(String(50), nullable=False)  # crossref, openalex, semantic_scholar
+    
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_accessed_at = Column(DateTime, default=datetime.utcnow)
+
+
+# =============================================================================
+# Frontend-Shared Models (managed here, used by both frontend and backend)
+# =============================================================================
+
+class User(Base):
+    """
+    User accounts linked to Firebase Authentication.
+    
+    This table is used by the frontend for user profile management
+    and authentication state sync.
+    """
+    __tablename__ = "users"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    firebase_uid = Column(String(128), unique=True, nullable=False, index=True)
+    email = Column(String(255), unique=True, nullable=False)
+    display_name = Column(String(255), nullable=True)
+    photo_url = Column(Text, nullable=True)
+    
+    # Profile extensions
+    university_profile = Column(JSONB, nullable=True)  # {university, major, year, etc.}
+    preferences = Column(JSONB, nullable=True)  # User preferences/settings
+    
+    # Subscription
+    subscription_tier = Column(String(50), default="free")  # free, pro, enterprise
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    projects = relationship("Project", back_populates="user", cascade="all, delete-orphan")
+
+
+class Project(Base):
+    """
+    User projects/presentations.
+    
+    Each project contains the configuration and generated content
+    for a single presentation.
+    """
+    __tablename__ = "projects"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    
+    # Project metadata
+    title = Column(String(255), nullable=False, default="Untitled Project")
+    description = Column(Text, nullable=True)
+    thumbnail_url = Column(Text, nullable=True)
+    
+    # Project state
+    status = Column(String(50), default="draft")  # draft, generating, completed, archived
+    
+    # Flow state (references PlaygroundSession or inline)
+    session_id = Column(UUID(as_uuid=True), ForeignKey("playground_sessions.id"), nullable=True)
+    
+    # Generated content snapshot
+    slides_data = Column(JSONB, nullable=True)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    user = relationship("User", back_populates="projects")
+
+
 # =============================================================================
 # Database Engine Setup
 # =============================================================================
@@ -99,7 +262,21 @@ def get_database_url() -> str:
     url = settings.database_url
     if url.startswith("postgresql://"):
         # Convert to async URL for asyncpg
-        return url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    
+    # asyncpg doesn't support 'sslmode' parameter - convert to 'ssl'
+    # Also remove 'channel_binding' as asyncpg doesn't support it
+    if "sslmode=require" in url:
+        url = url.replace("sslmode=require", "ssl=require")
+    if "sslmode=prefer" in url:
+        url = url.replace("sslmode=prefer", "ssl=prefer")
+    if "&channel_binding=require" in url:
+        url = url.replace("&channel_binding=require", "")
+    if "?channel_binding=require&" in url:
+        url = url.replace("?channel_binding=require&", "?")
+    if "?channel_binding=require" in url:
+        url = url.replace("?channel_binding=require", "")
+    
     return url
 
 
@@ -129,6 +306,23 @@ def init_async_db():
         class_=AsyncSession,
         expire_on_commit=False
     )
+
+
+def get_async_session_local():
+    """
+    Get the async session factory, initializing if needed.
+    
+    This is the SAFE way to access AsyncSessionLocal from other modules.
+    It avoids the import-time binding issue where the variable is captured
+    as None before init_async_db() is called.
+    
+    Returns:
+        async_sessionmaker: The async session factory for creating sessions.
+    """
+    global AsyncSessionLocal
+    if AsyncSessionLocal is None:
+        init_async_db()
+    return AsyncSessionLocal
 
 
 async def get_async_session() -> AsyncSession:

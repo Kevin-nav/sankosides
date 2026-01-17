@@ -48,6 +48,8 @@ downloads/
 eggs/
 .eggs/
 lib/
+!sanko-frontend/lib/
+!beta-landing/lib/
 lib64/
 parts/
 sdist/
@@ -84,3 +86,7 @@ Google AI Studio Gemini API Inquiry.md
 Interactions API Technical Guide Research.md
 idea.md
 things_to_note_do_not_read.md
+
+# Large files
+*.pdf
+pdfs_for_testing/

@@ -46,6 +46,9 @@ export async function GET(request: NextRequest) {
 /**
  * PUT /api/user/profile
  * Updates the current user's university profile settings.
+ * 
+ * Supports both legacy JSONB universityProfile AND new structured fields:
+ * - universityId, facultyId, departmentId, academicLevel, academicYear, programmeId
  */
 export async function PUT(request: NextRequest) {
     try {
@@ -61,15 +64,54 @@ export async function PUT(request: NextRequest) {
         const decodedToken = await adminAuth.verifyIdToken(idToken);
 
         const body = await request.json();
-        const { universityProfile, displayName } = body;
+        const {
+            universityProfile,
+            displayName,
+            // New structured fields
+            universityId,
+            facultyId,
+            departmentId,
+            academicLevel,
+            academicYear,
+            programmeId,
+        } = body;
+
+        // Build update object with only provided fields
+        const updateData: Record<string, unknown> = {
+            updatedAt: new Date(),
+        };
+
+        // Legacy JSONB field
+        if (universityProfile !== undefined) {
+            updateData.universityProfile = universityProfile;
+        }
+        if (displayName !== undefined) {
+            updateData.displayName = displayName;
+        }
+
+        // New structured fields
+        if (universityId !== undefined) {
+            updateData.universityId = universityId;
+        }
+        if (facultyId !== undefined) {
+            updateData.facultyId = facultyId;
+        }
+        if (departmentId !== undefined) {
+            updateData.departmentId = departmentId;
+        }
+        if (academicLevel !== undefined) {
+            updateData.academicLevel = academicLevel;
+        }
+        if (academicYear !== undefined) {
+            updateData.academicYear = academicYear;
+        }
+        if (programmeId !== undefined) {
+            updateData.programmeId = programmeId;
+        }
 
         const [updatedUser] = await db
             .update(schema.users)
-            .set({
-                ...(universityProfile && { universityProfile }),
-                ...(displayName && { displayName }),
-                updatedAt: new Date(),
-            })
+            .set(updateData)
             .where(eq(schema.users.firebaseUid, decodedToken.uid))
             .returning();
 

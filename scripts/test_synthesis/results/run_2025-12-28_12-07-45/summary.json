@@ -1,0 +1,100 @@
+{
+  "run_name": "run_2025-12-28_12-07-45",
+  "total_runs": 18,
+  "last_updated": "2025-12-28T12:50:53.393101",
+  "overall": {
+    "total": 18,
+    "successes": 9,
+    "failures": 9,
+    "success_rate": 50.0,
+    "avg_time_ms": 70976.4928888924,
+    "avg_sections": 10.222222222222221,
+    "error_types": {
+      "json_parse_error": 1,
+      "json_truncated": 5,
+      "api_error": 3
+    }
+  },
+  "by_strategy": {
+    "baseline": {
+      "total": 18,
+      "successes": 9,
+      "failures": 9,
+      "success_rate": 50.0,
+      "avg_time_ms": 70976.4928888924,
+      "avg_sections": 10.222222222222221,
+      "error_types": {
+        "json_parse_error": 1,
+        "json_truncated": 5,
+        "api_error": 3
+      }
+    }
+  },
+  "by_pdf": {
+    "1S2.1 Str.O.Mat 152.pdf": {
+      "total": 3,
+      "successes": 1,
+      "failures": 2,
+      "success_rate": 33.33333333333333,
+      "avg_time_ms": 115748.36810000124,
+      "avg_sections": 7.0,
+      "error_types": {
+        "json_truncated": 2
+      }
+    },
+    "Calculus 166.pdf": {
+      "total": 3,
+      "successes": 3,
+      "failures": 0,
+      "success_rate": 100.0,
+      "avg_time_ms": 45903.32366666795,
+      "avg_sections": 8.0,
+      "error_types": {}
+    },
+    "Complete Lecture Notes.pdf": {
+      "total": 3,
+      "successes": 2,
+      "failures": 1,
+      "success_rate": 66.66666666666666,
+      "avg_time_ms": 56928.26724999759,
+      "avg_sections": 8.0,
+      "error_types": {
+        "json_truncated": 1
+      }
+    },
+    "EL 171 Handout.pdf": {
+      "total": 3,
+      "successes": 0,
+      "failures": 3,
+      "success_rate": 0.0,
+      "avg_time_ms": 0,
+      "avg_sections": 0,
+      "error_types": {
+        "json_truncated": 1,
+        "api_error": 2
+      }
+    },
+    "ENGINEERING DRAWING R3.pdf": {
+      "total": 3,
+      "successes": 3,
+      "failures": 0,
+      "success_rate": 100.0,
+      "avg_time_ms": 90491.18746667712,
+      "avg_sections": 15.0,
+      "error_types": {}
+    },
+    "Basic Materials Science 2025.pdf": {
+      "total": 3,
+      "successes": 0,
+      "failures": 3,
+      "success_rate": 0.0,
+      "avg_time_ms": 0,
+      "avg_sections": 0,
+      "error_types": {
+        "json_parse_error": 1,
+        "json_truncated": 1,
+        "api_error": 1
+      }
+    }
+  }
+}

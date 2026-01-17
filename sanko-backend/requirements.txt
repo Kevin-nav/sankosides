@@ -24,6 +24,11 @@ aiohttp>=3.9.0
 
 # File Processing
 python-multipart>=0.0.6
+aiofiles>=23.0.0
+PyMuPDF>=1.24.0  # Local PDF chunking for extraction optimization
+
+# Cloud Storage (Cloudflare R2 - S3 compatible)
+aioboto3>=12.0.0
 
 # Visual QA Loop (Playwright)
 playwright>=1.40.0
@@ -31,3 +36,9 @@ playwright>=1.40.0
 # Utilities
 python-jose>=3.3.0  # JWT verification
 
+# Export Pipeline (PPT/PDF generation)
+python-pptx>=1.0.0  # PowerPoint generation
+latex2mathml>=3.77.0  # LaTeX to MathML conversion
+lxml>=5.0.0  # XML processing for OMML
+
+redis

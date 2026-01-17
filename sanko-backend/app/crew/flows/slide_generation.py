@@ -60,7 +60,17 @@ from app.crew.agents.helper import (
     build_guardrail_prompt,
 )
 from app.crew.tools.render_service_tool import get_render_tool
-from app.crew.tools.synthesis_tool import SynthesisTool
+from app.crew.tools.synthesis_tool import SynthesisTool, SynthesisError
+from app.crew.tools.context_tool import ReadSectionTool, ListSectionsTool
+from app.crew.tools.academic_search_tool import AcademicSearchTool
+from app.crew.tools.doi_validator import DOIValidatorTool
+from app.services.citation_utils import (
+    extract_inline_citations,
+    find_matching_citation,
+    remove_inline_citation,
+    extract_all_citations_from_slides,
+    sort_citations,
+)
 from app.core.logging import get_logger
 from app.crew.flows.metrics import (
     MetricsCollector,
@@ -103,6 +113,9 @@ class FlowState(BaseModel):
     # Session tracking
     session_id: str = Field(default_factory=lambda: str(uuid4()))
     user_id: Optional[str] = None
+    project_id: Optional[str] = Field(default=None, description="Link to existing project")
+    mode: Optional[str] = Field(default=None, description="Generation mode: deep_research, synthesis, or replica")
+    topic: Optional[str] = Field(default=None, description="Initial topic for deep research mode")
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     
@@ -120,6 +133,12 @@ class FlowState(BaseModel):
         description="Structured content extracted from synthesis"
     )
     
+    # R2 uploaded files tracking
+    uploaded_files: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="List of uploaded file metadata (hash, r2_key, filename)"
+    )
+    
     # Clarification conversation tracking (NEW - fixes memory issue)
     conversation_history: List[ClarificationMessage] = Field(
         default_factory=list,
@@ -128,6 +147,28 @@ class FlowState(BaseModel):
     gathered_info: Optional[GatheredInfo] = Field(
         default=None,
         description="Progressively tracked info from user during clarification"
+    )
+    
+    # Document scope tracking (for zero-hallucination architecture)
+    selected_sections: List[str] = Field(
+        default_factory=list,
+        description="Section titles user explicitly wants to focus on"
+    )
+    approved_related: List[str] = Field(
+        default_factory=list,
+        description="Related sections user approved for inclusion"
+    )
+    declined_related: List[str] = Field(
+        default_factory=list,
+        description="Related sections user declined (don't ask again)"
+    )
+    document_scoped: bool = Field(
+        default=False,
+        description="Whether user has specified which sections to use"
+    )
+    pending_related_sections: List[str] = Field(
+        default_factory=list,
+        description="Related sections we're asking user about"
     )
     
     # Current status
@@ -141,6 +182,11 @@ class FlowState(BaseModel):
     # Helper/retry tracking
     helper_attempts: Dict[str, int] = Field(default_factory=dict)
     failure_context: Optional[Dict[str, Any]] = None
+    needs_helper: bool = Field(default=False, description="Whether QA escalated to Helper agent")
+    helper_context: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Context for Helper agent (trigger, failed_slides, issues)"
+    )
     
     # Error tracking
     error_message: Optional[str] = None
@@ -214,9 +260,22 @@ class FlowEventEmitter:
     - complete: When flow finishes
     """
     
+    _instances: Dict[str, "FlowEventEmitter"] = {}
+    
     def __init__(self, session_id: str):
         self.session_id = session_id
         self.listeners: List[Callable] = []
+        FlowEventEmitter._instances[session_id] = self
+        
+    @classmethod
+    def get_or_create(cls, session_id: str) -> "FlowEventEmitter":
+        if session_id in cls._instances:
+            return cls._instances[session_id]
+        return cls(session_id)
+        
+    @classmethod
+    def get(cls, session_id: str) -> Optional["FlowEventEmitter"]:
+        return cls._instances.get(session_id)
     
     def add_listener(self, callback: Callable):
         """Add an event listener."""
@@ -230,7 +289,7 @@ class FlowEventEmitter:
             "timestamp": datetime.utcnow().isoformat(),
             **data,
         }
-        logger.debug(f"Event: {event_type} - {data}")
+        logger.info(f"[SSE] Emitting event: {event_type} | data={data}")
         for listener in self.listeners:
             try:
                 if asyncio.iscoroutinefunction(listener):
@@ -255,6 +314,14 @@ class FlowEventEmitter:
     
     async def pause_for_review(self, review_type: str, data: Dict):
         await self.emit("pause", {"review_type": review_type, **data})
+    
+    async def progress(self, message: str, stage: str = None, details: Dict = None):
+        """Emit a progress update event."""
+        await self.emit("progress", {
+            "message": message,
+            "stage": stage,
+            **(details or {}),
+        })
     
     async def error(self, message: str, stage: str):
         await self.emit("error", {"message": message, "stage": stage})
@@ -285,7 +352,7 @@ class SlideGenerationFlow:
         event_emitter: Optional[FlowEventEmitter] = None,
     ):
         self.state = FlowState(session_id=session_id or str(uuid4()))
-        self.emitter = event_emitter or FlowEventEmitter(self.state.session_id)
+        self.emitter = event_emitter or FlowEventEmitter.get_or_create(self.state.session_id)
         self.retry_tracker = RetryBudget()
         self.metrics = MetricsCollector.get_or_create(self.state.session_id)
     
@@ -295,9 +362,9 @@ class SlideGenerationFlow:
 
     async def run_synthesis(self, file_paths: List[str]) -> KnowledgeBase:
         """
-        Run multimodal extraction on a list of PDF files.
+        Run multimodal extraction on a list of PDF files (local paths).
         
-        This is the first stage of the Synthesis Engine mode.
+        DEPRECATED: Use run_synthesis_from_r2 for R2-stored files.
         
         Args:
             file_paths: List of local paths to the uploaded PDFs.
@@ -317,16 +384,17 @@ class SlideGenerationFlow:
         
         for path in file_paths:
             logger.info(f"Synthesizing file: {path}")
-            # Wrap the tool call in a thread pool since it's blocking
-            loop = asyncio.get_event_loop()
-            kb = await loop.run_in_executor(None, synthesis_tool._run, path)
-            
-            if isinstance(kb, str) and kb.startswith("Error"):
-                logger.error(f"Synthesis failed for {path}: {kb}")
-                continue
+            try:
+                # Wrap the tool call in a thread pool since it's blocking
+                loop = asyncio.get_running_loop()
+                kb = await loop.run_in_executor(None, synthesis_tool._run, path)
                 
-            all_sections.extend(kb.sections)
-            combined_summary_parts.append(f"Content from {os.path.basename(path)}: {kb.summary}")
+                all_sections.extend(kb.sections)
+                combined_summary_parts.append(f"Content from {os.path.basename(path)}: {kb.summary}")
+            except SynthesisError as e:
+                logger.error(f"Synthesis failed for {path}: {e}")
+                await self.emitter.error(str(e), "synthesis")
+                continue
             
         final_kb = KnowledgeBase(
             summary="\n\n".join(combined_summary_parts),
@@ -339,6 +407,181 @@ class SlideGenerationFlow:
         await self.emitter.stage_complete("synthesis", {
             "sections_extracted": len(all_sections),
             "summary": final_kb.summary[:200] + "..."
+        })
+        
+        return final_kb
+
+    async def run_synthesis_from_r2(
+        self,
+        uploaded_files: List[Dict[str, Any]],
+    ) -> KnowledgeBase:
+        """
+        Run multimodal extraction on files stored in R2 with PostgreSQL caching.
+        
+        This method:
+        1. Checks PostgreSQL cache for each file (by hash)
+        2. Uses cached KnowledgeBase if available (saves API cost)
+        3. Downloads from R2 and runs synthesis only for uncached files
+        4. Caches new results in PostgreSQL for future use
+        5. Processes multiple files in parallel with asyncio.gather
+        
+        Args:
+            uploaded_files: List of dicts with keys:
+                - file_hash: SHA-256 hash of file content
+                - r2_key: R2 storage key
+                - filename: Original filename
+                - size_bytes: File size
+                - cached: Whether cache was found during upload
+            
+        Returns:
+            The combined KnowledgeBase.
+        """
+        from app.services.storage import get_storage_service, PDFCacheService
+        from app.core.database import get_async_session
+        import time
+        import tempfile
+        
+        logger.info(f"[SYNTHESIS] Starting synthesis for {len(uploaded_files)} file(s)")
+        
+        await self.emitter.stage_start("synthesis")
+        self.state.status = FlowStatus.SYNTHESIZING
+        self.state.current_stage = "synthesis"
+        
+        storage = get_storage_service()
+        cache_service = PDFCacheService()
+        synthesis_tool = SynthesisTool()
+        
+        # Collect results
+        all_sections = []
+        combined_summary_parts = []
+        failed_files = []  # Track failed files for user feedback
+        
+        for idx, file_info in enumerate(uploaded_files, 1):
+            file_hash = file_info["file_hash"]
+            r2_key = file_info["r2_key"]
+            filename = file_info.get("filename", "unknown.pdf")
+            
+            logger.info(f"[SYNTHESIS] [{idx}/{len(uploaded_files)}] Processing: {filename}")
+            logger.info(f"[SYNTHESIS]   Hash: {file_hash[:16]}...")
+            logger.info(f"[SYNTHESIS]   R2 Key: {r2_key}")
+            
+            # Step 1: Check cache (quick DB operation - separate session)
+            logger.info(f"[SYNTHESIS]   Checking cache...")
+            cached_kb = None
+            try:
+                async for db_session in get_async_session():
+                    cached_kb = await cache_service.get_cached(file_hash, db_session)
+                    break
+            except Exception as e:
+                logger.warning(f"[SYNTHESIS]   Cache check failed: {e}")
+            
+            if cached_kb:
+                logger.info(f"[SYNTHESIS]   ✓ CACHE HIT: Using pre-processed KnowledgeBase")
+                logger.info(f"[SYNTHESIS]   → {len(cached_kb.sections)} sections, skipping Gemini API call")
+                all_sections.extend(cached_kb.sections)
+                combined_summary_parts.append(f"Content from {filename}: {cached_kb.summary}")
+                continue
+            
+            # Step 2: Download from R2 (no DB needed)
+            logger.info(f"[SYNTHESIS]   ⏳ CACHE MISS: Gemini processing required")
+            logger.info(f"[SYNTHESIS]   📥 Downloading from R2...")
+            try:
+                download_start = time.time()
+                file_data = await storage.download_file(r2_key)
+                download_time = (time.time() - download_start) * 1000
+                logger.info(f"[SYNTHESIS]   ✓ Downloaded {len(file_data) / 1024:.1f}KB in {download_time:.0f}ms")
+            except Exception as e:
+                logger.error(f"[SYNTHESIS]   ✗ Failed to download from R2: {e}")
+                await self.emitter.error(f"Download failed: {e}", "synthesis")
+                failed_files.append({"filename": filename, "error": f"Download failed: {e}"})
+                continue
+            
+            # Step 3: Run Gemini synthesis (long operation - NO DB connection held)
+            tmp_path = None
+            kb = None
+            processing_time_ms = 0
+            try:
+                with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+                    tmp.write(file_data)
+                    tmp_path = tmp.name
+                
+                logger.info(f"[SYNTHESIS]  Calling Gemini API for multimodal extraction...")
+                logger.info(f"[SYNTHESIS]  This may take several minutes for large documents...")
+                start_time = time.time()
+                loop = asyncio.get_running_loop()
+                kb = await loop.run_in_executor(None, synthesis_tool._run, tmp_path)
+                processing_time_ms = int((time.time() - start_time) * 1000)
+                
+                logger.info(f"[SYNTHESIS]   ✓ Gemini processing complete in {processing_time_ms}ms")
+                logger.info(f"[SYNTHESIS]   → Extracted {len(kb.sections)} sections")
+                
+            except SynthesisError as e:
+                logger.error(f"[SYNTHESIS]   ✗ Gemini synthesis failed: {e}")
+                await self.emitter.error(str(e), "synthesis")
+                failed_files.append({
+                    "filename": filename, 
+                    "error": str(e),
+                    "suggestion": "You can paste the relevant text content directly in the chat as a fallback."
+                })
+                continue
+            except Exception as e:
+                logger.error(f"[SYNTHESIS]   ✗ Unexpected error: {e}")
+                await self.emitter.error(str(e), "synthesis")
+                failed_files.append({"filename": filename, "error": f"Unexpected error: {e}"})
+                continue
+            finally:
+                # Clean up temp file
+                if tmp_path:
+                    try:
+                        os.unlink(tmp_path)
+                    except:
+                        pass
+            
+            # Step 4: Cache the result (fresh DB connection - quick operation)
+            if kb:
+                logger.info(f"[SYNTHESIS]  Saving to cache for future use...")
+                try:
+                    async for db_session in get_async_session():
+                        await cache_service.save_cache(
+                            file_hash=file_hash,
+                            r2_key=r2_key,
+                            knowledge_base=kb,
+                            db_session=db_session,
+                            original_filename=filename,
+                            file_size_bytes=len(file_data),
+                            processing_time_ms=processing_time_ms,
+                        )
+                        break
+                    logger.info(f"[SYNTHESIS]   ✓ Cached successfully")
+                except Exception as e:
+                    logger.warning(f"[SYNTHESIS]   Cache save failed (non-fatal): {e}")
+                    # Continue anyway - we have the KB in memory
+                
+                all_sections.extend(kb.sections)
+                combined_summary_parts.append(f"Content from {filename}: {kb.summary}")
+        
+        # Store failed files info for user feedback
+        if failed_files:
+            self.state.failure_context = {"failed_synthesis": failed_files}
+            logger.warning(f"[SYNTHESIS] {len(failed_files)} file(s) failed processing")
+        
+        final_kb = KnowledgeBase(
+            summary="\n\n".join(combined_summary_parts) if combined_summary_parts else "",
+            sections=all_sections
+        )
+        
+        self.state.knowledge_base = final_kb
+        self.state.status = FlowStatus.AWAITING_CLARIFICATION
+        
+        logger.info(f"[SYNTHESIS] Complete: {len(all_sections)} total sections from {len(uploaded_files)} file(s)")
+        if failed_files:
+            logger.info(f"[SYNTHESIS] {len(failed_files)} file(s) could not be processed")
+        
+        await self.emitter.stage_complete("synthesis", {
+            "sections_extracted": len(all_sections),
+            "files_processed": len(uploaded_files) - len(failed_files),
+            "files_failed": len(failed_files),
+            "summary": final_kb.summary[:200] + "..." if final_kb.summary else ""
         })
         
         return final_kb
@@ -397,7 +640,7 @@ class SlideGenerationFlow:
                 citation_style=info.citation_style or "apa",
                 references_placement=info.references_placement or "last_slide",
                 theme_id=info.theme or "modern",
-                include_speaker_notes=info.include_speaker_notes if info.include_speaker_notes is not None else True,
+                include_speaker_notes=False,  # Speaker notes not currently supported
                 special_requests=info.special_requests or "",
                 is_complete=True,
             )
@@ -419,8 +662,16 @@ class SlideGenerationFlow:
                 "message": "Requirements confirmed! Ready to generate your presentation.",
             }
         
-        # Create clarifier agent
-        clarifier = create_clarifier_agent()
+        # Create clarifier agent with document tools if we have a knowledge base
+        tools = []
+        if self.state.knowledge_base:
+            # Wire up tools for querying document sections
+            # These enable the clarifier to read EXACT, VERBATIM content from PDFs
+            tools.append(ListSectionsTool(kb=self.state.knowledge_base))
+            tools.append(ReadSectionTool(kb=self.state.knowledge_base))
+            logger.info(f"Wired {len(tools)} document tools to clarifier agent")
+        
+        clarifier = create_clarifier_agent(tools=tools)
         
         # Build the full context for the agent
         conversation_context = self._format_conversation_history()
@@ -429,55 +680,240 @@ class SlideGenerationFlow:
         missing_optional = info.get_missing_optional()
         
         # Determine what stage we're in
-        if info.needs_confirmation():
+        has_document = bool(self.state.knowledge_base and self.state.knowledge_base.sections)
+        
+        # =====================================================================
+        # SCOPE-FIRST DOCUMENT HANDLING (Zero-Hallucination Architecture)
+        # =====================================================================
+        document_context = ""
+        
+        if has_document:
+            # Phase 0: Try to detect scope from user's message
+            if not self.state.document_scoped:
+                detected_sections = self._detect_scope_from_message(user_message)
+                
+                if detected_sections:
+                    # User already specified sections! Skip asking
+                    logger.info(f"Scope detected from message: {detected_sections}")
+                    self.state.selected_sections = detected_sections
+                    self.state.document_scoped = True
+                    self.state.gathered_info.document_acknowledged = True
+                    
+                    # Check for related sections to suggest
+                    related = self._find_related_sections(detected_sections)
+                    if related:
+                        self.state.pending_related_sections = related
+                        logger.info(f"Found related sections to suggest: {related}")
+            
+            # Phase 1.5: If we have pending related sections to ask about
+            if self.state.pending_related_sections:
+                related_list = ", ".join(self.state.pending_related_sections)
+                selected_list = ", ".join(self.state.selected_sections)
+                
+                # Check if user responded to the related sections question
+                msg_lower = user_message.lower()
+                approve_patterns = ["include", "yes", "add", "both", "all", "sure"]
+                decline_patterns = ["no", "just", "only", "skip", "don't"]
+                
+                if any(p in msg_lower for p in approve_patterns):
+                    # User approved - add to approved_related
+                    self.state.approved_related.extend(self.state.pending_related_sections)
+                    self.state.pending_related_sections = []
+                    logger.info(f"User approved related sections")
+                elif any(p in msg_lower for p in decline_patterns):
+                    # User declined - add to declined_related
+                    self.state.declined_related.extend(self.state.pending_related_sections)
+                    self.state.pending_related_sections = []
+                    logger.info(f"User declined related sections")
+                # else: still waiting for answer
+            
+            # Detect source preference from user message
+            msg_lower = user_message.lower()
+            pdf_only_patterns = ["only from", "just from", "exclusively from", "stick to the document", "just the pdf", "only the pdf", "just this document"]
+            hybrid_patterns = ["also research", "supplement", "external sources", "you can research", "can also research", "add external"]
+            
+            if not info.has_source_preference:
+                if any(p in msg_lower for p in pdf_only_patterns):
+                    info.source_type = "pdf_only"
+                    info.has_source_preference = True
+                    logger.info(f"Detected source preference: pdf_only")
+                elif any(p in msg_lower for p in hybrid_patterns):
+                    info.source_type = "pdf_plus_research"
+                    info.has_source_preference = True
+                    logger.info(f"Detected source preference: pdf_plus_research")
+            
+            # Build the appropriate context
+            if self.state.document_scoped:
+                # Phase 2: Inject verbatim content of selected sections
+                document_context = self._build_scoped_context()
+            else:
+                # Phase 1: Show structure only, ask for scope
+                document_context = self._build_structure_only_context()
+        else:
+            # No document - research mode
+            if not info.has_source_preference:
+                info.source_type = "research_only"
+                info.has_source_preference = True
+                logger.info(f"No document uploaded - setting source_type: research_only")
+        
+        # =====================================================================
+        # DETERMINE STAGE INSTRUCTION
+        # =====================================================================
+        
+        if has_document and self.state.pending_related_sections:
+            # Asking about related sections
+            related_list = ", ".join(self.state.pending_related_sections)
+            selected_list = ", ".join(self.state.selected_sections)
+            
+            stage_instruction = f"""## CURRENT STAGE: SUGGEST RELATED SECTIONS
+
+You identified that the user wants to focus on: **{selected_list}**
+
+I noticed these sections reference other sections that might provide helpful context:
+**{related_list}**
+
+ASK THE USER: "Would you like me to include context from these related sections as well, or should I focus only on the sections you mentioned?"
+
+Wait for their answer before proceeding."""
+
+        elif has_document and not self.state.document_scoped:
+            # Need to ask user which sections to focus on
+            stage_instruction = """## CURRENT STAGE: SCOPE DOCUMENT (CRITICAL)
+
+The user has uploaded a document but hasn't specified which sections to focus on.
+
+**YOUR RESPONSE MUST:**
+1. Acknowledge you received the document
+2. Show the document structure (sections found)
+3. Ask: "Which sections would you like to focus on for your presentation?"
+
+Do NOT proceed to other questions until user specifies scope.
+This is critical for accuracy - we only work with content the user wants."""
+
+        elif has_document and self.state.document_scoped and not self.state.gathered_info.document_acknowledged:
+            # Scoped but not acknowledged yet
+            selected_list = ", ".join(self.state.selected_sections)
+            self.state.gathered_info.document_acknowledged = True
+            
+            stage_instruction = f"""## CURRENT STAGE: ACKNOWLEDGE SCOPE
+
+User wants to focus on: **{selected_list}**
+
+**YOUR RESPONSE MUST:**
+1. Confirm you found these sections in the document
+2. Briefly mention what content you have access to
+3. Then proceed to gather other requirements (audience, slide count, etc.)
+
+The document content is now available - you can reference specific facts from it."""
+
+        elif has_document and self.state.document_scoped and info.document_acknowledged and not info.has_source_preference:
+            # Document scoped and acknowledged, but need to ask about source preference
+            stage_instruction = """## CURRENT STAGE: ASK SOURCE PREFERENCE
+
+The user has selected their sections. Now ask about source preference:
+
+**YOUR RESPONSE MUST:**
+Ask: "Should I use content EXCLUSIVELY from this document, or can I supplement with external research if needed?"
+
+This is important for academic accuracy - some users want citations only from their document, others want additional sources.
+
+Wait for their answer before proceeding to gather other requirements."""
+
+        elif info.needs_confirmation():
             stage_instruction = """## CURRENT STAGE: CONFIRMATION REQUIRED
 All essential info is gathered. You MUST now:
-1. Summarize everything in a readable format
-2. Ask: "Does this look correct? If so, I'll finalize your presentation requirements."
-DO NOT output JSON yet - wait for user confirmation!"""
+1. Announce that you have gathered all necessary information.
+2. State that a summary card has been generated for their review.
+3. Explicitly ask them to review the card and click the confirmation button to proceed.
+
+Example: "I have gathered all the necessary details for your presentation. A summary card has been generated above/below for your review. Please check the details and click the confirmation button to proceed."
+
+DO NOT ask them to type "yes" or "confirm" - direct them to the UI button.
+DO NOT output JSON yet - wait for the user to click the confirmation button!"""
+
         elif not missing_required:
-            stage_instruction = f"""## CURRENT STAGE: GATHER OPTIONAL INFO
-Required info is complete. Ask about ONE of these optional fields:
-{self._format_list(missing_optional[:2]) if missing_optional else "None left"}
-Ask ONLY ONE question. Be conversational."""
+            # Ready for confirmation
+            stage_instruction = """## CURRENT STAGE: READY FOR CONFIRMATION
+Required info is complete. Apply these intelligent defaults for any missing optional fields:
+- Theme: Modern/Professional
+- Citation: APA
+- Tone: Academic
+- Emphasis: Balanced
+
+Then announce you are ready to finalize and ask them to use the confirmation card."""
+
         else:
+            # Still gathering info
             stage_instruction = f"""## CURRENT STAGE: GATHER REQUIRED INFO
-Still need these required fields - ask about ONE:
-{self._format_list(missing_required)}
-Ask ONLY ONE question. Do not combine questions."""
+Still need: {', '.join(missing_required)}
+
+Ask naturally about what's missing. You can ask about multiple things in one conversational question if it feels natural.
+
+Be efficient - the user may have already told you some of this in their message!"""
         
         # Create task with FULL CONTEXT
-        task = Task(
-            description=f"""You are continuing a conversation to gather presentation requirements.
+        # IMPORTANT: When tools are attached, we must explicitly tell the agent
+        # that asking questions is done via Final Answer, NOT via a tool
+        tool_instruction = ""
+        if tools:
+            tool_instruction = """
+## TOOL USAGE INSTRUCTIONS (CRITICAL)
+You have access to document tools, but they are OPTIONAL:
+- **List Document Sections**: Use ONLY if you need to see what content is available
+- **Read Document Section**: Use ONLY if you need to verify or read specific content
 
-## FULL CONVERSATION HISTORY
+**TO ASK QUESTIONS OR RESPOND TO THE USER**: Use `Final Answer` with your text response.
+DO NOT try to use a tool called "Ask a clarifying question" - that tool does not exist!
+Your question/response IS the Final Answer. Just write your question as plain text.
+
+Example of correct behavior:
+- Thought: I need to ask how many slides they want
+- Final Answer: How many slides would you like in your presentation?
+
+Example of INCORRECT behavior (DO NOT DO THIS):
+- Action: Ask a clarifying question  <-- WRONG! This tool doesn't exist!
+"""
+        
+        # Create task with the instruction
+        task = Task(
+            description=f"""{stage_instruction}
+
+## CONVERSATION HISTORY
 {conversation_context}
 
 ## INFORMATION ALREADY GATHERED
 {gathered_context}
 
-{stage_instruction}
+{document_context}
+
+{tool_instruction}
 
 ## CRITICAL RULES
-1. **ASK EXACTLY ONE QUESTION** - Never combine multiple questions in one response
-2. **DO NOT repeat questions** - Check gathered info above before asking
-3. **If user says "decide yourself"** - Acknowledge and move to the NEXT question
-4. **DO NOT output JSON** until user explicitly confirms the summary
+1. **ACCURACY FIRST** - Only reference facts that appear in the document content provided above
+2. **NEVER re-confirm explicit statements** - If user said "harvard style", don't ask "Harvard style correct?"
+3. **Scope before content** - If document is uploaded but not scoped, ask which sections to focus on
+4. **Use intelligent defaults** - Don't ask about every optional field, apply sensible defaults
+5. **DO NOT output JSON** until user explicitly confirms the summary
+6. **TO RESPOND**: Use `Final Answer` with your text. Tools are optional for reading document details.
 
 ## RESPONSE FORMAT
-- For questions: Write ONE natural, conversational question (NO JSON)
-- For confirmation: Summarize info + ask "Does this look correct?"
-- For completion: Output OrderForm JSON with exact field names
+- For document scoping: Show structure + ask "Which sections would you like to focus on?"
+- For related sections: Ask if they want to include related sections
+- For questions: Natural conversation (can ask about a couple things if it flows naturally)
+- For confirmation: State you are done -> Ask user to use the confirmation card button
+- For completion: Use `Final Answer` with OrderForm JSON
 
-Be friendly and efficient. ONE question at a time!""",
-            expected_output="Either ONE follow-up question, a confirmation summary, OR a complete OrderForm JSON",
+Be efficient and accurate - reference document content when relevant!""",
+            expected_output="Either a document scoping question, a confirmation summary, clarifying questions, OR a complete OrderForm JSON",
             agent=clarifier,
         )
         
         try:
-            # Execute the agent
+            # Execute the agent in a thread pool to avoid blocking the event loop
+            # crew.kickoff() is synchronous and can take 5-30+ seconds
             crew = Crew(agents=[clarifier], tasks=[task])
-            result = crew.kickoff()
+            loop = asyncio.get_running_loop()
+            result = await loop.run_in_executor(None, crew.kickoff)
             
             # Parse the response
             response_text = str(result)
@@ -497,6 +933,14 @@ Be friendly and efficient. ONE question at a time!""",
                 r"can you confirm",
                 r"please confirm",
                 r"ready to finalize",
+                r"ready to proceed",
+                r"proceed with these settings",
+                r"click the confirmation button",
+                r"use the confirmation button",
+                r"review the card",
+                r"check the details",
+                r"summary card",
+                r"finalize the presentation",
                 r"if (this|everything) looks (good|correct)",
                 r"let me (know|confirm)",
             ]
@@ -529,14 +973,16 @@ Be friendly and efficient. ONE question at a time!""",
                     self.state.order_form = OrderForm()
                 self.state.order_form.clarification_notes = response_text
                 
-                # Check if we have enough info to show confirmation UI
-                # (instead of asking more optional questions)
-                if self.state.gathered_info.is_ready_for_confirmation():
+                # Check if we should show confirmation UI:
+                # 1. Agent explicitly asked for confirmation (regex detected)
+                # 2. OR we heuristically determined we have enough info
+                if self.state.gathered_info.confirmation_sent or self.state.gathered_info.is_ready_for_confirmation():
                     # Return needs_confirmation with structured summary for UI
+                    # We usually keep the agent's question text so the user sees the summary/question
                     return {
                         "complete": False,
                         "needs_confirmation": True,
-                        "question": None,  # Don't show the LLM's question
+                        "question": response_text,  # Show the Agent's text/summary
                         "summary": self._build_summary_for_ui(),
                         "message": "Please review your presentation requirements:",
                     }
@@ -605,8 +1051,7 @@ Be friendly and efficient. ONE question at a time!""",
         if info.let_agent_decide_theme:
             parts.append("- **Theme**: User wants you to decide")
             
-        if info.include_speaker_notes is not None:
-            parts.append(f"- **Speaker Notes**: {'Yes' if info.include_speaker_notes else 'No'}")
+        # Speaker notes not currently supported - removed from GatheredInfo
             
         if info.special_requests:
             parts.append(f"- **Special Requests**: {info.special_requests}")
@@ -637,6 +1082,165 @@ Be friendly and efficient. ONE question at a time!""",
     def _format_list(self, items: List[str]) -> str:
         """Format a list of items for the prompt."""
         return "\n".join(f"- {item}" for item in items)
+    
+    # =========================================================================
+    # Document Scope Detection (Zero-Hallucination Architecture)
+    # =========================================================================
+    
+    def _detect_scope_from_message(self, user_message: str) -> List[str]:
+        """
+        Attempt to match user's message to specific sections.
+        
+        Returns list of section titles that match, or empty if no clear scope.
+        This is used to skip asking "which sections?" when user already specified.
+        """
+        if not self.state.knowledge_base or not self.state.knowledge_base.sections:
+            return []
+        
+        message_lower = user_message.lower()
+        matched_sections = []
+        
+        for section in self.state.knowledge_base.sections:
+            title_lower = section.title.lower()
+            
+            # Direct mention: "chapter 1", "section 2.1", exact title
+            if title_lower in message_lower:
+                if section.title not in matched_sections:
+                    matched_sections.append(section.title)
+                continue
+            
+            # Topic-based matching: "machine learning" matches "3. Machine Learning Approaches"
+            # Extract keywords from section title (words > 3 chars, exclude numbers)
+            import re
+            keywords = [w for w in re.split(r'\W+', title_lower) if len(w) > 3 and not w.isdigit()]
+            for kw in keywords:
+                if kw in message_lower:
+                    if section.title not in matched_sections:
+                        matched_sections.append(section.title)
+                    break
+        
+        return matched_sections
+    
+    def _find_related_sections(self, selected_titles: List[str]) -> List[str]:
+        """
+        Find sections that the selected sections reference.
+        
+        Looks for explicit references like "see Section 2.1" or mentions of other section titles.
+        Returns section titles that are referenced but not already selected.
+        """
+        if not self.state.knowledge_base or not self.state.knowledge_base.sections:
+            return []
+        
+        related = set()
+        selected_set = set(selected_titles)
+        
+        # Get the content of selected sections
+        for section in self.state.knowledge_base.sections:
+            if section.title not in selected_set:
+                continue
+                
+            content_lower = section.content.lower()
+            
+            # Look for references to other sections
+            for other_section in self.state.knowledge_base.sections:
+                if other_section.title in selected_set:
+                    continue
+                if other_section.title in related:
+                    continue
+                    
+                other_title_lower = other_section.title.lower()
+                
+                # Check if this section is mentioned in the selected section's content
+                if other_title_lower in content_lower:
+                    related.add(other_section.title)
+                    continue
+                
+                # Check for "section X" or "chapter X" references
+                import re
+                keywords = [w for w in re.split(r'\W+', other_title_lower) if len(w) > 3 and not w.isdigit()]
+                for kw in keywords:
+                    if f"see {kw}" in content_lower or f"in the {kw}" in content_lower:
+                        related.add(other_section.title)
+                        break
+        
+        # Exclude already approved or declined sections
+        related -= set(self.state.approved_related)
+        related -= set(self.state.declined_related)
+        
+        return list(related)
+    
+    def _build_structure_only_context(self) -> str:
+        """
+        Build context with only document structure (section titles + page ranges).
+        
+        Used when user hasn't specified which sections they want yet.
+        Token-efficient because it doesn't include full content.
+        """
+        if not self.state.knowledge_base or not self.state.knowledge_base.sections:
+            return ""
+        
+        context = f"""## UPLOADED DOCUMENT
+
+**Document Summary:** {self.state.knowledge_base.summary}
+
+### Document Structure:
+"""
+        
+        for i, section in enumerate(self.state.knowledge_base.sections, 1):
+            page_info = f" (Pages {section.page_range})" if section.page_range else ""
+            visual_count = len(section.visuals) if section.visuals else 0
+            visual_info = f" [{visual_count} visuals]" if visual_count > 0 else ""
+            context += f"{i}. **{section.title}**{page_info}{visual_info}\n"
+        
+        context += "\n> 📋 Please specify which sections you want to focus on for your presentation."
+        
+        return context
+    
+    def _build_scoped_context(self) -> str:
+        """
+        Build context with FULL VERBATIM content of selected sections.
+        
+        Used after user has specified which sections they want.
+        Includes all sections from selected_sections + approved_related.
+        """
+        if not self.state.knowledge_base or not self.state.knowledge_base.sections:
+            return ""
+        
+        # Combine selected and approved related
+        all_selected = set(self.state.selected_sections) | set(self.state.approved_related)
+        
+        if not all_selected:
+            return self._build_structure_only_context()
+        
+        context_parts = ["## DOCUMENT CONTENT (Verbatim from selected sections)\n"]
+        
+        for section in self.state.knowledge_base.sections:
+            if section.title not in all_selected:
+                continue
+                
+            context_parts.append(f"""
+### {section.title}
+**Source: Pages {section.page_range or 'N/A'}**
+
+{section.content}
+""")
+            
+            # Include visual descriptions
+            if section.visuals:
+                context_parts.append("**Visual Elements:**")
+                for visual in section.visuals:
+                    context_parts.append(f"- {visual}")
+                context_parts.append("")
+            
+            context_parts.append("---\n")
+        
+        context_parts.append("""
+> ⚠️ **ACCURACY REQUIREMENT**: All content above is verbatim from the source document.
+> Do NOT infer, guess, or add information that is not explicitly shown above.
+> Any facts used must be directly from the sections provided.
+""")
+        
+        return "\n".join(context_parts)
     
     def _extract_info_from_message(self, message: str) -> None:
         """
@@ -913,7 +1517,12 @@ Be friendly and efficient. ONE question at a time!""",
         """
         Generate the presentation skeleton for user review.
         
-        This stage PAUSES after generating - user must call
+        This stage uses the Outliner agent to intelligently structure
+        the presentation based on:
+        - OrderForm (user preferences from Clarifier)
+        - KnowledgeBase (document content from synthesis)
+        
+        The stage PAUSES after generating - user must call
         approve_outline() to continue.
         
         Returns:
@@ -924,11 +1533,117 @@ Be friendly and efficient. ONE question at a time!""",
         if not self.state.order_form or not self.state.order_form.is_complete:
             raise ValueError("Cannot generate outline: OrderForm not complete")
         
-        # Use the order form to create skeleton
-        # In a real implementation, this would use an Outliner agent
         order = self.state.order_form
+        logger.info(f"[OUTLINER] Starting outline generation for {self.state.session_id[:8]}...")
         
-        # Generate skeleton based on preferences
+        # Try CrewAI-based outline generation first
+        try:
+            skeleton = await self._run_outliner_agent()
+            logger.info(f"[OUTLINER] Agent returned skeleton with {len(skeleton.slides)} slides")
+        except Exception as e:
+            logger.warning(f"[OUTLINER] Agent failed, using fallback: {e}")
+            skeleton = self._generate_skeleton_fallback()
+            logger.info(f"[OUTLINER] Fallback generated skeleton with {len(skeleton.slides)} slides")
+        
+        logger.info(f"[OUTLINER] Updating state.skeleton and status...")
+        self.state.skeleton = skeleton
+        self.state.status = FlowStatus.AWAITING_OUTLINE_APPROVAL
+        self.state.total_slides = len(skeleton.slides)
+        logger.info(f"[OUTLINER] ✅ State updated: status={self.state.status}, skeleton={len(self.state.skeleton.slides)} slides")
+        
+        await self.emitter.pause_for_review("outline", {
+            "skeleton": skeleton.model_dump(),
+        })
+        
+        return skeleton
+    
+    async def _run_outliner_agent(self) -> Skeleton:
+        """
+        Run the Outliner agent with CrewAI to generate an intelligent skeleton.
+        
+        This passes both the OrderForm and KnowledgeBase to the agent
+        so it can make informed decisions about slide structure.
+        """
+        logger.info("Running Outliner agent with CrewAI")
+        
+        from app.crew.agents.outliner import create_outliner_agent, create_outliner_task
+        
+        # Create tools for document access if we have a knowledge base
+        tools = []
+        if self.state.knowledge_base:
+            tools.append(ListSectionsTool(kb=self.state.knowledge_base))
+            tools.append(ReadSectionTool(kb=self.state.knowledge_base))
+        
+        # Create agent with optional tools and iteration limit to prevent infinite loops
+        outliner = create_outliner_agent(tools=tools if tools else None, max_iter=3)
+        
+        # Create task with OrderForm + KnowledgeBase
+        task = create_outliner_task(
+            agent=outliner,
+            order_form=self.state.order_form,
+            knowledge_base=self.state.knowledge_base,
+        )
+        
+        # Execute with CrewAI using robust retry wrapper
+        crew = Crew(agents=[outliner], tasks=[task])
+        
+        # Use retry wrapper with configurable timeout and automatic retries
+        from app.crew.utils.agent_execution import execute_crew_with_retry
+        result = await execute_crew_with_retry(crew, "outliner")
+        
+        # Parse the skeleton from agent output
+        skeleton = self._parse_skeleton_from_result(result)
+        
+        logger.info(f"Outliner generated skeleton with {len(skeleton.slides)} slides")
+        return skeleton
+    
+    def _parse_skeleton_from_result(self, result) -> Skeleton:
+        """
+        Parse Skeleton from CrewAI result.
+        
+        Handles both direct Pydantic output and JSON string parsing.
+        """
+        import re
+        
+        # If result has a pydantic attribute (output_pydantic worked)
+        if hasattr(result, 'pydantic') and result.pydantic:
+            return result.pydantic
+        
+        # Try to extract JSON from raw output
+        raw_output = str(result)
+        
+        # Look for JSON block
+        json_match = re.search(r'```(?:json)?\s*([\s\S]*?)```', raw_output)
+        if json_match:
+            raw_output = json_match.group(1).strip()
+        
+        # Try direct JSON parse
+        try:
+            data = json.loads(raw_output)
+            return Skeleton(**data)
+        except (json.JSONDecodeError, ValueError) as e:
+            logger.warning(f"Failed to parse skeleton JSON: {e}")
+        
+        # Last resort: find any JSON object
+        json_match = re.search(r'\{[\s\S]*\}', raw_output)
+        if json_match:
+            try:
+                data = json.loads(json_match.group())
+                return Skeleton(**data)
+            except (json.JSONDecodeError, ValueError) as e:
+                logger.warning(f"Failed to parse extracted JSON: {e}")
+        
+        # Fall back to fallback generator
+        logger.warning("Could not parse outliner output, using fallback skeleton")
+        return self._generate_skeleton_fallback()
+    
+    def _generate_skeleton_fallback(self) -> Skeleton:
+        """
+        Fallback skeleton generation when the Outliner agent fails.
+        
+        Creates a basic structure from OrderForm topics.
+        """
+        order = self.state.order_form
         slides = []
         slide_count = order.target_slides
         
@@ -971,19 +1686,12 @@ Be friendly and efficient. ONE question at a time!""",
             estimated_duration_minutes=len(slides) * 2,
         )
         
-        self.state.skeleton = skeleton
-        self.state.status = FlowStatus.AWAITING_OUTLINE_APPROVAL
-        self.state.total_slides = len(slides)
-        
-        await self.emitter.pause_for_review("outline", {
-            "skeleton": skeleton.model_dump(),
-        })
-        
         return skeleton
     
     async def approve_outline(
         self,
         modifications: Optional[List[Dict]] = None,
+        modified_skeleton: Optional[Dict] = None,
     ) -> Skeleton:
         """
         Approve the outline (with optional modifications).
@@ -996,6 +1704,7 @@ Be friendly and efficient. ONE question at a time!""",
         
         Args:
             modifications: List of changes to apply
+            modified_skeleton: Full skeleton replacement (takes precedence)
             
         Returns:
             Updated Skeleton
@@ -1003,7 +1712,16 @@ Be friendly and efficient. ONE question at a time!""",
         if not self.state.skeleton:
             raise ValueError("No skeleton to approve")
         
-        if modifications:
+        if modified_skeleton:
+            # Full replacement from frontend
+            try:
+                # Ensure it's a valid Skeleton
+                self.state.skeleton = Skeleton(**modified_skeleton)
+            except Exception as e:
+                logger.error(f"Failed to parse modified skeleton: {e}")
+                raise ValueError(f"Invalid skeleton data: {e}")
+
+        elif modifications:
             skeleton = self.state.skeleton
             
             for mod in modifications:
@@ -1073,7 +1791,8 @@ Be friendly and efficient. ONE question at a time!""",
     
     async def run_generation(self) -> GeneratedPresentation:
         """
-        Run the full generation pipeline: Planner → Refiner → Generator → QA
+        Run the full generation pipeline:
+        Planner → Refiner → Citation Auditor → Final Slides → Generator → QA
         
         This runs asynchronously with progress streaming.
         For performance, individual slides can be generated in parallel.
@@ -1086,27 +1805,81 @@ Be friendly and efficient. ONE question at a time!""",
         
         self.state.status = FlowStatus.GENERATING
         
+        # Log pipeline start
+        logger.info(f"[FLOW] ====== PIPELINE START ======")
+        logger.info(f"[FLOW] Session: {self.state.session_id}")
+        logger.info(f"[FLOW] Skeleton: {len(self.state.skeleton.slides)} slides")
+        logger.info(f"[FLOW] Stages: Planner → Refiner → Citation Auditor → Final Slides → Generator → QA")
+        
+        # Emit pipeline_start for frontend
+        await self.emitter.emit("pipeline_start", {
+            "total_stages": 6,
+            "stages": ["planner", "refiner", "citation_auditor", "final_slides", "generator", "visual_qa"],
+        })
+        
         try:
-            # Stage 3: Planner
+            # Stage 1: Planner
+            logger.info(f"[FLOW] Starting Stage 1/6: Planner")
             await self._run_planner()
+            logger.info(f"[FLOW] Completed Stage 1/6: Planner")
             
-            # Stage 4: Refiner (with async asset rendering)
+            # Stage 2: Refiner (with async asset rendering)
+            logger.info(f"[FLOW] Starting Stage 2/6: Refiner")
             await self._run_refiner()
+            logger.info(f"[FLOW] Completed Stage 2/6: Refiner")
+            
+            # Stage 3: Citation Auditor (verify all citations)
+            logger.info(f"[FLOW] Starting Stage 3/6: Citation Auditor")
+            await self._run_citation_auditor()
+            logger.info(f"[FLOW] Completed Stage 3/6: Citation Auditor")
+            
+            # Stage 4: Generate References and Thank You slides
+            logger.info(f"[FLOW] Starting Stage 4/6: Final Slides")
+            await self._generate_final_slides()
+            logger.info(f"[FLOW] Completed Stage 4/6: Final Slides")
             
             # Stage 5: Generator (parallel slide generation)
+            logger.info(f"[FLOW] Starting Stage 5/6: Generator")
             await self._run_generator()
+            logger.info(f"[FLOW] Completed Stage 5/6: Generator")
             
             # Stage 6: Visual QA
+            logger.info(f"[FLOW] Starting Stage 6/6: Visual QA")
             await self._run_qa()
+            logger.info(f"[FLOW] Completed Stage 6/6: Visual QA")
             
             self.state.status = FlowStatus.COMPLETED
+            
+            logger.info(f"[FLOW] ====== PIPELINE COMPLETE ======")
+            logger.info(f"[FLOW] Total slides: {self.state.generated_presentation.total_slides}")
+            
+            # Emit pipeline_complete for frontend
+            await self.emitter.emit("pipeline_complete", {
+                "success": True,
+                "total_slides": self.state.generated_presentation.total_slides,
+            })
+            
+            # Also emit the regular complete event
             await self.emitter.complete(self.state.generated_presentation)
             
             return self.state.generated_presentation
             
         except Exception as e:
+            logger.error(f"[FLOW] ====== PIPELINE FAILED ======")
+            logger.error(f"[FLOW] Error in stage '{self.state.current_stage}': {e}")
+            import traceback
+            logger.error(f"[FLOW] Traceback: {traceback.format_exc()}")
+            
             self.state.status = FlowStatus.FAILED
             self.state.error_message = str(e)
+            
+            # Emit pipeline_error for frontend
+            await self.emitter.emit("pipeline_error", {
+                "success": False,
+                "stage": self.state.current_stage,
+                "error": str(e),
+            })
+            
             await self.emitter.error(str(e), self.state.current_stage)
             raise
     
@@ -1115,21 +1888,56 @@ Be friendly and efficient. ONE question at a time!""",
         await self.emitter.stage_start("planner")
         self.state.current_stage = "planner"
         
+        # Import the comprehensive task creator
+        from app.crew.agents.planner import create_planner_agent, create_planning_task
+        
+        logger.info("Running Planner agent with CrewAI")
+        
+        # Create agent (uses PRO model with high thinking)
         planner = create_planner_agent()
         
-        # Build the planning task
-        task = Task(
-            description=self._build_planner_prompt(),
-            expected_output="PlannedContent JSON with full bullet points for each slide",
+        # Create comprehensive task with full context
+        task = create_planning_task(
             agent=planner,
+            skeleton=self.state.skeleton,
+            order_form=self.state.order_form,
+            university_context=None,  # TODO: Pass university context when available
         )
         
+        # Execute with CrewAI using robust retry wrapper
         crew = Crew(agents=[planner], tasks=[task])
-        result = crew.kickoff()
+        
+        # Use retry wrapper with configurable timeout and automatic retries
+        from app.crew.utils.agent_execution import execute_crew_with_retry
+        result = await execute_crew_with_retry(crew, "planner")
+        
+        # Debug: Log what we got from CrewAI
+        logger.info(f"[PLANNER] CrewAI result type: {type(result)}")
+        logger.info(f"[PLANNER] CrewAI result dir: {[attr for attr in dir(result) if not attr.startswith('_')]}")
+        
+        # Try to get raw output - CrewAI result has different properties
+        raw_output = None
+        if hasattr(result, 'raw'):
+            raw_output = result.raw
+            logger.info(f"[PLANNER] Using result.raw ({len(raw_output)} chars)")
+        elif hasattr(result, 'output'):
+            raw_output = result.output
+            logger.info(f"[PLANNER] Using result.output ({len(raw_output)} chars)")
+        elif hasattr(result, 'result'):
+            raw_output = result.result
+            logger.info(f"[PLANNER] Using result.result ({len(raw_output)} chars)")
+        else:
+            raw_output = str(result)
+            logger.info(f"[PLANNER] Using str(result) ({len(raw_output)} chars)")
+        
+        # Log first 500 chars to see what we're parsing
+        logger.debug(f"[PLANNER] Raw output preview: {raw_output[:500] if raw_output else 'NONE'}")
         
         # Parse result into PlannedContent
-        planned_content = self._parse_planned_content(str(result))
+        planned_content = self._parse_planned_content(raw_output)
         self.state.planned_content = planned_content
+        
+        logger.info(f"Planner generated content for {len(planned_content.slides)} slides")
         
         await self.emitter.stage_complete("planner", {
             "slides_planned": len(planned_content.slides),
@@ -1168,26 +1976,123 @@ Focus Areas: {', '.join(order.focus_areas) if order.focus_areas else 'None'}
 
 Return a JSON object with 'slides' array containing PlannedSlide objects."""
     
+    def _is_actual_slide_data(self, data: dict) -> bool:
+        """
+        Check if a JSON object contains actual slide data vs a schema definition.
+        
+        Schema definitions have:
+        - "properties", "type": "object", "required", "items" as object
+        
+        Actual data has:
+        - "slides" as a list with objects containing "order", "title", "content_type"
+        """
+        # Must have "slides" key
+        if "slides" not in data:
+            return False
+        
+        slides = data["slides"]
+        
+        # Slides must be a list for actual data (schema has it as an object)
+        if not isinstance(slides, list):
+            logger.debug(f"[PLANNER_PARSE] slides is not a list: {type(slides)}")
+            return False
+        
+        # Must have at least one slide
+        if len(slides) == 0:
+            logger.debug("[PLANNER_PARSE] slides list is empty")
+            return False
+        
+        # First slide must have "order" and "title" (actual slide data)
+        first_slide = slides[0]
+        if not isinstance(first_slide, dict):
+            return False
+        
+        # Check for required fields in actual slide data
+        if "order" in first_slide and "title" in first_slide:
+            logger.debug(f"[PLANNER_PARSE] Found valid slide data with order={first_slide.get('order')}")
+            return True
+        
+        # Check if it looks like a schema (has "properties" or "type": "object")
+        if "properties" in data or data.get("type") == "object":
+            logger.debug("[PLANNER_PARSE] Looks like a schema definition, skipping")
+            return False
+        
+        return False
+    
     def _parse_planned_content(self, text: str) -> PlannedContent:
         """Parse PlannedContent from agent response."""
         import re
         
-        # Try to extract JSON
-        json_match = re.search(r'\{[\s\S]*\}', text)
-        if json_match:
-            try:
-                data = json.loads(json_match.group())
-                if "slides" in data:
-                    return PlannedContent(
-                        presentation_title=self.state.skeleton.presentation_title,
-                        target_audience=self.state.skeleton.target_audience,
-                        theme_id=self.state.order_form.theme_id,
-                        citation_style=self.state.order_form.citation_style,
-                        slides=[PlannedSlide(**s) for s in data["slides"]],
-                    )
-            except (json.JSONDecodeError, ValueError) as e:
-                logger.warning(f"Failed to parse PlannedContent: {e}")
+        logger.info(f"[PLANNER_PARSE] Parsing PlannedContent from {len(text)} chars")
+        logger.debug(f"[PLANNER_PARSE] First 200 chars: {text[:200]}")
         
+        # Try multiple approaches to extract valid JSON
+        json_data = None
+        
+        # Approach 1: Find JSON starting with {"presentation_title" or {"slides"
+        # Look for actual data patterns (slides as array)
+        json_patterns = [
+            r'\{\s*"presentation_title"\s*:\s*"[^"]+[\s\S]*"slides"\s*:\s*\[',  # Real data pattern
+            r'\{\s*"slides"\s*:\s*\[',  # Direct slides array
+        ]
+        
+        for pattern in json_patterns:
+            match = re.search(pattern, text)
+            if match:
+                logger.debug(f"[PLANNER_PARSE] Pattern matched at position {match.start()}")
+                # Find the start of this JSON object
+                start_pos = text.rfind('{', 0, match.end())
+                if start_pos == -1:
+                    start_pos = match.start()
+                
+                # Extract balanced JSON using brace counting
+                json_str = self._extract_balanced_json(text[start_pos:])
+                if json_str:
+                    logger.debug(f"[PLANNER_PARSE] Extracted balanced JSON of {len(json_str)} chars")
+                    try:
+                        data = json.loads(json_str)
+                        if self._is_actual_slide_data(data):
+                            json_data = data
+                            logger.info(f"[PLANNER_PARSE] ✅ Pattern match: valid slide data with {len(data['slides'])} slides")
+                            break
+                        else:
+                            logger.debug("[PLANNER_PARSE] Pattern matched but not actual slide data")
+                    except json.JSONDecodeError as e:
+                        logger.warning(f"[PLANNER_PARSE] JSON decode failed: {e}")
+                        continue
+                else:
+                    logger.warning(f"[PLANNER_PARSE] _extract_balanced_json returned None")
+        
+        # Approach 2: Try to find any valid JSON object with actual slide data
+        if not json_data:
+            logger.debug("[PLANNER_PARSE] Approach 1 failed, trying approach 2 (iterate all braces)")
+            # Find all potential JSON starts
+            for i, char in enumerate(text):
+                if char == '{':
+                    json_str = self._extract_balanced_json(text[i:])
+                    if json_str:
+                        try:
+                            data = json.loads(json_str)
+                            if self._is_actual_slide_data(data):
+                                json_data = data
+                                logger.info(f"[PLANNER_PARSE] ✅ Iteration found valid slide data with {len(data['slides'])} slides")
+                                break
+                        except json.JSONDecodeError:
+                            continue
+        
+        if json_data and "slides" in json_data:
+            try:
+                return PlannedContent(
+                    presentation_title=json_data.get("presentation_title", self.state.skeleton.presentation_title),
+                    target_audience=json_data.get("target_audience", self.state.skeleton.target_audience),
+                    theme_id=json_data.get("theme_id", self.state.order_form.theme_id),
+                    citation_style=json_data.get("citation_style", self.state.order_form.citation_style),
+                    slides=[PlannedSlide(**s) for s in json_data["slides"]],
+                )
+            except (ValueError, TypeError) as e:
+                logger.warning(f"Failed to create PlannedContent from JSON: {e}")
+        
+        logger.warning("Using fallback PlannedContent from skeleton")
         # Fallback: generate from skeleton
         return PlannedContent(
             presentation_title=self.state.skeleton.presentation_title,
@@ -1205,40 +2110,536 @@ Return a JSON object with 'slides' array containing PlannedSlide objects."""
             ],
         )
     
+    def _extract_balanced_json(self, text: str) -> Optional[str]:
+        """Extract a balanced JSON object from text using brace counting."""
+        if not text or text[0] != '{':
+            return None
+        
+        depth = 0
+        in_string = False
+        escape_next = False
+        
+        for i, char in enumerate(text):
+            if escape_next:
+                escape_next = False
+                continue
+            
+            if char == '\\' and in_string:
+                escape_next = True
+                continue
+            
+            if char == '"' and not escape_next:
+                in_string = not in_string
+                continue
+            
+            if not in_string:
+                if char == '{':
+                    depth += 1
+                elif char == '}':
+                    depth -= 1
+                    if depth == 0:
+                        return text[:i + 1]
+        
+        return None
+    
     async def _run_refiner(self):
-        """Run the Refiner agent to render assets."""
+        """
+        Run the Refiner stage with hybrid approach:
+        1. Agent converts placeholders to actual code (LaTeX/Mermaid)
+        2. Programmatic rendering with RenderService (reliable)
+        3. Agent-based citation search with AcademicSearchTool
+        """
         await self.emitter.stage_start("refiner")
         self.state.current_stage = "refiner"
         
+        logger.info(f"[REFINER] ====== Stage Start ======")
+        logger.info(f"[REFINER] Planned slides: {len(self.state.planned_content.slides)}")
+        
         render_tool = get_render_tool()
-        refiner = create_refiner_agent(tools=[render_tool])
+        academic_tool = AcademicSearchTool()
+        citation_style = self.state.order_form.citation_style or "apa"
         
-        # Process each slide - could be parallelized
-        refined_slides = []
+        # Import ImageSourceAgent for image search/verification
+        from app.crew.agents.image_source_agent import ImageSourceAgent
+        image_agent = ImageSourceAgent()
         
-        for i, planned_slide in enumerate(self.state.planned_content.slides):
-            await self.emitter.slide_progress(planned_slide.order, len(self.state.planned_content.slides), "refining")
+        try:
+            # Step 1: Convert placeholders to code using agent
+            logger.info(f"[REFINER] Step 1: Converting placeholders to code...")
+            await self.emitter.progress("Converting placeholders to code...", stage="refiner")
+            enhanced_content = await self._convert_placeholders_with_agent()
+            logger.info(f"[REFINER] Step 1 complete: {len(enhanced_content.slides)} slides with converted placeholders")
             
-            refined_slide = await self._refine_slide(planned_slide, render_tool)
-            refined_slides.append(refined_slide)
+            # Step 2: Process each slide - render assets and search citations
+            logger.info(f"[REFINER] Step 2: Processing slides (render + citations)...")
+            refined_slides = []
+            total_slides = len(enhanced_content.slides)
+            
+            for i, planned_slide in enumerate(enhanced_content.slides):
+                logger.info(f"[REFINER]   Processing slide {i+1}/{total_slides}: '{planned_slide.title}'")
+                
+                await self.emitter.slide_progress(
+                    planned_slide.order, 
+                    total_slides, 
+                    "refining"
+                )
+                
+                try:
+                    # Refine the slide (render SVGs, search citations, source images)
+                    refined_slide = await self._refine_slide_enhanced(
+                        planned_slide, 
+                        render_tool, 
+                        academic_tool,
+                        citation_style,
+                        image_agent,
+                    )
+                    refined_slides.append(refined_slide)
+                    
+                    # Log what was rendered
+                    eq_status = "✓" if refined_slide.equation_svg else "—"
+                    diag_status = "✓" if refined_slide.diagram_svg else "—"
+                    cit_count = len(refined_slide.citations) if refined_slide.citations else 0
+                    img_status = "✓" if refined_slide.image_url else "—"
+                    logger.info(f"[REFINER]   Slide {i+1} complete: eq={eq_status} diag={diag_status} cit={cit_count} img={img_status}")
+                    
+                except Exception as slide_error:
+                    logger.error(f"[REFINER]   Slide {i+1} FAILED: {slide_error}")
+                    # Create a minimal refined slide to continue
+                    from app.models.schemas import RefinedSlide
+                    refined_slides.append(RefinedSlide(
+                        order=planned_slide.order,
+                        title=planned_slide.title,
+                        content_type=planned_slide.content_type,
+                        bullet_points=planned_slide.bullet_points,
+                        template_type=planned_slide.template_type,
+                    ))
+            
+            # Build RefinedContent
+            self.state.refined_content = RefinedContent(
+                presentation_title=enhanced_content.presentation_title,
+                target_audience=enhanced_content.target_audience,
+                theme_id=enhanced_content.theme_id,
+                citation_style=citation_style,
+                slides=refined_slides,
+                total_citations=sum(len(s.citations) for s in refined_slides if s.citations),
+                equations_rendered=sum(1 for s in refined_slides if s.equation_svg),
+                diagrams_rendered=sum(1 for s in refined_slides if s.diagram_svg),
+            )
+            
+            logger.info(f"[REFINER] ====== Stage Complete ======")
+            logger.info(
+                f"[REFINER] Results: {len(refined_slides)} slides, "
+                f"{self.state.refined_content.equations_rendered} equations, "
+                f"{self.state.refined_content.diagrams_rendered} diagrams, "
+                f"{self.state.refined_content.total_citations} citations"
+            )
+            
+            await self.emitter.stage_complete("refiner", {
+                "slides_refined": len(refined_slides),
+                "equations_rendered": self.state.refined_content.equations_rendered,
+                "diagrams_rendered": self.state.refined_content.diagrams_rendered,
+                "total_citations": self.state.refined_content.total_citations,
+            })
+            
+        finally:
+            await academic_tool.close()
+            await image_agent.close()
+    
+    async def _run_citation_auditor(self) -> RefinedContent:
+        """
+        Run Citation Auditor to verify all citations.
+        Position: After Refiner, before Generator
         
-        self.state.refined_content = RefinedContent(
-            presentation_title=self.state.planned_content.presentation_title,
-            target_audience=self.state.planned_content.target_audience,
-            theme_id=self.state.planned_content.theme_id,
-            citation_style=self.state.planned_content.citation_style,
-            slides=refined_slides,
-            total_citations=sum(len(s.citations) for s in refined_slides),
-            equations_rendered=sum(1 for s in refined_slides if s.equation_svg),
-            diagrams_rendered=sum(1 for s in refined_slides if s.diagram_svg),
+        This method:
+        1. Extracts inline citations from each slide's bullet points
+        2. Cross-references with slide.citations array
+        3. Removes unverified inline citations from text
+        4. Validates DOIs for citations that have them
+        
+        Returns:
+            Updated RefinedContent with verified citations
+        """
+        await self.emitter.stage_start("citation_auditor")
+        self.state.current_stage = "citation_auditor"
+        
+        logger.info("[CITATION AUDITOR] ====== Stage Start ======")
+        
+        refined = self.state.refined_content
+        citation_style = self.state.order_form.citation_style or "apa"
+        inline_format = "numbered" if citation_style == "ieee" else "author_year"
+        
+        removed_count = 0
+        verified_count = 0
+        
+        # For each slide, verify inline citations
+        for slide in refined.slides:
+            for i, bullet in enumerate(slide.bullet_points):
+                # Extract inline citations from this bullet point
+                citations_found = extract_inline_citations(bullet, inline_format)
+                
+                # Process in reverse order to maintain string positions
+                for author, year, start, end in reversed(citations_found):
+                    # Check if citation exists in slide.citations
+                    match = find_matching_citation(author, year, slide.citations)
+                    
+                    if not match:
+                        # Citation not found - remove from text
+                        slide.bullet_points[i] = remove_inline_citation(
+                            slide.bullet_points[i], start, end
+                        )
+                        removed_count += 1
+                        logger.warning(
+                            f"[CITATION AUDITOR] Removed unverified citation: ({author}, {year})"
+                        )
+                    else:
+                        verified_count += 1
+        
+        # Validate DOIs for all citations (optional enhancement)
+        doi_tool = DOIValidatorTool()
+        doi_validated = 0
+        doi_invalid = 0
+        
+        for slide in refined.slides:
+            for citation in slide.citations:
+                if citation.doi and not citation.verified:
+                    try:
+                        result = await doi_tool._arun(citation.doi)
+                        if result.get("valid"):
+                            citation.verified = True
+                            doi_validated += 1
+                        else:
+                            logger.warning(
+                                f"[CITATION AUDITOR] Invalid DOI: {citation.doi} - {result.get('error')}"
+                            )
+                            doi_invalid += 1
+                    except Exception as e:
+                        logger.error(f"[CITATION AUDITOR] DOI validation error: {e}")
+        
+        logger.info(f"[CITATION AUDITOR] ====== Stage Complete ======")
+        logger.info(
+            f"[CITATION AUDITOR] Results: {verified_count} verified, "
+            f"{removed_count} removed, {doi_validated} DOIs validated, {doi_invalid} invalid DOIs"
         )
         
-        await self.emitter.stage_complete("refiner", {
-            "slides_refined": len(refined_slides),
+        await self.emitter.stage_complete("citation_auditor", {
+            "verified_citations": verified_count,
+            "removed_citations": removed_count,
+            "dois_validated": doi_validated,
+            "dois_invalid": doi_invalid,
+        })
+        
+        return refined
+    
+    async def _generate_references_slide(self, include_images: bool = True) -> RefinedSlide:
+        """
+        Generate References slide with properly formatted citations.
+        
+        This method:
+        1. Collects unique citations from all slides
+        2. Sorts based on citation style (alphabetical for Harvard/APA, appearance for IEEE)
+        3. Calls render service for HTML-formatted output
+        4. Collects image citations (if include_images=True)
+        5. Creates RefinedSlide with content_type=REFERENCES
+        
+        Returns:
+            RefinedSlide for the References slide
+        """
+        import httpx
+        from app.core.config import settings
+        
+        logger.info("[REFERENCES] Generating References slide...")
+        
+        refined = self.state.refined_content
+        citation_style = self.state.order_form.citation_style or "apa"
+        
+        # Collect unique citations from all slides
+        all_citations = extract_all_citations_from_slides(refined.slides)
+        
+        # Collect image citations if configured
+        image_citations = []
+        if include_images:
+            figure_num = 0
+            for slide in refined.slides:
+                if slide.image_url:
+                    figure_num += 1
+                    if hasattr(slide, 'image_citation') and slide.image_citation:
+                        # Don't include "Author's own work" or "AI-generated"
+                        if slide.image_citation.source_type not in ["original", "generated"]:
+                            image_citations.append({
+                                "figure_number": figure_num,
+                                "caption": slide.image_caption or slide.image_alt or "",
+                                "citation": slide.image_citation.to_citation_string(),
+                            })
+        
+        if not all_citations and not image_citations:
+            logger.info("[REFERENCES] No citations or image sources found, skipping References slide")
+            return None
+        
+        # Sort text citations based on style
+        ordering = "appearance" if citation_style == "ieee" else "alphabetical"
+        sorted_citations = sort_citations(all_citations, ordering) if all_citations else []
+        
+        # Format text citations using render service
+        formatted_text_citations = []
+        if sorted_citations:
+            try:
+                render_url = getattr(settings, 'RENDER_SERVICE_URL', 'http://localhost:3001')
+                async with httpx.AsyncClient() as client:
+                    response = await client.post(
+                        f"{render_url}/render/citation",
+                        json={
+                            "citations": [c.model_dump() for c in sorted_citations],
+                            "style": citation_style,
+                            "format": "html"
+                        },
+                        timeout=30.0
+                    )
+                    if response.status_code == 200:
+                        result = response.json()
+                        formatted_text_citations = [
+                            c.get("formatted", "") for c in result.get("citations", [])
+                        ]
+                    else:
+                        logger.warning(f"[REFERENCES] Render service returned {response.status_code}")
+            except Exception as e:
+                logger.error(f"[REFERENCES] Failed to format citations: {e}")
+                # Fallback: use simple formatting
+                for cit in sorted_citations:
+                    authors = ", ".join(cit.authors) if cit.authors else "Unknown"
+                    formatted_text_citations.append(f"{authors} ({cit.year}). {cit.title}.")
+        
+        # Format image citations (simple format)
+        formatted_image_citations = [
+            f"Figure {img['figure_number']}: {img['citation']}"
+            for img in image_citations
+        ]
+        
+        # Combine text and image citations
+        all_formatted = formatted_text_citations.copy()
+        if formatted_image_citations:
+            all_formatted.append("")  # Blank line separator
+            all_formatted.append("<strong>Figure Sources</strong>")
+            all_formatted.extend(formatted_image_citations)
+        
+        # Create References slide
+        next_order = len(refined.slides) + 1
+        
+        references_slide = RefinedSlide(
+            order=next_order,
+            title="References",
+            content_type=SlideContentType.REFERENCES,
+            bullet_points=[],  # References use formatted_citations instead
+            citations=sorted_citations,
+            formatted_citations=all_formatted,
+            template_type="references",
+        )
+        
+        logger.info(
+            f"[REFERENCES] Created References slide with {len(formatted_text_citations)} citations "
+            f"and {len(formatted_image_citations)} figure sources"
+        )
+        
+        return references_slide
+    
+    async def _generate_final_slides(self):
+        """
+        Generate the References and Thank You slides.
+        Position: After Citation Auditor, before Generator.
+        """
+        await self.emitter.stage_start("final_slides")
+        self.state.current_stage = "final_slides"
+        
+        logger.info("[FINAL SLIDES] ====== Stage Start ======")
+        
+        slides_added = 0
+        
+        # Generate References slide (if there are citations)
+        # Note: We pass include_images=True to include image citations
+        references_slide = await self._generate_references_slide(include_images=True)
+        if references_slide:
+            self.state.refined_content.slides.append(references_slide)
+            slides_added += 1
+            logger.info("[FINAL SLIDES] Added References slide")
+        
+        # Generate Thank You slide
+        thank_you_slide = self._generate_thank_you_slide()
+        self.state.refined_content.slides.append(thank_you_slide)
+        slides_added += 1
+        logger.info("[FINAL SLIDES] Added Thank You slide")
+        
+        # Update total slides count
+        self.state.total_slides = len(self.state.refined_content.slides)
+        
+        logger.info(f"[FINAL SLIDES] ====== Stage Complete: Added {slides_added} slides ======")
+        
+        await self.emitter.stage_complete("final_slides", {
+            "slides_added": slides_added,
+            "has_references": references_slide is not None,
         })
     
-    async def _refine_slide(self, planned: PlannedSlide, render_tool) -> RefinedSlide:
-        """Refine a single slide (render assets)."""
+    def _generate_thank_you_slide(self) -> RefinedSlide:
+        """
+        Generate a Thank You slide as the final slide.
+        """
+        from app.models.schemas import SlideContentType
+        
+        next_order = len(self.state.refined_content.slides) + 1
+        
+        return RefinedSlide(
+            order=next_order,
+            title="Thank You",
+            content_type=SlideContentType.THANK_YOU,
+            bullet_points=[
+                "Questions?",
+            ],
+            template_type="thank_you",
+            speaker_notes="Thank the audience for their attention and invite questions.",
+        )
+    
+    async def _convert_placeholders_with_agent(self) -> PlannedContent:
+        """
+        Use Refiner agent to convert placeholder descriptions to actual code.
+        
+        Example:
+            equation_placeholder="gradient descent update" 
+            → equation_latex="\\theta = \\theta - \\alpha \\nabla J(\\theta)"
+        """
+        from app.crew.agents.refiner import create_refiner_agent
+        
+        # Check if there are any placeholders to convert
+        has_placeholders = any(
+            s.equation_placeholder or s.diagram_placeholder
+            for s in self.state.planned_content.slides
+        )
+        
+        if not has_placeholders:
+            logger.info("No placeholders to convert, skipping agent call")
+            return self.state.planned_content
+        
+        # Build a focused prompt just for code conversion
+        slides_info = []
+        for s in self.state.planned_content.slides:
+            if s.equation_placeholder or s.diagram_placeholder:
+                slides_info.append({
+                    "order": s.order,
+                    "title": s.title,
+                    "equation_placeholder": s.equation_placeholder,
+                    "diagram_placeholder": s.diagram_placeholder,
+                })
+        
+        # Use a simplified task for code conversion
+        conversion_prompt = f"""Convert the following placeholder descriptions to actual code.
+
+For each slide:
+1. If equation_placeholder exists, write valid LaTeX math code
+2. If diagram_placeholder exists, write valid Mermaid diagram code
+
+Slides requiring conversion:
+{json.dumps(slides_info, indent=2)}
+
+Return a JSON object with this structure:
+{{
+  "conversions": [
+    {{
+      "order": 1,
+      "equation_latex": "LaTeX code here or null",
+      "diagram_mermaid": "Mermaid code here or null"
+    }}
+  ]
+}}
+
+IMPORTANT:
+- LaTeX should be valid math notation (e.g., "\\\\frac{{a}}{{b}}", "\\\\sum_{{i=1}}^{{n}}")
+- Mermaid should be valid diagram syntax (graph TD, flowchart LR, sequenceDiagram, etc.)
+- Only include slides that have placeholders
+"""
+        
+        try:
+            # Create agent and run conversion
+            refiner = create_refiner_agent()
+            task = Task(
+                description=conversion_prompt,
+                expected_output="JSON with LaTeX and Mermaid conversions",
+                agent=refiner,
+            )
+            
+            crew = Crew(agents=[refiner], tasks=[task])
+            
+            # Use retry wrapper with configurable timeout and automatic retries
+            from app.crew.utils.agent_execution import execute_crew_with_retry
+            result = await execute_crew_with_retry(crew, "refiner")
+            
+            # Parse conversions
+            conversions = self._parse_conversions(str(result))
+            
+            # Apply conversions to planned content
+            enhanced_slides = []
+            for slide in self.state.planned_content.slides:
+                # Find conversion for this slide
+                conversion = conversions.get(slide.order, {})
+                
+                # Create enhanced slide with actual code
+                enhanced_slide = PlannedSlide(
+                    order=slide.order,
+                    title=slide.title,
+                    content_type=slide.content_type,
+                    bullet_points=slide.bullet_points,
+                    speaker_notes=slide.speaker_notes,
+                    citation_queries=slide.citation_queries,
+                    template_type=slide.template_type,
+                    image_query=slide.image_query,
+                    # Replace placeholders with actual code
+                    equation_placeholder=conversion.get("equation_latex") or slide.equation_placeholder,
+                    diagram_placeholder=conversion.get("diagram_mermaid") or slide.diagram_placeholder,
+                )
+                enhanced_slides.append(enhanced_slide)
+            
+            return PlannedContent(
+                presentation_title=self.state.planned_content.presentation_title,
+                target_audience=self.state.planned_content.target_audience,
+                theme_id=self.state.planned_content.theme_id,
+                citation_style=self.state.planned_content.citation_style,
+                slides=enhanced_slides,
+            )
+            
+        except Exception as e:
+            logger.warning(f"Agent conversion failed, using fallback: {e}")
+            return self.state.planned_content
+    
+    def _parse_conversions(self, text: str) -> dict:
+        """Parse code conversions from agent output."""
+        import re
+        
+        # Try to extract JSON
+        json_match = re.search(r'\{[\s\S]*\}', text)
+        if json_match:
+            try:
+                data = json.loads(json_match.group())
+                conversions = data.get("conversions", [])
+                return {c["order"]: c for c in conversions if "order" in c}
+            except (json.JSONDecodeError, KeyError):
+                pass
+        
+        return {}
+    
+    async def _refine_slide_enhanced(
+        self, 
+        planned: PlannedSlide, 
+        render_tool,
+        academic_tool: AcademicSearchTool,
+        citation_style: str,
+        image_agent: Optional["ImageSourceAgent"] = None,
+    ) -> RefinedSlide:
+        """
+        Refine a single slide with full asset rendering, citation search, and image sourcing.
+        
+        Args:
+            planned: The planned slide content
+            render_tool: RenderServiceTool for SVG generation
+            academic_tool: AcademicSearchTool for citation search
+            citation_style: Citation format (apa, ieee, harvard, chicago, mla, vancouver)
+            image_agent: Optional ImageSourceAgent for image search/verification
+        """
         refined = RefinedSlide(
             order=planned.order,
             title=planned.title,
@@ -1251,53 +2652,278 @@ Return a JSON object with 'slides' array containing PlannedSlide objects."""
         # Render equation if present
         if planned.equation_placeholder:
             try:
-                # Convert placeholder to LaTeX
-                latex = self._placeholder_to_latex(planned.equation_placeholder)
+                # Check if it's already LaTeX code or still a description
+                latex = planned.equation_placeholder
+                if not any(cmd in latex for cmd in ['\\', '^', '_', '{', '}']):
+                    # Still a description, use fallback
+                    latex = self._placeholder_to_latex_fallback(latex)
+                
                 svg = render_tool._run(action="latex", content=latex)
                 if not svg.startswith("Error"):
                     refined.equation_latex = latex
                     refined.equation_svg = svg
+                    logger.debug(f"Rendered equation for slide {planned.order}")
+                else:
+                    logger.warning(f"Equation render failed: {svg}")
             except Exception as e:
-                logger.warning(f"Failed to render equation: {e}")
+                logger.warning(f"Failed to render equation for slide {planned.order}: {e}")
         
         # Render diagram if present
         if planned.diagram_placeholder:
             try:
-                mermaid = self._placeholder_to_mermaid(planned.diagram_placeholder)
+                # Check if it's already Mermaid code or still a description
+                mermaid = planned.diagram_placeholder
+                # Expanded list of Mermaid diagram type keywords
+                mermaid_keywords = [
+                    'graph', 'flowchart', 'sequencediagram', 'classdiagram',
+                    'pie', 'gantt', 'statediagram', 'erdiagram', 'journey',
+                    'gitgraph', 'mindmap', 'timeline', 'quadrantchart',
+                    'xychart', 'sankey', 'block',
+                ]
+                if not any(kw in mermaid.lower() for kw in mermaid_keywords):
+                    # Still a description, use fallback
+                    mermaid = self._placeholder_to_mermaid_fallback(mermaid)
+                
+                # Check for quadrantChart which has compatibility issues with Mermaid v10
+                if mermaid.lower().startswith('quadrantchart'):
+                    logger.warning("quadrantChart has compatibility issues, converting to graph")
+                    mermaid = self._convert_quadrant_to_graph(mermaid)
+                
                 svg = render_tool._run(action="mermaid", content=mermaid)
                 if not svg.startswith("Error"):
                     refined.diagram_mermaid = mermaid
                     refined.diagram_svg = svg
+                    logger.debug(f"Rendered diagram for slide {planned.order}")
+                else:
+                    logger.warning(f"Diagram render failed: {svg}")
             except Exception as e:
-                logger.warning(f"Failed to render diagram: {e}")
+                logger.warning(f"Failed to render diagram for slide {planned.order}: {e}")
+        
+        # Search and validate citations
+        if planned.citation_queries:
+            try:
+                citations = []
+                formatted_citations = []
+                
+                for query in planned.citation_queries[:3]:  # Limit to 3 queries per slide
+                    results = await academic_tool.search(query, max_results=2)
+                    
+                    for citation in results:
+                        citations.append(citation)
+                        
+                        # Format citation using RenderService
+                        formatted = render_tool._run(
+                            action="citation",
+                            citation=citation.model_dump(),
+                            style=citation_style,
+                        )
+                        if not formatted.startswith("Error"):
+                            formatted_citations.append(formatted)
+                
+                refined.citations = citations
+                refined.formatted_citations = formatted_citations
+                
+                if citations:
+                    logger.debug(f"Found {len(citations)} citations for slide {planned.order}")
+                    
+            except Exception as e:
+                logger.warning(f"Citation search failed for slide {planned.order}: {e}")
+        
+        # Search and source images using ImageSourceAgent
+        if planned.image_query and image_agent:
+            try:
+                logger.info(f"[REFINER] Sourcing image for slide {planned.order}: '{planned.image_query}'")
+                
+                image_result = await image_agent.find_image(
+                    query=planned.image_query,
+                    slide_context=planned.title,
+                )
+                
+                refined.image_url = image_result.image_url
+                refined.image_alt = image_result.image_alt
+                refined.image_caption = image_result.image_caption
+                refined.image_citation = image_result.citation
+                
+                logger.info(
+                    f"[REFINER] Image sourced for slide {planned.order}: "
+                    f"method={image_result.source_method}, score={image_result.verification_score:.2f}"
+                )
+                
+            except Exception as e:
+                logger.warning(f"Image sourcing failed for slide {planned.order}: {e}")
         
         return refined
     
-    def _placeholder_to_latex(self, placeholder: str) -> str:
-        """Convert a placeholder description to LaTeX. In production, agent does this."""
-        # Simple conversion for common patterns
-        if "linear regression" in placeholder.lower():
-            return r"y = \beta_0 + \beta_1 x + \epsilon"
-        elif "quadratic" in placeholder.lower():
-            return r"ax^2 + bx + c = 0"
+    def _placeholder_to_latex_fallback(self, placeholder: str) -> str:
+        """
+        Fallback: Convert placeholder description to LaTeX when agent fails.
+        Maps common mathematical concepts to their formulas.
+        """
+        placeholder_lower = placeholder.lower()
+        
+        # Common mathematical formulas
+        latex_map = {
+            "linear regression": r"y = \beta_0 + \beta_1 x + \epsilon",
+            "quadratic formula": r"x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}",
+            "quadratic equation": r"ax^2 + bx + c = 0",
+            "gradient descent": r"\theta = \theta - \alpha \nabla J(\theta)",
+            "mean squared error": r"MSE = \frac{1}{n} \sum_{i=1}^{n} (y_i - \hat{y}_i)^2",
+            "softmax": r"\sigma(z)_j = \frac{e^{z_j}}{\sum_{k=1}^{K} e^{z_k}}",
+            "sigmoid": r"\sigma(x) = \frac{1}{1 + e^{-x}}",
+            "normal distribution": r"f(x) = \frac{1}{\sigma\sqrt{2\pi}} e^{-\frac{(x-\mu)^2}{2\sigma^2}}",
+            "bayes theorem": r"P(A|B) = \frac{P(B|A) \cdot P(A)}{P(B)}",
+            "euler": r"e^{i\pi} + 1 = 0",
+            "pythagorean": r"a^2 + b^2 = c^2",
+            "derivative": r"\frac{df}{dx} = \lim_{h \to 0} \frac{f(x+h) - f(x)}{h}",
+            "integral": r"\int_a^b f(x) \, dx",
+            "summation": r"\sum_{i=1}^{n} x_i",
+            "cross entropy": r"H(p, q) = -\sum_{x} p(x) \log q(x)",
+            "chain rule": r"\frac{dy}{dx} = \frac{dy}{du} \cdot \frac{du}{dx}",
+        }
+        
+        for key, latex in latex_map.items():
+            if key in placeholder_lower:
+                return latex
+        
+        # Generic fallback
+        return r"f(x) = \sum_{i=1}^{n} x_i"
+    
+    def _placeholder_to_mermaid_fallback(self, placeholder: str) -> str:
+        """
+        Fallback: Convert placeholder description to Mermaid when agent fails.
+        Creates a simple flowchart based on the description.
+        """
+        placeholder_lower = placeholder.lower()
+        
+        # Try to detect diagram type from description
+        if any(kw in placeholder_lower for kw in ['sequence', 'interaction', 'message']):
+            return f"""sequenceDiagram
+    participant A as Client
+    participant B as Server
+    A->>B: Request
+    B-->>A: Response"""
+        
+        elif any(kw in placeholder_lower for kw in ['class', 'inheritance', 'object']):
+            return f"""classDiagram
+    class {placeholder.split()[0].title()}
+    {placeholder.split()[0].title()} : +method()
+    {placeholder.split()[0].title()} : -attribute"""
+        
+        elif any(kw in placeholder_lower for kw in ['pie', 'distribution', 'percentage']):
+            return """pie title Distribution
+    "Category A" : 40
+    "Category B" : 35
+    "Category C" : 25"""
+        
+        elif any(kw in placeholder_lower for kw in ['matrix', '2x2', 'quadrant', 'four']):
+            # Quadrant/matrix diagram as a graph (quadrantChart has v10 compatibility issues)
+            return """graph TD
+    subgraph High["High"]
+        A["Quadrant 1"]
+        B["Quadrant 2"]
+    end
+    subgraph Low["Low"]
+        C["Quadrant 3"]
+        D["Quadrant 4"]
+    end
+    A --- B
+    C --- D
+    A --- C
+    B --- D"""
+        
         else:
-            return r"f(x) = \sum_{i=1}^{n} x_i"
-    
-    def _placeholder_to_mermaid(self, placeholder: str) -> str:
-        """Convert a placeholder description to Mermaid. In production, agent does this."""
-        return f"""graph TD
+            # Default flowchart
+            return f"""graph TD
     A[Start] --> B[{placeholder}]
-    B --> C[End]"""
+    B --> C[Process]
+    C --> D[End]"""
     
+    def _convert_quadrant_to_graph(self, quadrant_code: str) -> str:
+        """
+        Convert quadrantChart code to a compatible graph diagram.
+        
+        quadrantChart has compatibility issues with Mermaid v10 CDN,
+        so we convert it to a simple subgraph-based representation.
+        """
+        # Extract title if present
+        title = "Quadrant Analysis"
+        lines = quadrant_code.strip().split('\n')
+        for line in lines:
+            if 'title' in line.lower():
+                title = line.split('title', 1)[-1].strip()
+                break
+        
+        # Return a compatible graph diagram
+        return f"""graph TD
+    subgraph "{title}"
+        direction TB
+        subgraph High["High Risk"]
+            Q1["Routine Manual"]
+            Q2["Routine Cognitive"]
+        end
+        subgraph Low["Lower Risk"]
+            Q3["Non-Routine Manual"]
+            Q4["Non-Routine Cognitive"]
+        end
+    end
+    Q1 --- Q2
+    Q3 --- Q4
+    Q1 --- Q3
+    Q2 --- Q4"""
     async def _run_generator(self):
-        """Run the Generator - parallel slide HTML generation."""
+        """
+        Run the Generator - parallel slide HTML generation using templates.
+        
+        Uses DATABASE templates when available, with fallback to hardcoded templates.
+        Features:
+        - Proper slide layouts (title, content, diagram, etc.)
+        - University branding (badge, name)
+        - Slide numbering ("1 of 10")
+        - Theme-specific layout styles
+        """
         await self.emitter.stage_start("generator")
         self.state.current_stage = "generator"
         
-        # For performance: generate slides in parallel
+        # Get theme and branding configuration
+        from app.themes import get_theme, UniversityBranding
+        from app.core.database import get_async_session_local
+        
+        theme = get_theme(self.state.order_form.theme_id or "modern")
+        
+        # Get layout style from theme (for DB template variant selection)
+        layout_style = getattr(theme, 'layout_style', 'default') or 'default'
+        
+        # Create branding from university context if available
+        branding = UniversityBranding()
+        if hasattr(self.state, 'university_context') and self.state.university_context:
+            branding = UniversityBranding(
+                university_name=self.state.university_context.university_name or "",
+                university_badge_url=self.state.university_context.badge_url or None,
+            )
+        
+        total_slides = len(self.state.refined_content.slides)
+        
+        # Get the async session factory (safely initializes DB if needed)
+        AsyncSessionLocal = get_async_session_local()
+        
+        # Generate slides in parallel with SEPARATE sessions per task
+        # SQLAlchemy AsyncSession does NOT support concurrent operations on the same session
+        # Each task creates its own session to avoid "concurrent operations not permitted" errors
+        async def generate_with_own_session(slide, slide_number):
+            async with AsyncSessionLocal() as session:
+                return await self._generate_slide_html_with_db_template(
+                    slide, 
+                    theme, 
+                    branding, 
+                    session,
+                    slide_number=slide_number,
+                    total_slides=total_slides,
+                    layout_style=layout_style,
+                )
+        
         tasks = [
-            self._generate_slide_html(slide)
-            for slide in self.state.refined_content.slides
+            generate_with_own_session(slide, i+1)
+            for i, slide in enumerate(self.state.refined_content.slides)
         ]
         
         generated_slides = await asyncio.gather(*tasks)
@@ -1309,29 +2935,127 @@ Return a JSON object with 'slides' array containing PlannedSlide objects."""
             total_slides=len(generated_slides),
         )
         
+        logger.info(f"Generator complete: {len(generated_slides)} slides with theme '{theme.id}' (layout: {layout_style})")
+        
         await self.emitter.stage_complete("generator", {
             "slides_generated": len(generated_slides),
+            "theme_id": theme.id,
+            "layout_style": layout_style,
         })
-    
-    async def _generate_slide_html(self, refined: RefinedSlide) -> GeneratedSlide:
-        """Generate HTML for a single slide."""
-        await self.emitter.slide_progress(refined.order, self.state.total_slides, "generating")
+
+    async def _generate_slide_html_with_db_template(
+        self, 
+        refined: RefinedSlide,
+        theme,
+        branding,
+        session,  # AsyncSession
+        slide_number: int,
+        total_slides: int,
+        layout_style: str = "default",
+    ) -> GeneratedSlide:
+        """
+        Generate HTML for a single slide using DATABASE templates with fallback.
         
-        # Build HTML from refined content
-        html = self._build_slide_html(refined)
+        This is the preferred method for production slide generation.
+        It queries the database for Jinja2 templates and falls back to
+        hardcoded Python templates if not found.
+        """
+        from app.templates.html_generator import generate_slide_html_with_db_template
+        from app.routers.generation.models import EnrichedSlide
+        
+        await self.emitter.slide_progress(refined.order, total_slides, "generating")
+        
+        # Convert RefinedSlide to EnrichedSlide for template compatibility
+        enriched = EnrichedSlide(
+            order=refined.order,
+            title=refined.title,
+            content_type=refined.content_type.value if hasattr(refined.content_type, 'value') else refined.content_type,
+            bullet_points=refined.bullet_points,
+            equation_latex=refined.equation_latex,
+            equation_svg=refined.equation_svg,
+            diagram_mermaid=refined.diagram_mermaid,
+            diagram_svg=refined.diagram_svg,
+            image_url=refined.image_url,
+            image_alt=refined.image_alt,
+            speaker_notes=refined.speaker_notes,
+            formatted_citations=refined.formatted_citations or [],
+        )
+        
+        # Generate HTML using DATABASE-AWARE template system
+        html = await generate_slide_html_with_db_template(
+            slide=enriched,
+            theme=theme,
+            session=session,
+            colors=theme.colors,
+            branding=branding,
+            slide_number=slide_number,
+            total_slides=total_slides,
+            layout_style=layout_style,
+        )
         
         self.state.slides_completed += 1
         
         return GeneratedSlide(
             order=refined.order,
             title=refined.title,
-            theme_id=self.state.refined_content.theme_id,
+            theme_id=theme.id,
+            rendered_html=html,
+            speaker_notes=refined.speaker_notes,
+        )
+    
+    async def _generate_slide_html_with_template(
+
+        self, 
+        refined: RefinedSlide,
+        theme,
+        branding,
+        slide_number: int,
+        total_slides: int,
+    ) -> GeneratedSlide:
+        """Generate HTML for a single slide using the template system."""
+        from app.templates.html_generator import generate_slide_html_with_branding
+        from app.routers.generation.models import EnrichedSlide
+        
+        await self.emitter.slide_progress(refined.order, total_slides, "generating")
+        
+        # Convert RefinedSlide to EnrichedSlide for template compatibility
+        enriched = EnrichedSlide(
+            order=refined.order,
+            title=refined.title,
+            content_type=refined.content_type.value if hasattr(refined.content_type, 'value') else refined.content_type,
+            bullet_points=refined.bullet_points,
+            equation_latex=refined.equation_latex,
+            equation_svg=refined.equation_svg,
+            diagram_mermaid=refined.diagram_mermaid,
+            diagram_svg=refined.diagram_svg,
+            image_url=refined.image_url,
+            image_alt=refined.image_alt,
+            speaker_notes=refined.speaker_notes,
+            formatted_citations=refined.formatted_citations or [],
+        )
+        
+        # Generate HTML using template system
+        html = generate_slide_html_with_branding(
+            slide=enriched,
+            theme=theme,
+            colors=theme.colors,
+            branding=branding,
+            slide_number=slide_number,
+            total_slides=total_slides,
+        )
+        
+        self.state.slides_completed += 1
+        
+        return GeneratedSlide(
+            order=refined.order,
+            title=refined.title,
+            theme_id=theme.id,
             rendered_html=html,
             speaker_notes=refined.speaker_notes,
         )
     
     def _build_slide_html(self, slide: RefinedSlide) -> str:
-        """Build HTML for a slide. In production, uses templates."""
+        """Legacy fallback - Build HTML for a slide without templates."""
         bullets_html = "\n".join([
             f"<li>{point}</li>" for point in slide.bullet_points
         ])
@@ -1357,48 +3081,545 @@ Return a JSON object with 'slides' array containing PlannedSlide objects."""
 </div>"""
     
     async def _run_qa(self):
-        """Run Visual QA to grade slides."""
+        """
+        Run Visual QA to grade slides using Gemini Vision.
+        
+        Flow:
+        1. Render each slide HTML to PNG screenshot
+        2. Send screenshots to Gemini Vision for grading
+        3. Score 0-100 across 5 criteria (layout, typography, visibility, hierarchy, completeness)
+        4. If any slide < 95%, retry up to 3 times
+        5. After 3 retries, escalate to Helper agent
+        """
         await self.emitter.stage_start("visual_qa")
         self.state.current_stage = "visual_qa"
         self.state.qa_loops += 1
         
-        # In production: render slides to images, run vision model
-        # For now: simulate passing QA
-        qa_results = [
-            QAResult(
-                slide_order=slide.order,
-                score=95.0 + (slide.order % 5),  # Simulated 95-99
-                issues=[],
-                passed=True,
-                iterations=self.state.qa_loops,
+        logger.info(f"Visual QA iteration {self.state.qa_loops}")
+        
+        # Get render client for screenshots
+        from app.clients.render import RenderServiceClient
+        render_client = RenderServiceClient()
+        
+        try:
+            qa_results = []
+            total_slides = len(self.state.generated_presentation.slides)
+            
+            for slide in self.state.generated_presentation.slides:
+                await self.emitter.slide_progress(slide.order, total_slides, "grading")
+                
+                # Render slide to screenshot
+                screenshot_result = await render_client.render_html_to_png(
+                    html=slide.rendered_html,
+                    width=1280,
+                    height=720,
+                )
+                
+                if screenshot_result.get("success", True) and screenshot_result.get("png_base64"):
+                    # Grade with vision model
+                    qa_result = await self._grade_slide_with_vision(
+                        screenshot_base64=screenshot_result["png_base64"],
+                        slide=slide,
+                        iteration=self.state.qa_loops,
+                    )
+                else:
+                    # Screenshot failed - mark as failed with error
+                    logger.warning(f"Screenshot failed for slide {slide.order}: {screenshot_result.get('error')}")
+                    qa_result = QAResult(
+                        slide_order=slide.order,
+                        score=0.0,
+                        issues=[f"Screenshot failed: {screenshot_result.get('error', 'Unknown error')}"],
+                        passed=False,
+                        iterations=self.state.qa_loops,
+                    )
+                
+                qa_results.append(qa_result)
+                
+                logger.info(f"Slide {slide.order}: score={qa_result.score}, passed={qa_result.passed}")
+            
+            # Calculate summary metrics
+            avg_score = sum(r.score for r in qa_results) / len(qa_results) if qa_results else 0
+            all_passed = all(r.passed for r in qa_results)
+            failed_slides = [r for r in qa_results if not r.passed]
+            
+            self.state.qa_report = QAReport(
+                session_id=self.state.session_id,
+                slides=qa_results,
+                average_score=avg_score,
+                all_passed=all_passed,
+                total_iterations=self.state.qa_loops,
             )
-            for slide in self.state.generated_presentation.slides
-        ]
+            
+            # Log QA summary
+            logger.info(f"QA complete: avg_score={avg_score:.1f}, all_passed={all_passed}, failed={len(failed_slides)}")
+            
+            # Check if we need to retry or escalate
+            if not all_passed:
+                if self.state.qa_loops < 3:
+                    # Retry: regenerate failed slides
+                    logger.info(f"Retrying {len(failed_slides)} failed slides...")
+                    await self._regenerate_failed_slides(failed_slides)
+                else:
+                    # Escalate to Helper agent
+                    logger.warning(f"QA failed after {self.state.qa_loops} iterations, escalating to Helper")
+                    self.state.needs_helper = True
+                    self.state.helper_context = {
+                        "trigger": "qa_loop_exceeded",
+                        "failed_slides": [
+                            {"order": r.slide_order, "score": r.score, "issues": r.issues}
+                            for r in failed_slides
+                        ],
+                        "total_iterations": self.state.qa_loops,
+                    }
+            
+            await self.emitter.stage_complete("visual_qa", {
+                "average_score": avg_score,
+                "all_passed": all_passed,
+                "failed_count": len(failed_slides),
+                "iteration": self.state.qa_loops,
+            })
+            
+        finally:
+            await render_client.close()
+    
+    async def _grade_slide_with_vision(
+        self,
+        screenshot_base64: str,
+        slide: GeneratedSlide,
+        iteration: int,
+    ) -> QAResult:
+        """
+        Use Gemini Vision to grade a slide screenshot.
         
-        avg_score = sum(r.score for r in qa_results) / len(qa_results)
-        all_passed = all(r.passed for r in qa_results)
+        Criteria (each 0-20, total 0-100):
+        1. Layout Quality - spacing, alignment, no overlaps
+        2. Typography - readable fonts, proper hierarchy
+        3. Content Visibility - all content visible, no cutoffs
+        4. Visual Hierarchy - clear focus, logical flow
+        5. Completeness - all expected content present
+        """
+        from google import genai
+        from google.genai import types
+        from app.core.config import settings
         
-        self.state.qa_report = QAReport(
-            session_id=self.state.session_id,
-            slides=qa_results,
-            average_score=avg_score,
-            all_passed=all_passed,
-            total_iterations=self.state.qa_loops,
+        # Construct the grading prompt
+        grading_prompt = f"""Grade this slide screenshot on a 0-100 scale.
+
+SLIDE INFO:
+- Title: {slide.title}
+- Order: {slide.order}
+- Template: {slide.theme_id}
+
+CRITERIA (each scored 0-20):
+1. Layout Quality: Proper spacing, alignment, no overlapping elements
+2. Typography: Readable font sizes, proper heading hierarchy
+3. Content Visibility: All content visible, no cut-off text/images
+4. Visual Hierarchy: Clear focus, important elements stand out
+5. Completeness: All expected content present, no missing placeholders
+
+RESPOND WITH JSON ONLY:
+{{
+    "layout_score": <0-20>,
+    "typography_score": <0-20>,
+    "visibility_score": <0-20>,
+    "hierarchy_score": <0-20>,
+    "completeness_score": <0-20>,
+    "total_score": <0-100>,
+    "issues": ["issue1", "issue2"],
+    "suggestions": ["fix1", "fix2"]
+}}"""
+
+        try:
+            # Import retry utility for transient API errors
+            from app.clients.gemini.retry import gemini_retry
+            
+            # Create Gemini client with new SDK
+            client = genai.Client(api_key=settings.gemini_api_key)
+            
+            # Define retry-wrapped API call (sync - new SDK doesn't use async)
+            @gemini_retry(max_attempts=4, min_wait=1, max_wait=30)
+            def call_vision_api():
+                return client.models.generate_content(
+                    model=settings.model_flash,
+                    contents=[
+                        types.Content(
+                            role="user",
+                            parts=[
+                                types.Part(text=grading_prompt),
+                                types.Part(
+                                    inline_data=types.Blob(
+                                        mime_type="image/png",
+                                        data=screenshot_base64,
+                                    )
+                                )
+                            ]
+                        )
+                    ],
+                    config=types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                    ),
+                )
+            
+            # Generate grading with retry (run sync call in thread to keep async context)
+            import asyncio
+            response = await asyncio.to_thread(call_vision_api)
+            
+            # Parse response
+            import json
+            result_text = response.text.strip()
+            
+            # Try to parse JSON
+            try:
+                result = json.loads(result_text)
+            except json.JSONDecodeError:
+                # Try to extract JSON from the response
+                import re
+                json_match = re.search(r'\{[\s\S]*\}', result_text)
+                if json_match:
+                    result = json.loads(json_match.group())
+                else:
+                    raise ValueError(f"Could not parse vision response: {result_text[:200]}")
+            
+            total_score = result.get("total_score", 0)
+            issues = result.get("issues", [])
+            
+            return QAResult(
+                slide_order=slide.order,
+                score=float(total_score),
+                issues=issues,
+                passed=total_score >= 95,
+                iterations=iteration,
+            )
+            
+        except Exception as e:
+            logger.error(f"Vision grading failed for slide {slide.order}: {e}")
+            # Return a failing score with the error
+            return QAResult(
+                slide_order=slide.order,
+                score=0.0,
+                issues=[f"Vision grading error: {str(e)}"],
+                passed=False,
+                iterations=iteration,
+            )
+    
+    async def _regenerate_failed_slides(self, failed_results: List[QAResult]):
+        """
+        Regenerate slides that failed QA with feedback.
+        
+        Uses the QA issues as context for the Generator to fix problems.
+        """
+        from app.themes import get_theme, UniversityBranding
+        
+        theme = get_theme(self.state.order_form.theme_id or "modern")
+        branding = UniversityBranding()
+        
+        total_slides = len(self.state.generated_presentation.slides)
+        failed_orders = {r.slide_order for r in failed_results}
+        
+        for result in failed_results:
+            # Find the refined slide
+            refined = next(
+                (s for s in self.state.refined_content.slides if s.order == result.slide_order),
+                None
+            )
+            if not refined:
+                continue
+            
+            logger.info(f"Regenerating slide {result.slide_order} with QA feedback: {result.issues}")
+            
+            # Regenerate with feedback context
+            new_generated = await self._generate_slide_html_with_template(
+                refined=refined,
+                theme=theme,
+                branding=branding,
+                slide_number=result.slide_order,
+                total_slides=total_slides,
+            )
+            
+            # Replace in presentation
+            for i, slide in enumerate(self.state.generated_presentation.slides):
+                if slide.order == result.slide_order:
+                    self.state.generated_presentation.slides[i] = new_generated
+                    break
+    
+    async def _run_helper(self):
+        """
+        Run Helper agent to fix failures after QA exhausted retries.
+        
+        The Helper:
+        1. Analyzes failure context (which slides failed, what issues)
+        2. Determines root cause and which stage to re-run
+        3. Creates guardrail prompts to prevent same mistakes
+        4. Re-runs the identified stage with guardrails
+        5. If all retries exhausted, gracefully degrades
+        
+        Stage-Issue Mapping:
+        - "Too much content" → Re-run Planner (reduce bullet points)
+        - "Layout broken" → Re-run Generator (fix template/CSS)
+        - "Equation not rendering" → Re-run Refiner (fix LaTeX)
+        - "Missing diagram" → Re-run Refiner (regenerate Mermaid)
+        """
+        await self.emitter.stage_start("helper")
+        self.state.current_stage = "helper"
+        
+        from app.crew.agents.helper import (
+            create_helper_agent,
+            create_fix_task,
+            FailureContext,
+            HelperDecision,
+            build_guardrail_prompt,
+        )
+        from crewai import Crew
+        
+        # Get helper context from QA escalation
+        helper_ctx = self.state.helper_context or {}
+        failed_slides = helper_ctx.get("failed_slides", [])
+        
+        # Collect all issues across failed slides
+        all_issues = []
+        for slide_info in failed_slides:
+            all_issues.extend(slide_info.get("issues", []))
+        
+        # Determine root cause and target stage
+        root_stage = self._identify_root_stage(all_issues)
+        
+        logger.info(f"Helper analyzing {len(failed_slides)} failed slides, root stage: {root_stage}")
+        
+        # Check retry budget
+        current_attempts = self.state.helper_attempts.get(root_stage, 0)
+        max_attempts = 3  # Total retry budget
+        
+        if current_attempts >= max_attempts:
+            # Budget exhausted - graceful degradation
+            logger.warning(f"Retry budget exhausted for {root_stage}, proceeding with current slides")
+            await self._graceful_degradation(failed_slides)
+            await self.emitter.stage_complete("helper", {
+                "action": "graceful_degradation",
+                "reason": "retry_budget_exhausted",
+            })
+            return
+        
+        # Create failure context for Helper agent
+        failure_context = FailureContext(
+            failing_agent=root_stage,
+            failure_type="qa_loop_exceeded",
+            error_message=f"QA failed for slides: {[s['order'] for s in failed_slides]}",
+            previous_attempts=current_attempts,
+            qa_issues=all_issues[:10],  # Limit for context window
         )
         
-        await self.emitter.stage_complete("visual_qa", {
-            "average_score": avg_score,
-            "all_passed": all_passed,
-        })
-
+        try:
+            # Create Helper agent and task
+            helper_agent = create_helper_agent()
+            
+            # Build available context
+            available_context = {
+                "order_form": self.state.order_form is not None,
+                "skeleton": self.state.skeleton is not None,
+                "planned_content": self.state.planned_content is not None,
+                "refined_content": self.state.refined_content is not None,
+                "generated_presentation": self.state.generated_presentation is not None,
+            }
+            
+            # Original prompt for the failing stage (simplified)
+            original_prompt = self._get_stage_prompt_summary(root_stage)
+            
+            task = create_fix_task(
+                agent=helper_agent,
+                failure_context=failure_context,
+                original_prompt=original_prompt,
+                available_context=available_context,
+            )
+            
+            # Run Helper agent
+            crew = Crew(
+                agents=[helper_agent],
+                tasks=[task],
+                verbose=False,
+            )
+            
+            result = await asyncio.to_thread(crew.kickoff)
+            
+            # Parse Helper decision
+            decision = self._parse_helper_decision(result)
+            
+            logger.info(f"Helper decision: {decision.action}")
+            
+            # Record attempt
+            self.state.helper_attempts[root_stage] = current_attempts + 1
+            
+            # Execute decision
+            if decision.action == "rerun_with_guardrails":
+                # Re-run the identified stage with guardrails
+                await self._rerun_stage_with_guardrails(
+                    stage=root_stage,
+                    guardrails=decision.guardrails or "",
+                    failed_slides=failed_slides,
+                )
+                
+                # Reset QA state for re-evaluation
+                self.state.needs_helper = False
+                self.state.qa_loops = 0  # Reset for fresh QA check
+                
+            elif decision.action == "escalate":
+                # Graceful degradation with logging
+                logger.warning(f"Helper escalated: {decision.escalate_reason}")
+                await self._graceful_degradation(failed_slides)
+                
+            else:
+                # Default: proceed with current state
+                logger.info("Helper completed without action, proceeding")
+            
+            await self.emitter.stage_complete("helper", {
+                "action": decision.action,
+                "target_stage": root_stage,
+            })
+            
+        except Exception as e:
+            logger.error(f"Helper agent failed: {e}")
+            # Fall back to graceful degradation
+            await self._graceful_degradation(failed_slides)
+            await self.emitter.stage_complete("helper", {
+                "action": "error_fallback",
+                "error": str(e),
+            })
+    
+    def _identify_root_stage(self, issues: List[str]) -> str:
+        """
+        Analyze QA issues to determine which stage likely caused the problem.
+        
+        Returns: 'planner', 'refiner', or 'generator'
+        """
+        issues_text = " ".join(issues).lower()
+        
+        # Stage-Issue Mapping
+        planner_keywords = [
+            "too much content", "too many bullet", "too dense", 
+            "overcrowded", "too long", "excessive"
+        ]
+        
+        refiner_keywords = [
+            "equation", "latex", "math", "diagram", "mermaid",
+            "rendering", "citation", "image missing", "svg"
+        ]
+        
+        generator_keywords = [
+            "layout", "css", "overlap", "cut off", "template",
+            "alignment", "spacing", "font", "broken"
+        ]
+        
+        # Count keyword matches
+        planner_score = sum(1 for kw in planner_keywords if kw in issues_text)
+        refiner_score = sum(1 for kw in refiner_keywords if kw in issues_text)
+        generator_score = sum(1 for kw in generator_keywords if kw in issues_text)
+        
+        # Return stage with highest score
+        scores = {
+            "planner": planner_score,
+            "refiner": refiner_score,
+            "generator": generator_score,
+        }
+        
+        return max(scores, key=scores.get) if any(scores.values()) else "generator"
+    
+    def _get_stage_prompt_summary(self, stage: str) -> str:
+        """Get a summary of the original prompt for a stage."""
+        summaries = {
+            "planner": "Create detailed slide content from skeleton with bullet points and placeholders",
+            "refiner": "Convert placeholders to code, render assets, search citations",
+            "generator": "Generate themed HTML slides with university branding",
+        }
+        return summaries.get(stage, "Process slide content")
+    
+    def _parse_helper_decision(self, result) -> "HelperDecision":
+        """Parse the Helper agent's decision from result."""
+        from app.crew.agents.helper import HelperDecision
+        
+        try:
+            if hasattr(result, 'pydantic') and result.pydantic:
+                return result.pydantic
+            
+            # Try to parse from raw output
+            import json
+            text = str(result.raw) if hasattr(result, 'raw') else str(result)
+            
+            import re
+            json_match = re.search(r'\{[\s\S]*\}', text)
+            if json_match:
+                data = json.loads(json_match.group())
+                return HelperDecision(**data)
+            
+        except Exception as e:
+            logger.warning(f"Failed to parse Helper decision: {e}")
+        
+        # Default: escalate
+        return HelperDecision(
+            action="escalate",
+            escalate_reason="Could not parse Helper decision",
+        )
+    
+    async def _rerun_stage_with_guardrails(
+        self,
+        stage: str,
+        guardrails: str,
+        failed_slides: List[Dict],
+    ):
+        """Re-run a specific stage with guardrail context."""
+        logger.info(f"Re-running {stage} with guardrails: {guardrails[:100]}...")
+        
+        # Store guardrails in state for the stage to use
+        self.state.failure_context = {
+            "guardrails": guardrails,
+            "failed_slide_orders": [s["order"] for s in failed_slides],
+        }
+        
+        # Re-run the appropriate stage
+        if stage == "planner":
+            await self._run_planner()
+            await self._run_refiner()
+            await self._run_generator()
+        elif stage == "refiner":
+            await self._run_refiner()
+            await self._run_generator()
+        elif stage == "generator":
+            await self._run_generator()
+    
+    async def _graceful_degradation(self, failed_slides: List[Dict]):
+        """
+        Handle graceful degradation when all retries are exhausted.
+        
+        Logs the failure but returns the slides as-is, allowing
+        the user to still get some output rather than nothing.
+        """
+        logger.warning(f"Graceful degradation: returning slides despite QA failures")
+        
+        # Log detailed failure info for debugging
+        for slide_info in failed_slides:
+            logger.warning(
+                f"Slide {slide_info['order']}: score={slide_info.get('score', 0)}, "
+                f"issues={slide_info.get('issues', [])}"
+            )
+        
+        # Mark state as having degraded
+        self.state.error_message = (
+            f"QA passed with reduced standards due to retry exhaustion. "
+            f"{len(failed_slides)} slides did not meet 95% threshold."
+        )
 
 # =============================================================================
 # Flow Runner (High-Level API)
 # =============================================================================
 
-async def create_session() -> FlowState:
-    """Create a new generation session."""
+async def create_session(
+    project_id: Optional[str] = None,
+    mode: Optional[str] = None,
+    topic: Optional[str] = None,
+) -> FlowState:
+    """Create a new generation session with optional metadata."""
     flow = SlideGenerationFlow()
+    flow.state.project_id = project_id
+    flow.state.mode = mode
+    flow.state.topic = topic
     return flow.state
 
 
@@ -1428,11 +3649,12 @@ async def approve_outline(
     session_id: str,
     state: FlowState,
     modifications: Optional[List[Dict]] = None,
+    modified_skeleton: Optional[Dict] = None,
 ) -> Skeleton:
     """Approve and optionally modify the outline."""
     flow = SlideGenerationFlow(session_id=session_id)
     flow.state = state
-    return await flow.approve_outline(modifications)
+    return await flow.approve_outline(modifications, modified_skeleton)
 
 
 async def run_generation(
