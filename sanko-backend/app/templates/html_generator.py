@@ -260,6 +260,10 @@ async def generate_slide_html_with_db_template(
     # Generate CSS variables from theme (consistent with both template types)
     css_vars = _generate_theme_css_vars(theme, colors)
     
+    # Generate layout-specific CSS from slide fields
+    layout_css = _generate_layout_css(slide)
+    css_styles = css_styles + "\n" + layout_css if css_styles else layout_css
+    
     # Determine if this is a title slide
     is_title_slide = slide.content_type == "title" or slide.order == 1
     
@@ -484,6 +488,78 @@ def _get_branding_css(branding: "UniversityBranding") -> str:
     return position_css
 
 
+def _generate_layout_css(slide) -> str:
+    """
+    Generate CSS based on slide's layout control fields.
+    
+    Uses:
+    - image_size_hint: small (30%), medium (50%), large (80%), fit (auto)
+    - visual_position: left, right, top, bottom, center
+    - content_balance: text_heavy (70/30), visual_heavy (30/70), balanced (50/50)
+    """
+    css_rules = []
+    
+    # Image size hints
+    size_hint = getattr(slide, 'image_size_hint', 'auto')
+    if size_hint:
+        size_map = {
+            'small': '30%',
+            'medium': '50%',
+            'large': '80%',
+            'fit': 'auto',
+            'auto': '50%',
+        }
+        max_width = size_map.get(size_hint, '50%')
+        css_rules.append(f"""
+/* Image size: {size_hint} */
+.slide img, .slide .visual-content {{
+    max-width: {max_width};
+    max-height: 70%;
+}}""")
+    
+    # Visual position
+    visual_pos = getattr(slide, 'visual_position', None)
+    if visual_pos:
+        if visual_pos == 'left':
+            css_rules.append("""
+/* Visual position: left */
+.columns-container { flex-direction: row-reverse; }""")
+        elif visual_pos == 'center':
+            css_rules.append("""
+/* Visual position: center */
+.visual-content, .diagram-container, .equation-wrapper {
+    margin: 0 auto;
+    text-align: center;
+}""")
+        elif visual_pos in ('top', 'bottom'):
+            direction = 'column' if visual_pos == 'top' else 'column-reverse'
+            css_rules.append(f"""
+/* Visual position: {visual_pos} */
+.columns-container {{ 
+    flex-direction: {direction}; 
+    gap: var(--spacing-md);
+}}
+.column {{ flex: none; }}""")
+    
+    # Content balance
+    content_balance = getattr(slide, 'content_balance', None)
+    if content_balance:
+        if content_balance == 'text_heavy':
+            css_rules.append("""
+/* Content balance: text heavy (70/30) */
+.column:first-child { flex: 7; }
+.column:last-child { flex: 3; }""")
+        elif content_balance == 'visual_heavy':
+            css_rules.append("""
+/* Content balance: visual heavy (30/70) */
+.column:first-child { flex: 3; }
+.column:last-child { flex: 7; }""")
+        # 'balanced' uses default 50/50
+    
+    return "\n".join(css_rules)
+
+
+
 def _get_base_slide_css() -> str:
     """Get the base CSS for all slide types."""
     return """
@@ -545,27 +621,154 @@ def _get_base_slide_css() -> str:
     left: 0;
 }
 
-/* Diagram styles */
+/* Diagram styles - PROJECTOR FRIENDLY (use 60-80% of area) */
 .slide-diagram .diagram-container {
     flex: 1;
     display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: center;
+    padding: var(--spacing-md);
 }
-.diagram-svg, .mermaid {
-    max-width: 100%;
-    max-height: 80%;
+.diagram-svg, .mermaid, .mermaid-svg {
+    min-width: 60%;
+    max-width: 90%;
+    min-height: 300px;
+    max-height: 500px;
 }
 
-/* Math/equation styles */
+/* Math/equation styles - LARGER for visibility */
 .equation-wrapper, .math-column {
     display: flex;
     justify-content: center;
     align-items: center;
     background: var(--color-surface);
     border-radius: var(--radius-md);
-    padding: var(--spacing-md);
+    padding: var(--spacing-lg);
+    min-height: 80px;
+}
+.equation-wrapper img, .equation-wrapper svg {
+    min-height: 50px;
+    max-width: 85%;
+}
+
+/* Chart/graph styles */
+.chart-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex: 1;
+}
+.chart-container img, .chart-container svg {
+    min-width: 50%;
+    max-width: 90%;
+    min-height: 250px;
+}
+
+/* Caption styling */
+.image-caption, .diagram-caption, .chart-caption {
+    font-size: var(--font-size-caption);
+    color: var(--color-text-secondary);
+    text-align: center;
+    margin-top: var(--spacing-sm);
+    max-width: 80%;
+}
+
+/* Thank You slide - centered, prominent */
+.slide-thank-you {
+    display: flex !important;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+}
+.slide-thank-you .thank-you-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--spacing-lg);
+}
+.slide-thank-you .thank-you-message {
+    font-family: var(--font-heading);
+    font-size: 72px;
+    font-weight: var(--font-weight-title);
+    color: var(--color-primary);
+    margin-bottom: var(--spacing-md);
+}
+.slide-thank-you .author-info {
+    font-size: var(--font-size-body);
+    color: var(--color-text-secondary);
+}
+.slide-thank-you .presenter-name {
+    font-weight: 600;
+    font-size: 28px;
+    color: var(--color-text-primary);
+}
+.slide-thank-you .presenter-email {
+    font-size: 20px;
+    color: var(--color-primary);
+}
+.slide-thank-you .questions-prompt {
+    font-size: 32px;
+    color: var(--color-text-secondary);
+    font-style: italic;
+    margin-top: var(--spacing-lg);
+}
+.slide-thank-you .thank-you-logo {
+    max-height: 80px;
+    margin-bottom: var(--spacing-md);
+}
+
+/* References slide - two-column, smaller font */
+.slide-references {
+    padding-top: 60px;
+}
+.slide-references .references-title {
+    font-size: var(--font-size-heading);
+    color: var(--color-primary);
+    margin-bottom: var(--spacing-md);
+}
+.slide-references .references-list {
+    column-count: 2;
+    column-gap: 32px;
+    font-size: 14px;
+    line-height: 1.6;
+}
+.slide-references .reference-entry {
+    break-inside: avoid;
+    margin-bottom: 10px;
+    text-indent: -20px;
+    padding-left: 20px;
+}
+.slide-references .reference-title {
+    font-style: italic;
+}
+.slide-references .figure-sources {
+    margin-top: var(--spacing-md);
+    padding-top: var(--spacing-sm);
+    border-top: 1px solid var(--color-border);
+    font-size: 12px;
+}
+
+/* Two-column layouts for image/text */
+.columns-container {
+    display: flex;
+    gap: var(--spacing-lg);
+    flex: 1;
+    align-items: center;
+}
+.column {
+    flex: 1;
+}
+.column.visual {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+.column.visual img {
+    max-width: 100%;
+    max-height: 400px;
+    object-fit: contain;
+    border-radius: var(--radius-md);
 }
 """
 

@@ -67,18 +67,18 @@ class SlideTheme(BaseModel):
     slide_width: str = "1280px"
     slide_height: str = "720px"
     
-    # Typography
+    # Typography - Projector-friendly sizes (readable at distance)
     font_heading: str = "Inter"
     font_body: str = "Inter"
-    font_size_title: str = "48px"
-    font_size_heading: str = "32px"
-    font_size_subheading: str = "24px"
-    font_size_body: str = "18px"
-    font_size_caption: str = "14px"
+    font_size_title: str = "56px"       # Was 48px
+    font_size_heading: str = "44px"     # Was 32px
+    font_size_subheading: str = "32px"  # Was 24px
+    font_size_body: str = "24px"        # Was 18px - CRITICAL for readability
+    font_size_caption: str = "18px"     # Was 14px
     font_weight_title: str = "700"
     font_weight_heading: str = "600"
     font_weight_body: str = "400"
-    line_height: str = "1.5"
+    line_height: str = "1.6"            # Was 1.5 - more breathing room
     
     # Spacing (based on 16px unit)
     spacing_xs: str = "8px"

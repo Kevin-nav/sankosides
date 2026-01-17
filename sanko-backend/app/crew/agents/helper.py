@@ -95,6 +95,30 @@ CRITICAL: Your previous output was missing required content.
     elif failure_context.failure_type == "qa_loop_exceeded":
         # Add specific guidance based on QA issues
         issues_text = "\n".join([f"  - {issue}" for issue in failure_context.qa_issues])
+        issues_lower = " ".join(failure_context.qa_issues).lower()
+        
+        layout_fixes = []
+        
+        # Detect layout-specific issues and suggest field changes
+        if any(term in issues_lower for term in ["image too large", "image oversized", "visual overflow"]):
+            layout_fixes.append("Set `image_size_hint` to 'medium' or 'small'")
+        
+        if any(term in issues_lower for term in ["text overlaps", "crowded", "cramped", "content overflow"]):
+            layout_fixes.append("Set `content_balance` to 'text_heavy' and reduce bullet points to 3-4 max")
+        
+        if any(term in issues_lower for term in ["formula not visible", "equation cut off", "math truncated"]):
+            layout_fixes.append("Set `visual_position` to 'center' for better formula visibility")
+        
+        if any(term in issues_lower for term in ["layout imbalanced", "visual dominates", "too much whitespace"]):
+            layout_fixes.append("Try a different `layout_preset_id` such as 'two_col_60_40' or 'stacked'")
+        
+        if any(term in issues_lower for term in ["diagram too small", "chart unreadable"]):
+            layout_fixes.append("Set `image_size_hint` to 'large' and `content_balance` to 'visual_heavy'")
+        
+        layout_guidance = ""
+        if layout_fixes:
+            layout_guidance = "\n\nLAYOUT FIXES (use these field values):\n" + "\n".join([f"  - {fix}" for fix in layout_fixes])
+        
         guardrails.append(f"""
 CRITICAL: Visual QA failed 3 times with these issues:
 {issues_text}
@@ -103,6 +127,7 @@ You MUST specifically address these issues:
 - If "text overflow": use shorter bullet points (max 10 words each)
 - If "layout broken": ensure content fits the slide dimensions
 - If "missing content": verify all expected elements are present
+{layout_guidance}
 """)
     
     elif failure_context.failure_type == "render_failed":
