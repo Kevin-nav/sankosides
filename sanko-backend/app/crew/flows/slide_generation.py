@@ -2226,6 +2226,11 @@ Return a JSON object with 'slides' array containing PlannedSlide objects."""
                 diagrams_rendered=sum(1 for s in refined_slides if s.diagram_svg),
             )
             
+            # Post-process: Convert markdown in bullet points to HTML
+            from app.services.markdown_processor import process_all_slides
+            logger.info(f"[REFINER] Post-processing: Converting markdown to HTML...")
+            self.state.refined_content.slides = process_all_slides(self.state.refined_content.slides)
+            
             logger.info(f"[REFINER] ====== Stage Complete ======")
             logger.info(
                 f"[REFINER] Results: {len(refined_slides)} slides, "
@@ -2905,6 +2910,30 @@ IMPORTANT:
         
         # Get the async session factory (safely initializes DB if needed)
         AsyncSessionLocal = get_async_session_local()
+        
+        # Assign layouts to slides using the variety engine
+        from app.services.layout_selector import get_layout_selector
+        layout_selector = get_layout_selector()
+        
+        # Get user preferences from order_form if available
+        user_layout_preferences = getattr(self.state.order_form, 'template_preferences', {}) or {}
+        
+        # Select layouts for all slides with variety
+        async with AsyncSessionLocal() as layout_session:
+            slide_layouts = await layout_selector.select_for_presentation(
+                slides=self.state.refined_content.slides,
+                user_preferences=user_layout_preferences,
+                db_session=layout_session,
+            )
+        
+        # Apply selected layouts to slides
+        for slide in self.state.refined_content.slides:
+            if slide.order in slide_layouts:
+                layout = slide_layouts[slide.order]
+                if not slide.layout_preset_id:
+                    slide.layout_preset_id = layout.get("preset_id")
+                logger.debug(f"Slide {slide.order}: assigned layout '{layout.get('preset_id')}'")
+        
         
         # Generate slides in parallel with SEPARATE sessions per task
         # SQLAlchemy AsyncSession does NOT support concurrent operations on the same session

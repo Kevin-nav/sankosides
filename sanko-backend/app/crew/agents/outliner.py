@@ -40,7 +40,13 @@ CRITICAL RULES:
 3. Mark "needs_diagram: true" when visual would help understanding
 4. Mark "needs_equation: true" for mathematical content
 5. Mark "needs_citation: true" for claims that need sources
-6. Every slide should have ONE clear purpose
+6. Mark "needs_image: true" for content slides that explain concepts, show examples, or compare things
+7. Every slide should have ONE clear purpose
+
+IMAGE GUIDELINES:
+- Most content slides SHOULD have needs_image: true
+- Exceptions: title slide, overview/agenda, pure equation slides, conclusions
+- Images help audience engagement - use liberally
 
 SLIDE TYPES:
 - "title": Opening slide with presentation title
@@ -266,8 +272,8 @@ Return a valid Skeleton JSON matching this structure:
       "equation_description": null,
       "needs_citation": false,
       "citation_topic": null,
-      "needs_image": false,
-      "image_description": null
+      "needs_image": true,
+      "image_description": "[Describe what image would enhance this slide]"
     }}
   ]
 }}

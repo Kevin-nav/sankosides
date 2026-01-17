@@ -481,6 +481,24 @@ class RefinedSlide(BaseModel):
     all_claims_verified: bool = Field(default=False)
     removed_claims: List[str] = Field(default_factory=list)
     
+    # Layout control fields (for Visual QA feedback loop)
+    layout_preset_id: Optional[str] = Field(
+        default=None,
+        description="ID of layout preset (e.g., 'two_col_50_50', 'full_bleed_image')"
+    )
+    image_size_hint: Optional[Literal["small", "medium", "large", "fit", "auto"]] = Field(
+        default="auto",
+        description="Size hint for images"
+    )
+    visual_position: Optional[Literal["left", "right", "top", "bottom", "center"]] = Field(
+        default="right",
+        description="Position for visual elements (images, diagrams, formulas)"
+    )
+    content_balance: Optional[Literal["text_heavy", "visual_heavy", "balanced"]] = Field(
+        default="balanced",
+        description="Content weight distribution"
+    )
+    
     # Title slide specific metadata
     author: Optional[str] = None
     supervisor: Optional[str] = None

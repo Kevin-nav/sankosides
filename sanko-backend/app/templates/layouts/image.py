@@ -29,9 +29,15 @@ class TwoColImageTemplate(BaseTemplate):
         image_alt = slide.image_alt if slide.image_alt else "Slide image"
         
         # Build caption with figure number
+        # Don't display AI-generated placeholder alt text as visible caption
         caption_html = ""
-        if slide.image_alt or slide.image_caption:
-            caption_text = slide.image_caption or slide.image_alt
+        caption_text = slide.image_caption
+        if not caption_text and slide.image_alt:
+            # Only use alt text as caption if it's not an AI placeholder
+            if not slide.image_alt.lower().startswith("ai-generated"):
+                caption_text = slide.image_alt
+        
+        if caption_text:
             if figure_number:
                 formatted_caption = caption_format.format(n=figure_number, caption=caption_text)
             else:

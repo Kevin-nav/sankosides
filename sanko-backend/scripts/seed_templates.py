@@ -345,37 +345,71 @@ TEMPLATES = [
     {
         "template_id": "thank_you",
         "name": "Thank You Slide",
-        "description": "Simple thank you closing slide",
+        "description": "Professional thank you closing slide with author info",
         "content_type": "thank_you",
         "html_template": """
 <div class="slide slide-thank-you" data-template="thank_you" data-slide-id="{{ slide.order }}">
     <div class="thank-you-content">
+        {% if logo_url %}
+        <img class="thank-you-logo" src="{{ logo_url }}" alt="Logo">
+        {% endif %}
         <h1 class="thank-you-message">Thank You</h1>
+        <div class="author-info">
+            {% if slide.author %}
+            <p class="presenter-name">{{ slide.author }}</p>
+            {% endif %}
+            {% if slide.email %}
+            <p class="presenter-email">{{ slide.email }}</p>
+            {% endif %}
+            {% if slide.date %}
+            <p class="presentation-date">{{ slide.date }}</p>
+            {% endif %}
+        </div>
+        <p class="questions-prompt">Questions?</p>
     </div>
 </div>
 """,
         "css_styles": """
 .slide-thank-you {
-    display: flex;
+    display: flex !important;
     justify-content: center;
     align-items: center;
-}
-.thank-you-content {
     text-align: center;
 }
+.thank-you-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--spacing-lg);
+}
 .thank-you-message {
-    font-size: var(--font-size-title);
+    font-size: 72px;
     font-weight: var(--font-weight-title);
     color: var(--color-primary);
+    margin-bottom: var(--spacing-md);
+}
+.author-info {
+    font-size: var(--font-size-body);
+    color: var(--color-text-secondary);
+}
+.presenter-name {
+    font-weight: 600;
+    font-size: 28px;
+    color: var(--color-text-primary);
+}
+.presenter-email {
+    font-size: 20px;
+    color: var(--color-primary);
+}
+.questions-prompt {
+    font-size: 32px;
+    color: var(--color-text-secondary);
+    font-style: italic;
+    margin-top: var(--spacing-lg);
 }
 .thank-you-logo {
     max-height: 80px;
-    margin-bottom: var(--spacing-lg);
-}
-.presenter-name {
-    font-size: var(--font-size-body);
-    color: var(--color-text-secondary);
-    margin-top: var(--spacing-md);
+    margin-bottom: var(--spacing-md);
 }
 """
     }
@@ -537,8 +571,8 @@ THEMES = [
             "font_heading": "Inter",
             "font_body": "Inter",
             "font_size_title": "56px",
-            "font_size_heading": "36px",
-            "font_size_body": "20px"
+            "font_size_heading": "44px",
+            "font_size_body": "24px"
         },
         "spacing": {
             "md": "24px",
@@ -584,9 +618,9 @@ THEMES = [
         "typography": {
             "font_heading": "Merriweather",
             "font_body": "Source Sans Pro",
-            "font_size_title": "52px",
-            "font_size_heading": "34px",
-            "font_size_body": "19px"
+            "font_size_title": "56px",
+            "font_size_heading": "44px",
+            "font_size_body": "24px"
         },
         "spacing": {
             "md": "24px",
@@ -650,7 +684,7 @@ THEMES = [
             "font_body": "Lato",
             "font_size_title": "72px",
             "font_size_heading": "48px",
-            "font_size_body": "22px"
+            "font_size_body": "24px"
         },
         "spacing": {
             "md": "20px",
@@ -709,8 +743,8 @@ THEMES = [
             "font_heading": "Playfair Display",
             "font_body": "Lato",
             "font_size_title": "58px",
-            "font_size_heading": "40px",
-            "font_size_body": "20px"
+            "font_size_heading": "44px",
+            "font_size_body": "24px"
         },
         "spacing": {
             "md": "22px",
@@ -768,8 +802,8 @@ THEMES = [
             "font_heading": "Inter",
             "font_body": "Inter",
             "font_size_title": "58px",
-            "font_size_heading": "40px",
-            "font_size_body": "19px"
+            "font_size_heading": "44px",
+            "font_size_body": "24px"
         },
         "spacing": {
             "md": "26px",
@@ -832,9 +866,9 @@ THEMES = [
         "typography": {
             "font_heading": "Georgia",
             "font_body": "Palatino Linotype",
-            "font_size_title": "54px",
-            "font_size_heading": "38px",
-            "font_size_body": "20px"
+            "font_size_title": "56px",
+            "font_size_heading": "44px",
+            "font_size_body": "24px"
         },
         "spacing": {
             "md": "24px",
@@ -898,9 +932,9 @@ THEMES = [
         "typography": {
             "font_heading": "Arial", 
             "font_body": "Arial",
-            "font_size_title": "48px",
-            "font_size_heading": "32px",
-            "font_size_body": "18px"
+            "font_size_title": "56px",
+            "font_size_heading": "44px",
+            "font_size_body": "24px"
         },
         "spacing": {
             "md": "24px",
