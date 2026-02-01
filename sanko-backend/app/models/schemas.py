@@ -401,6 +401,38 @@ class ImageCitation(BaseModel):
             return " ".join(parts) if parts else "Unknown source"
 
 
+class ResearchNeed(BaseModel):
+    """A claim or fact that needs academic backing."""
+    claim: str = Field(..., description="The claim or statement needing support")
+    query: str = Field(..., description="Search query to find supporting papers")
+    intent: Literal["statistic", "definition", "methodology", "finding", "common_fact"] = Field(
+        default="finding",
+        description="What type of support is needed"
+    )
+    is_common_knowledge: bool = Field(
+        default=False,
+        description="If True, this is common knowledge and can be stated without deep research"
+    )
+
+
+class ResearchFact(BaseModel):
+    """A fact extracted from a research paper and used in slide content."""
+    fact: str = Field(..., description="The extracted fact or finding")
+    source: "CitationMetadata" = Field(..., description="The paper this fact came from")
+    confidence: float = Field(
+        default=0.8, ge=0.0, le=1.0,
+        description="Confidence that this fact supports the claim"
+    )
+    extraction_source: Literal["abstract", "tldr", "full_text", "user_upload"] = Field(
+        default="abstract",
+        description="Where in the paper this fact was extracted from"
+    )
+    used_in_bullet: Optional[int] = Field(
+        default=None,
+        description="Index of the bullet point where this fact was integrated"
+    )
+
+
 class PlannedSlide(BaseModel):
     """Slide after Planner processing - with full content and placeholders."""
     order: int = Field(..., ge=1)
@@ -427,6 +459,12 @@ class PlannedSlide(BaseModel):
     speaker_notes: Optional[str] = None
     template_type: Optional[str] = Field(
         None, description="Which layout template to use"
+    )
+    
+    # Research-driven content generation
+    research_needs: List["ResearchNeed"] = Field(
+        default_factory=list,
+        description="Claims that need academic backing with search queries"
     )
 
 
@@ -504,6 +542,12 @@ class RefinedSlide(BaseModel):
     supervisor: Optional[str] = None
     degree: Optional[str] = None
     date: Optional[str] = None
+    
+    # Research-driven content tracking
+    research_facts: List["ResearchFact"] = Field(
+        default_factory=list,
+        description="Facts extracted from papers and used in this slide's content"
+    )
 
 
 class RefinedContent(BaseModel):
@@ -574,3 +618,19 @@ class QAReport(BaseModel):
     average_score: float = Field(default=0.0)
     all_passed: bool = Field(default=False)
     total_iterations: int = Field(default=0)
+
+
+# =============================================================================
+# Beta Survey
+# =============================================================================
+
+class SurveySubmission(BaseModel):
+    """Beta survey submission data."""
+    email: Optional[str] = Field(None, description="User email for linkage")
+    university: Optional[str] = None
+    course: Optional[str] = None
+    citation_style: Optional[str] = None
+    slide_frequency: Optional[str] = None
+    pain_points: Optional[str] = None
+    additional_feedback: Optional[str] = None
+

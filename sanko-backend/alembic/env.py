@@ -20,6 +20,7 @@ load_dotenv()
 from app.core.database import Base, get_sync_database_url
 # Make sure template models are registered with Base
 import app.core.template_models
+import app.core.survey_models
 
 # Alembic Config object
 config = context.config

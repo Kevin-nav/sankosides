@@ -57,6 +57,26 @@ When a slide needs citations:
 - Add `citation_queries`: Search terms for finding relevant papers
 - Example: ["machine learning climate prediction", "neural networks weather forecasting"]
 
+### 3. Research-Backed Claims (NEW - CRITICAL)
+For claims that need academic support, add `research_needs`:
+- Each research need specifies a claim, search query, and intent
+- Intent types: "statistic", "definition", "methodology", "finding", "common_fact"
+- Mark `is_common_knowledge: true` for widely-known facts that don't need deep research
+
+Example research_needs:
+```json
+[
+  {"claim": "AI can predict weather with 90% accuracy", "query": "AI weather prediction accuracy", "intent": "statistic", "is_common_knowledge": false},
+  {"claim": "Machine learning uses neural networks", "query": "", "intent": "common_fact", "is_common_knowledge": true}
+]
+```
+
+RULE: Only add research_needs for claims that:
+1. Contain specific statistics or numbers
+2. Make bold assertions about effectiveness or performance
+3. Describe methodologies or findings that should be attributed
+4. Are NOT common knowledge (e.g., "water boils at 100°C" needs no research)
+
 When a slide needs equations:
 - Add `equation_placeholder`: Description of what equation is needed
 - Example: "Linear regression formula: y = mx + b with explanation"
@@ -69,7 +89,7 @@ When a slide needs images:
 - Add `image_query`: Search term for finding relevant images
 - Example: "satellite imagery climate change visualization"
 
-### 3. Focus Areas
+### 4. Focus Areas
 If focus_areas says ["machine learning", "sustainability"]:
 - These topics should be MORE detailed
 - Other topics can be briefer
@@ -106,6 +126,7 @@ Return a PlannedContent object with:
   - diagram_placeholder (if needed)
   - citation_queries (if needed)
   - image_query (if needed)
+  - research_needs (for claims needing academic backing)
   - template_type
   - speaker_notes (if requested)
 
@@ -237,6 +258,7 @@ Narrative: {skeleton.narrative_arc}
 5. Suggest template_type for each slide
 6. Add speaker_notes if requested
 7. Follow all institution formatting rules above (if specified)
+8. Identify claims needing research backing (add research_needs)
 
 ## OUTPUT FORMAT
 Return ONLY a valid JSON object (no schema, no explanation) with this structure:
@@ -255,6 +277,9 @@ Return ONLY a valid JSON object (no schema, no explanation) with this structure:
       "diagram_placeholder": "Description of diagram needed or null",
       "citation_queries": ["search term 1", "search term 2"],
       "image_query": "image search term or null",
+      "research_needs": [
+        {{"claim": "Specific claim needing backing", "query": "search query", "intent": "statistic|definition|methodology|finding|common_fact", "is_common_knowledge": false}}
+      ],
       "speaker_notes": "Speaker notes or null",
       "template_type": "content|title|diagram|equation|image|two_column|quote|conclusion"
     }}

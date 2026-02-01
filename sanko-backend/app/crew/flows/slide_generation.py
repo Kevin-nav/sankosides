@@ -46,6 +46,8 @@ from app.models.schemas import (
     GatheredInfo,
     ClarificationMessage,
     KnowledgeBase,
+    ResearchFact,
+    ResearchNeed,
 )
 from app.crew.agents.clarifier import create_clarifier_agent
 from app.crew.agents.planner import create_planner_agent
@@ -1951,7 +1953,8 @@ Be efficient and accurate - reference document content when relevant!""",
         slides_list = "\n".join([
             f"- Slide {s.order}: {s.title} ({s.content_type.value})"
             f"\n  Description: {s.description}"
-            f"\n  Needs diagram: {s.needs_diagram}, equation: {s.needs_equation}, citation: {s.needs_citation}"
+            f"\n  Needs diagram: {s.needs_diagram}, equation: {s.needs_equation}, citation: {s.needs_citation}, image: {s.needs_image}"
+            f"\n  Image Description: {s.image_description if s.needs_image else 'None'}"
             for s in skeleton.slides
         ])
         
@@ -1972,7 +1975,8 @@ Focus Areas: {', '.join(order.focus_areas) if order.focus_areas else 'None'}
 2. For slides needing citations, add `citation_queries` (search terms)
 3. For slides needing diagrams, add `diagram_placeholder` (description)
 4. For slides needing equations, add `equation_placeholder` (LaTeX description)
-5. Add speaker_notes if requested: {order.include_speaker_notes}
+5. For slides needing images, add `image_query` (search term for finding/generating an image)
+6. Add speaker_notes if requested: {order.include_speaker_notes}
 
 Return a JSON object with 'slides' array containing PlannedSlide objects."""
     
@@ -2756,6 +2760,77 @@ IMPORTANT:
                 
             except Exception as e:
                 logger.warning(f"Image sourcing failed for slide {planned.order}: {e}")
+        
+        # Process research needs - extract facts from papers and integrate into content
+        if hasattr(planned, 'research_needs') and planned.research_needs:
+            try:
+                research_facts = []
+                papers_used = []
+                
+                for need in planned.research_needs:
+                    # Skip common knowledge - no research needed
+                    if need.is_common_knowledge:
+                        logger.debug(f"[RESEARCH] Skipping common knowledge: {need.claim[:50]}...")
+                        continue
+                    
+                    if not need.query:
+                        continue
+                    
+                    # Search for papers supporting this claim
+                    logger.info(f"[RESEARCH] Searching for: {need.query}")
+                    papers = await academic_tool.search(need.query, max_results=3)
+                    
+                    if not papers:
+                        logger.debug(f"[RESEARCH] No papers found for: {need.query}")
+                        continue
+                    
+                    # Extract facts from paper abstracts
+                    for paper in papers:
+                        if not paper.abstract:
+                            continue
+                        
+                        # Create a research fact from the abstract
+                        # In a future enhancement, this could use LLM to extract specific facts
+                        fact = ResearchFact(
+                            fact=paper.abstract[:300],  # Use abstract as the fact
+                            source=paper,
+                            confidence=paper.relevance_score,
+                            extraction_source="abstract",
+                        )
+                        research_facts.append(fact)
+                        
+                        # Track which papers we actually used
+                        if paper not in papers_used:
+                            papers_used.append(paper)
+                        
+                        # Limit to one paper per research need
+                        break
+                
+                # Store research facts
+                refined.research_facts = research_facts
+                
+                # Only cite papers whose content we actually used
+                if papers_used:
+                    for paper in papers_used:
+                        if paper not in refined.citations:
+                            refined.citations.append(paper)
+                            
+                            # Format citation
+                            formatted = render_tool._run(
+                                action="citation",
+                                citation=paper.model_dump(),
+                                style=citation_style,
+                            )
+                            if not formatted.startswith("Error"):
+                                refined.formatted_citations.append(formatted)
+                    
+                    logger.info(
+                        f"[RESEARCH] Slide {planned.order}: Extracted {len(research_facts)} facts, "
+                        f"citing {len(papers_used)} papers"
+                    )
+                
+            except Exception as e:
+                logger.warning(f"Research processing failed for slide {planned.order}: {e}")
         
         return refined
     

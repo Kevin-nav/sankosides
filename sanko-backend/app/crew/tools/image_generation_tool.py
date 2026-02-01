@@ -65,7 +65,7 @@ class NanoBananaImageTool:
     ):
         self.api_key = api_key or settings.gemini_api_key
         self.client = genai.Client(api_key=self.api_key)
-        self.output_dir = Path(output_dir)
+        self.output_dir = Path(output_dir).resolve()
         self.output_dir.mkdir(parents=True, exist_ok=True)
         # Lazy-loaded R2 storage service
         self._storage = None

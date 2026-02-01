@@ -185,7 +185,8 @@ class ImageSourceAgent:
                 else:
                     # Local path fallback - wrap with file://
                     logger.warning(f"[IMAGE AGENT] Image saved locally, not R2: {asset.file_path}")
-                    image_url = f"file://{asset.file_path}"
+                    from pathlib import Path
+                    image_url = Path(asset.file_path).resolve().as_uri()
             else:
                 logger.warning(f"[IMAGE AGENT] Generation failed: {asset.error}")
                 image_url = "https://via.placeholder.com/800x600?text=Generation+Failed"
