@@ -89,34 +89,36 @@ export function ProblemSection() {
                         return (
                             <div
                                 key={index}
-                                className="problem-card glass-card overflow-hidden hover-lift tap-feedback"
+                                className="problem-card bg-neutral-900/40 border border-white/5 rounded-2xl overflow-hidden hover:border-white/10 transition-colors"
                                 style={{ opacity: 0 }}
                             >
-                                <div className="grid grid-cols-2">
+                                <div className="grid grid-cols-2 h-full">
                                     {/* Before side */}
-                                    <div className="p-5 sm:p-6 bg-red-500/5 border-r border-neutral-800/50">
-                                        <div className="flex items-center gap-2 mb-3">
-                                            <X className="w-4 h-4 text-red-400" />
-                                            <span className="text-xs font-medium text-red-400 uppercase tracking-wide">Before</span>
+                                    <div className="p-3 sm:p-5 md:p-6 bg-red-950/20 border-r border-white/5 flex flex-col justify-center">
+                                        <div className="flex items-center gap-1.5 sm:gap-2 mb-2 sm:mb-3">
+                                            <X className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-red-400" />
+                                            <span className="text-[9px] sm:text-[10px] font-bold text-red-400 uppercase tracking-widest">Before</span>
                                         </div>
-                                        <div className="flex items-start gap-2">
-                                            <BeforeIcon className="w-4 h-4 text-neutral-500 mt-0.5 flex-shrink-0" />
-                                            <div>
-                                                <p className="text-sm text-neutral-300 font-medium">{problem.before.text}</p>
-                                                <p className="text-xs text-neutral-500 mt-1">{problem.before.subtext}</p>
+                                        <div className="flex flex-col sm:flex-row items-start gap-2 sm:gap-3">
+                                            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-red-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                                <BeforeIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-400" />
+                                            </div>
+                                            <div className="min-w-0">
+                                                <p className="text-xs sm:text-sm text-neutral-200 font-medium leading-tight break-words">{problem.before.text}</p>
+                                                <p className="text-[10px] sm:text-xs text-neutral-500 mt-1 sm:mt-1.5 leading-tight">{problem.before.subtext}</p>
                                             </div>
                                         </div>
                                     </div>
 
                                     {/* After side */}
-                                    <div className="p-5 sm:p-6 bg-emerald-500/5">
-                                        <div className="flex items-center gap-2 mb-3">
-                                            <Check className="w-4 h-4 text-emerald-400" />
-                                            <span className="text-xs font-medium text-emerald-400 uppercase tracking-wide">After</span>
+                                    <div className="p-3 sm:p-5 md:p-6 bg-emerald-950/20 flex flex-col justify-center">
+                                        <div className="flex items-center gap-1.5 sm:gap-2 mb-2 sm:mb-3">
+                                            <Check className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-400" />
+                                            <span className="text-[9px] sm:text-[10px] font-bold text-emerald-400 uppercase tracking-widest">After</span>
                                         </div>
-                                        <div>
-                                            <p className="text-sm text-emerald-300 font-medium">{problem.after.text}</p>
-                                            <p className="text-xs text-neutral-400 mt-1">{problem.after.subtext}</p>
+                                        <div className="flex flex-col sm:block pl-0">
+                                            <p className="text-xs sm:text-sm text-emerald-100 font-medium leading-tight break-words">{problem.after.text}</p>
+                                            <p className="text-[10px] sm:text-xs text-emerald-500/70 mt-1 sm:mt-1.5 leading-tight">{problem.after.subtext}</p>
                                         </div>
                                     </div>
                                 </div>

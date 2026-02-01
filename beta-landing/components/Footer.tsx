@@ -67,7 +67,7 @@ export function Footer() {
 
                     {/* Copyright */}
                     <p className="text-neutral-600 text-sm">
-                        © 2025 SankoSlides. All rights reserved.
+                        © 2026 SankoSlides by HCX Technologies. All rights reserved.
                     </p>
                 </div>
             </div>

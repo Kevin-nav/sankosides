@@ -54,9 +54,9 @@ export const referralSources = [
 
 export const features = [
     {
-        id: "university-compliant",
-        title: "University Compliant",
-        description: "Built with Ghanaian university formatting standards in mind. Your lecturers will approve.",
+        id: "real-citations",
+        title: "Real Citations",
+        description: "We find actual academic papers with DOIs. No fake references, no hallucinations.",
         highlight: true,
     },
     {
@@ -65,14 +65,14 @@ export const features = [
         description: '"Colour" not "color", "organisation" not "organization". Never lose marks again.',
     },
     {
+        id: "university-compliant",
+        title: "Built for Ghanaian Academics",
+        description: "Formatting standards that your lecturers will approve. UMaT, KNUST, UG, and more.",
+    },
+    {
         id: "references",
         title: "Proper References",
         description: "APA, Harvard, IEEE — citations formatted exactly how your lecturers want them.",
-    },
-    {
-        id: "real-citations",
-        title: "Real Citations",
-        description: "We find actual academic papers with DOIs. No fake references, no hallucinations.",
     },
     {
         id: "equations",
@@ -134,7 +134,11 @@ export const problems = [
 export const faqs = [
     {
         question: "Is the beta free?",
-        answer: "Yes! Beta testers get free access. We may introduce pricing later, but beta testers will get special deals.",
+        answer: "Yes! Beta testers get free access during the beta phase. We may introduce pricing later, but you will likely get better deals in the future.",
+    },
+    {
+        question: "Will my lecturer know I used AI?",
+        answer: "SankoSlides is a productivity tool, not a cheating tool. We handle the formatting, citations, and 'grunt work' (like converting notes to bullet points). The core ideas and study material come from you. It's like using Grammarly, but for presentations.",
     },
     {
         question: "When will I get access?",

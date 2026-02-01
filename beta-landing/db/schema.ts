@@ -28,5 +28,25 @@ export const betaSignups = pgTable('beta_signups', {
     emailSentAt: timestamp('email_sent_at'),  // Track when welcome email was sent
 });
 
+export const surveyResponses = pgTable('survey_responses', {
+    id: uuid('id').defaultRandom().primaryKey(),
+
+    // User Identification
+    email: varchar('email', { length: 255 }).notNull(),
+
+    // Configuration Data (The new "Survey")
+    operatingSystem: varchar('operating_system', { length: 100 }),
+    browser: varchar('browser', { length: 100 }),
+    citationStyle: varchar('citation_style', { length: 100 }),
+    contentSource: varchar('content_source', { length: 255 }),
+    visualStyle: varchar('visual_style', { length: 255 }),
+
+    // Metadata
+    createdAt: timestamp('created_at').defaultNow(),
+});
+
 export type BetaSignup = typeof betaSignups.$inferSelect;
 export type NewBetaSignup = typeof betaSignups.$inferInsert;
+
+export type SurveyResponse = typeof surveyResponses.$inferSelect;
+export type NewSurveyResponse = typeof surveyResponses.$inferInsert;

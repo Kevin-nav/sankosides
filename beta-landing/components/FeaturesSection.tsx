@@ -87,7 +87,7 @@ export function FeaturesSection() {
                     <div className="mb-6">
                         <span className="verified-badge">
                             <Shield className="w-4 h-4" />
-                            Verified for UMaT Standards
+                            Built for Ghanaian Academics
                         </span>
                     </div>
 

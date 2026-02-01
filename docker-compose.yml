@@ -1,0 +1,17 @@
+services:
+  beta-landing:
+    build:
+      context: ./beta-landing
+      dockerfile: Dockerfile
+    container_name: beta-landing
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+    networks:
+      - sanko-network
+
+networks:
+  sanko-network:
+    driver: bridge

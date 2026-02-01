@@ -12,21 +12,29 @@ import { BetaSignupForm } from '@/components/BetaSignupForm';
 
 export default function Home() {
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [prefilledEmail, setPrefilledEmail] = useState('');
 
-  const openForm = () => setIsFormOpen(true);
-  const closeForm = () => setIsFormOpen(false);
+  const openForm = (email?: string) => {
+    if (email) setPrefilledEmail(email);
+    setIsFormOpen(true);
+  };
+
+  const closeForm = () => {
+    setIsFormOpen(false);
+    // Optional: clear email after close if desired, but keeping it might be better UX if they re-open
+  };
 
   return (
     <main className="min-h-screen bg-[#0a0a0f]">
-      <Navbar onCtaClick={openForm} />
+      <Navbar onCtaClick={() => openForm()} />
       <Hero onCtaClick={openForm} />
       <ProblemSection />
       <FeaturesSection />
-      <HowItWorks onCtaClick={openForm} />
+      <HowItWorks onCtaClick={() => openForm()} />
       <FAQSection />
       <Footer />
 
-      <BetaSignupForm isOpen={isFormOpen} onClose={closeForm} />
+      <BetaSignupForm isOpen={isFormOpen} onClose={closeForm} initialEmail={prefilledEmail} />
     </main>
   );
 }

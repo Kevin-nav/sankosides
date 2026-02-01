@@ -14,6 +14,7 @@ import {
 interface BetaSignupFormProps {
     isOpen: boolean;
     onClose: () => void;
+    initialEmail?: string;
 }
 
 interface FormData {
@@ -48,7 +49,7 @@ const initialFormData: FormData = {
     referral: '',
 };
 
-export function BetaSignupForm({ isOpen, onClose }: BetaSignupFormProps) {
+export function BetaSignupForm({ isOpen, onClose, initialEmail = '' }: BetaSignupFormProps) {
     const [step, setStep] = useState(1);
     const [formData, setFormData] = useState<FormData>(initialFormData);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -67,7 +68,10 @@ export function BetaSignupForm({ isOpen, onClose }: BetaSignupFormProps) {
     useEffect(() => {
         if (isOpen) {
             setStep(1);
-            setFormData(initialFormData);
+            setFormData({
+                ...initialFormData,
+                email: initialEmail || ''
+            });
             setIsSuccess(false);
             setError('');
 

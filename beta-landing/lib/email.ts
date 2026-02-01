@@ -31,8 +31,8 @@ export async function sendBetaWelcomeEmail(name: string, email: string): Promise
         const { error } = await resend.emails.send({
             from: FROM_EMAIL,
             to: email,
-            subject: 'Welcome to SankoSlides Beta! 🎉',
-            react: BetaWelcomeEmail({ name }),
+            subject: "You're on the list! Welcome to SankoSlides Beta 🚀",
+            react: BetaWelcomeEmail({ name, email }),
         });
 
         if (error) {

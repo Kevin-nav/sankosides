@@ -38,8 +38,8 @@ export function Navbar({ onCtaClick }: NavbarProps) {
         <nav
             ref={navRef}
             className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled
-                    ? 'bg-neutral-950/90 backdrop-blur-lg border-b border-white/5'
-                    : 'bg-transparent'
+                ? 'bg-neutral-950/90 backdrop-blur-lg border-b border-white/5'
+                : 'bg-transparent'
                 }`}
             style={{ opacity: 0 }}
         >
@@ -67,6 +67,6 @@ export function Navbar({ onCtaClick }: NavbarProps) {
                     </button>
                 </div>
             </div>
-        </nav>
+        </nav >
     );
 }
