@@ -1863,6 +1863,22 @@ Be efficient and accurate - reference document content when relevant!""",
             
             # Also emit the regular complete event
             await self.emitter.complete(self.state.generated_presentation)
+
+            # PERSIST TO CONVEX
+            try:
+                from app.core.database import get_db
+                client = get_db()
+                if self.state.project_id:
+                     # Convert Pydantic to dict for Convex
+                    slides_data = self.state.generated_presentation.model_dump()
+                    client.mutation("projects:updateSlides", {
+                        "projectId": self.state.project_id,
+                        "slides": slides_data, 
+                        "status": "completed"
+                    })
+                    logger.info(f"[FLOW] Persisted results to Convex for project {self.state.project_id}")
+            except Exception as e:
+                logger.error(f"[FLOW] Failed to persist results to Convex: {e}")
             
             return self.state.generated_presentation
             
@@ -1883,6 +1899,19 @@ Be efficient and accurate - reference document content when relevant!""",
             })
             
             await self.emitter.error(str(e), self.state.current_stage)
+
+            # UPDATE CONVEX STATUS TO FAILED
+            try:
+                from app.core.database import get_db
+                client = get_db()
+                if self.state.project_id:
+                    client.mutation("projects:updateStatus", {
+                        "projectId": self.state.project_id,
+                        "status": "failed"
+                    })
+            except Exception as ex:
+                 logger.error(f"[FLOW] Failed to update failure status in Convex: {ex}")
+
             raise
     
     async def _run_planner(self):

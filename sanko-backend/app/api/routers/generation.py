@@ -40,7 +40,8 @@ from app.crew.flows.slide_generation import (
 )
 from app.crew.flows.metrics import MetricsCollector
 from app.core.logging import get_logger
-from app.core.database import get_async_session
+from app.core.logging import get_logger
+from app.core.database import get_db, get_convex_client
 from app.services.storage import get_storage_service, PDFCacheService
 
 logger = get_logger(__name__)
@@ -261,9 +262,11 @@ async def start_session_endpoint(
         uploaded_files = []
         cache_hits = 0
         
-        # Get DB session for cache lookups
-        async for db_session in get_async_session():
-            for file in files:
+        # Get Convex client for cache lookups
+        client = get_db()
+        
+        # We process files directly
+        for file in files:
                 # Validate file
                 validate_upload_file(file)
                 
@@ -278,7 +281,9 @@ async def start_session_endpoint(
                 )
                 
                 # Check cache for existing KnowledgeBase
-                cached_kb = await cache_service.get_cached(file_hash, db_session)
+                # TODO: Implement Convex cache lookup
+                # cached_kb = await cache_service.get_cached(file_hash, client)
+                cached_kb = None 
                 if cached_kb:
                     cache_hits += 1
                 
@@ -289,7 +294,6 @@ async def start_session_endpoint(
                     "size_bytes": len(file_data),
                     "cached": cached_kb is not None,
                 })
-            break  # Only need one iteration of the generator
         
         # Store file info in state for synthesis
         state.uploaded_files = uploaded_files
@@ -342,7 +346,12 @@ async def upload_files(files: List[UploadFile] = File(...)):
     total_cached = 0
     files_to_process = []  # Files that need background synthesis
     
-    async for db_session in get_async_session():
+    # async for db_session in get_async_session():
+    # client = get_db()
+    
+    # Just run once
+    if True:
+        client = get_db()
         for file in files:
             logger.info(f"[UPLOAD] Processing file: {file.filename}")
             
@@ -372,7 +381,8 @@ async def upload_files(files: List[UploadFile] = File(...)):
             
             # Check cache for existing KnowledgeBase (this means Gemini has already processed it)
             logger.info(f"[UPLOAD]   Checking if Gemini has processed this PDF...")
-            cached_kb = await cache_service.get_cached(file_hash, db_session)
+            # TODO: Implement Convex cache lookup
+            cached_kb = None # await cache_service.get_cached(file_hash, client)
             is_cached = cached_kb is not None
             sections_count = len(cached_kb.sections) if cached_kb else None
             
@@ -410,7 +420,6 @@ async def upload_files(files: List[UploadFile] = File(...)):
                 cached=is_cached,
                 sections_count=sections_count,
             ))
-        break  # Only need one iteration of the generator
     
     # Start background synthesis for uncached files
     if files_to_process:
@@ -501,16 +510,17 @@ async def get_file_processing_status(file_hash: str):
         # Check if it's already cached
         cache_service = PDFCacheService()
         try:
-            async for db_session in get_async_session():
-                cached_kb = await cache_service.get_cached(file_hash, db_session)
-                if cached_kb:
-                    return {
-                        "file_hash": file_hash,
-                        "status": "completed",
-                        "cached": True,
-                        "sections_count": len(cached_kb.sections),
-                    }
-                break
+            # TODO: Convex cache lookup
+            # async for db_session in get_async_session():
+            #    cached_kb = await cache_service.get_cached(file_hash, db_session)
+            cached_kb = None
+            if cached_kb:
+                return {
+                    "file_hash": file_hash,
+                    "status": "completed",
+                    "cached": True,
+                    "sections_count": len(cached_kb.sections),
+                }
         except Exception:
             pass
         
@@ -574,9 +584,11 @@ async def clarify_session(session_id: str, request: ClarifyRequest):
                 logger.info(f"[CLARIFY]   Checking if Gemini has processed this PDF...")
                 cached_kb = None
                 try:
-                    async for db_session in get_async_session():
-                        cached_kb = await cache_service.get_cached(file_hash, db_session)
-                        break
+                    # TODO: Convex cache lookup
+                    # async for db_session in get_async_session():
+                    #     cached_kb = await cache_service.get_cached(file_hash, db_session)
+                    #     break
+                    pass
                 except Exception as e:
                     logger.warning(f"[CLARIFY]   Cache check failed: {e}")
                 
