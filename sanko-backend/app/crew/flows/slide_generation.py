@@ -1871,11 +1871,20 @@ Be efficient and accurate - reference document content when relevant!""",
                 if self.state.project_id:
                      # Convert Pydantic to dict for Convex
                     slides_data = self.state.generated_presentation.model_dump()
-                    client.mutation("projects:updateSlides", {
-                        "projectId": self.state.project_id,
-                        "slides": slides_data, 
-                        "status": "completed"
-                    })
+                    
+                    # Run mutation in thread to avoid blocking loop
+                    await asyncio.wait_for(
+                        asyncio.to_thread(
+                            client.mutation,
+                            "projects:updateSlides", 
+                            {
+                                "projectId": self.state.project_id,
+                                "slides": slides_data, 
+                                "status": "completed"
+                            }
+                        ),
+                        timeout=10.0
+                    )
                     logger.info(f"[FLOW] Persisted results to Convex for project {self.state.project_id}")
             except Exception as e:
                 logger.error(f"[FLOW] Failed to persist results to Convex: {e}")
@@ -1905,10 +1914,17 @@ Be efficient and accurate - reference document content when relevant!""",
                 from app.core.database import get_db
                 client = get_db()
                 if self.state.project_id:
-                    client.mutation("projects:updateStatus", {
-                        "projectId": self.state.project_id,
-                        "status": "failed"
-                    })
+                    await asyncio.wait_for(
+                        asyncio.to_thread(
+                            client.mutation,
+                            "projects:updateStatus", 
+                            {
+                                "projectId": self.state.project_id,
+                                "status": "failed"
+                            }
+                        ),
+                        timeout=10.0
+                    )
             except Exception as ex:
                  logger.error(f"[FLOW] Failed to update failure status in Convex: {ex}")
 

@@ -147,7 +147,7 @@ export function BlueprintReview({ sessionId, onApprove }: BlueprintReviewProps) 
 
     function startSSE() {
         console.log("Starting SSE for outline...");
-        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
         const eventSource = new EventSource(`${backendUrl}/api/generation/stream/${sessionId}`);
 
         eventSource.onmessage = (event) => {
@@ -235,7 +235,7 @@ export function BlueprintReview({ sessionId, onApprove }: BlueprintReviewProps) 
             }
 
             // Step 2: Start generation (this kicks off the Planner agent)
-            const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
+            const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
             const generateRes = await fetch(`${backendUrl}/api/generation/generate/${sessionId}`, {
                 method: "POST",
                 headers: {

@@ -67,7 +67,7 @@ sanko-frontend/
 - npm or pnpm
 - Firebase project (for authentication)
 - Neon PostgreSQL database
-- Running [sanko-backend](../sanko-backend) at `localhost:8080`
+- Running [sanko-backend](../sanko-backend) at `localhost:8000`
 
 ### Environment Setup
 
@@ -89,7 +89,7 @@ GOOGLE_APPLICATION_CREDENTIALS=./path-to-service-account.json
 DATABASE_URL=postgresql://...
 
 # Backend API
-NEXT_PUBLIC_API_URL=http://localhost:8080
+NEXT_PUBLIC_API_URL=http://localhost:8000
 ```
 
 ### Installation

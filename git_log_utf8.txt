@@ -1,0 +1,5 @@
+﻿be96596 Update font sizes in database seed templates
+b85d208 feat: Synthesis Engine & Template System
+c5fb054 conductor(plan): Mark task 'Update backend endpoint' as complete
+3c876b8 feat(backend): Add file upload support to /start endpoint for synthesis
+9b5a888 feat(conductor): Create track for Synthesis Engine Frontend Integration

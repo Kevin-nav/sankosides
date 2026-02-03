@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     
     # Optional Firebase (for JWT verification)
     firebase_project_id: Optional[str] = None
+
+    # Feature Flags
+    enable_convex_cache: bool = False
     
     # Academic Search APIs
     semantic_scholar_api_key: Optional[str] = None  # Get from semanticscholar.org/product/api

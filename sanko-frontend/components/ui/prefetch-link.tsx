@@ -62,7 +62,7 @@ export function PrefetchLink({
 }
 
 // Pre-defined prefetch configurations for common routes
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 export const PREFETCH_CONFIGS: Record<string, string[]> = {
     templates: [

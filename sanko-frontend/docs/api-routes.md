@@ -103,7 +103,7 @@ Dashboard metrics for the current user.
 
 The `next.config.ts` includes a rewrite rule:
 ```
-/api/generation/:path* → http://127.0.0.1:8080/api/generation/:path*
+/api/generation/:path* → http://127.0.0.1:8000/api/generation/:path*
 ```
 
 This proxies any unhandled generation routes directly to the Python backend.

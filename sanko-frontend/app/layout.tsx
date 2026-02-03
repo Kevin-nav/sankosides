@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono, Noto_Sans } from "next/font/google";
 import { AuthProvider } from "@/components/auth-provider";
 import { QueryProvider } from "@/components/providers/query-provider";
+import { ConvexClientProvider } from "@/components/providers/convex-provider";
 import { Navbar } from "@/components/navbar";
 import { ThemeProvider } from "@/components/theme-provider";
 import "./globals.css";
@@ -34,12 +35,14 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <QueryProvider>
-          <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-            <AuthProvider>
-              <Navbar />
-              {children}
-            </AuthProvider>
-          </ThemeProvider>
+          <ConvexClientProvider>
+            <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+              <AuthProvider>
+                <Navbar />
+                {children}
+              </AuthProvider>
+            </ThemeProvider>
+          </ConvexClientProvider>
         </QueryProvider>
       </body>
     </html>

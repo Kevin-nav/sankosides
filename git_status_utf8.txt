@@ -1,0 +1,38 @@
+﻿ M beta-landing/app/layout.tsx
+ M beta-landing/app/page.tsx
+ M beta-landing/components/BetaSignupForm.tsx
+ M beta-landing/components/FeaturesSection.tsx
+ M beta-landing/components/Footer.tsx
+ M beta-landing/components/Hero.tsx
+ M beta-landing/components/Navbar.tsx
+ M beta-landing/components/ProblemSection.tsx
+ M beta-landing/data/constants.ts
+ M beta-landing/db/schema.ts
+ M beta-landing/emails/beta-welcome.tsx
+ M beta-landing/lib/email.ts
+ M beta-landing/next.config.ts
+ M beta-landing/package-lock.json
+ M beta-landing/package.json
+ M sanko-backend/alembic/env.py
+ M sanko-backend/app/crew/agents/image_source_agent.py
+ M sanko-backend/app/crew/agents/planner.py
+ M sanko-backend/app/crew/flows/slide_generation.py
+ M sanko-backend/app/crew/tools/image_generation_tool.py
+ M sanko-backend/app/models/schemas.py
+?? beta-landing/.dockerignore
+?? beta-landing/Dockerfile
+?? beta-landing/app/api/survey/
+?? beta-landing/app/full-survey/
+?? beta-landing/components/SmoothScrolling.tsx
+?? beta-landing/components/survey/
+?? beta-landing/docs/
+?? docker-compose.yml
+?? git_log.txt
+?? git_status.txt
+?? git_status_utf8.txt
+?? other_repos.txt
+?? sanko-backend/alembic/versions/5ea91711823d_update_survey_schema.py
+?? sanko-backend/alembic/versions/8f6b4bb227a6_add_survey_responses_table.py
+?? sanko-backend/app/core/survey_models.py
+?? sanko-backend/scripts/create_layout_presets.py
+?? sanko-backend/scripts/verify_table.py

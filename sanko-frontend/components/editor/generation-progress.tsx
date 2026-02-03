@@ -173,7 +173,7 @@ export function GenerationProgress({ sessionId, onComplete, onStageChange }: Gen
         if (!sessionId) return;
 
         // Use direct backend URL for SSE to bypass Next.js proxy buffering
-        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
         const url = `${backendUrl}/api/generation/stream/${sessionId}`;
         const es = new EventSource(url);
 

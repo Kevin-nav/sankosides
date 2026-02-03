@@ -40,8 +40,7 @@ from app.crew.flows.slide_generation import (
 )
 from app.crew.flows.metrics import MetricsCollector
 from app.core.logging import get_logger
-from app.core.logging import get_logger
-from app.core.database import get_db, get_convex_client
+from app.core.database import get_db
 from app.services.storage import get_storage_service, PDFCacheService
 
 logger = get_logger(__name__)
@@ -350,76 +349,74 @@ async def upload_files(files: List[UploadFile] = File(...)):
     # client = get_db()
     
     # Just run once
-    if True:
-        client = get_db()
-        for file in files:
-            logger.info(f"[UPLOAD] Processing file: {file.filename}")
-            
-            # Validate file
-            validate_upload_file(file)
-            logger.info(f"[UPLOAD]   ✓ File validation passed")
-            
-            # Check file size (20MB limit)
-            file_data = await file.read()
-            file_size_mb = len(file_data) / 1024 / 1024
-            logger.info(f"[UPLOAD]   File size: {file_size_mb:.2f}MB")
-            
-            if len(file_data) > 20 * 1024 * 1024:  # 20MB
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"File '{file.filename}' exceeds 20MB limit ({file_size_mb:.1f}MB)"
-                )
-            
-            # Upload to R2 (with deduplication)
-            logger.info(f"[UPLOAD]   Uploading to R2...")
-            file_hash, r2_key, was_duplicate = await storage.upload_file(
-                file_data=file_data,
-                original_filename=file.filename,
-                content_type=file.content_type or "application/pdf",
+    for file in files:
+        logger.info(f"[UPLOAD] Processing file: {file.filename}")
+        
+        # Validate file
+        validate_upload_file(file)
+        logger.info(f"[UPLOAD]   ✓ File validation passed")
+        
+        # Check file size (20MB limit)
+        file_data = await file.read()
+        file_size_mb = len(file_data) / 1024 / 1024
+        logger.info(f"[UPLOAD]   File size: {file_size_mb:.2f}MB")
+        
+        if len(file_data) > 20 * 1024 * 1024:  # 20MB
+            raise HTTPException(
+                status_code=400,
+                detail=f"File '{file.filename}' exceeds 20MB limit ({file_size_mb:.1f}MB)"
             )
-            logger.info(f"[UPLOAD]   ✓ R2 upload complete: hash={file_hash[:16]}... (duplicate={was_duplicate})")
-            
-            # Check cache for existing KnowledgeBase (this means Gemini has already processed it)
-            logger.info(f"[UPLOAD]   Checking if Gemini has processed this PDF...")
-            # TODO: Implement Convex cache lookup
-            cached_kb = None # await cache_service.get_cached(file_hash, client)
-            is_cached = cached_kb is not None
-            sections_count = len(cached_kb.sections) if cached_kb else None
-            
-            # Check if already being processed
-            existing_job = get_processing_status(file_hash)
-            is_processing = existing_job and existing_job.status in [ProcessingStatus.QUEUED, ProcessingStatus.PROCESSING]
-            
-            if is_cached:
-                total_cached += 1
-                logger.info(f"[UPLOAD]   ✓ CACHE HIT: Gemini already processed - {sections_count} sections extracted")
-            elif is_processing:
-                logger.info(f"[UPLOAD]   ⏳ Already processing in background")
-            else:
-                # Queue for background processing
-                logger.info(f"[UPLOAD]   🚀 Queuing for background synthesis")
-                files_to_process.append({
-                    "file_hash": file_hash,
-                    "r2_key": r2_key,
-                    "filename": file.filename,
-                })
-                # Create job tracker
-                job = ProcessingJob(
-                    file_hash=file_hash,
-                    filename=file.filename,
-                    r2_key=r2_key,
-                    status=ProcessingStatus.QUEUED,
-                )
-                set_processing_status(job)
-            
-            results.append(FileUploadResult(
+        
+        # Upload to R2 (with deduplication)
+        logger.info(f"[UPLOAD]   Uploading to R2...")
+        file_hash, r2_key, was_duplicate = await storage.upload_file(
+            file_data=file_data,
+            original_filename=file.filename,
+            content_type=file.content_type or "application/pdf",
+        )
+        logger.info(f"[UPLOAD]   ✓ R2 upload complete: hash={file_hash[:16]}... (duplicate={was_duplicate})")
+        
+        # Check cache for existing KnowledgeBase (this means Gemini has already processed it)
+        logger.info(f"[UPLOAD]   Checking if Gemini has processed this PDF...")
+        # TODO: Implement Convex cache lookup
+        cached_kb = None # await cache_service.get_cached(file_hash, get_db())
+        is_cached = cached_kb is not None
+        sections_count = len(cached_kb.sections) if cached_kb else None
+        
+        # Check if already being processed
+        existing_job = get_processing_status(file_hash)
+        is_processing = existing_job and existing_job.status in [ProcessingStatus.QUEUED, ProcessingStatus.PROCESSING]
+        
+        if is_cached:
+            total_cached += 1
+            logger.info(f"[UPLOAD]   ✓ CACHE HIT: Gemini already processed - {sections_count} sections extracted")
+        elif is_processing:
+            logger.info(f"[UPLOAD]   ⏳ Already processing in background")
+        else:
+            # Queue for background processing
+            logger.info(f"[UPLOAD]   🚀 Queuing for background synthesis")
+            files_to_process.append({
+                "file_hash": file_hash,
+                "r2_key": r2_key,
+                "filename": file.filename,
+            })
+            # Create job tracker
+            job = ProcessingJob(
                 file_hash=file_hash,
                 filename=file.filename,
-                size_bytes=len(file_data),
                 r2_key=r2_key,
-                cached=is_cached,
-                sections_count=sections_count,
-            ))
+                status=ProcessingStatus.QUEUED,
+            )
+            set_processing_status(job)
+        
+        results.append(FileUploadResult(
+            file_hash=file_hash,
+            filename=file.filename,
+            size_bytes=len(file_data),
+            r2_key=r2_key,
+            cached=is_cached,
+            sections_count=sections_count,
+        ))
     
     # Start background synthesis for uncached files
     if files_to_process:
