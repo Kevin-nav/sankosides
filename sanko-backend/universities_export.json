@@ -1,0 +1,132 @@
+{
+  "universities": [
+    {
+      "universityId": "umat",
+      "name": "University of Mines and Technology",
+      "shortName": "UMaT",
+      "country": "Ghana",
+      "defaultCitationStyle": "harvard",
+      "spellingVariant": "british",
+      "unitSystem": "si",
+      "faculties": [
+        {
+          "facultyId": "fmmt",
+          "name": "Faculty of Mining and Minerals Technology",
+          "shortName": "FMMT",
+          "departments": [
+            {
+              "departmentId": "mining_engineering",
+              "name": "Mining Engineering",
+              "isStem": true
+            },
+            {
+              "departmentId": "minerals_engineering",
+              "name": "Minerals Engineering",
+              "isStem": true
+            }
+          ]
+        },
+        {
+          "facultyId": "foe",
+          "name": "Faculty of Engineering",
+          "shortName": "FoE",
+          "departments": [
+            {
+              "departmentId": "mechanical_engineering",
+              "name": "Mechanical Engineering",
+              "isStem": true
+            },
+            {
+              "departmentId": "electrical_electronic_engineering",
+              "name": "Electrical and Electronic Engineering",
+              "isStem": true
+            },
+            {
+              "departmentId": "renewable_energy_engineering",
+              "name": "Renewable Energy Engineering",
+              "isStem": true
+            }
+          ]
+        },
+        {
+          "facultyId": "fges",
+          "name": "Faculty of Geosciences and Environmental Studies",
+          "shortName": "FGES",
+          "departments": [
+            {
+              "departmentId": "geological_engineering",
+              "name": "Geological Engineering",
+              "isStem": true
+            },
+            {
+              "departmentId": "geomatic_engineering",
+              "name": "Geomatic Engineering",
+              "isStem": true
+            },
+            {
+              "departmentId": "environmental_safety_engineering",
+              "name": "Environmental and Safety Engineering",
+              "isStem": true
+            }
+          ]
+        },
+        {
+          "facultyId": "fcams",
+          "name": "Faculty of Computing and Mathematical Sciences",
+          "shortName": "FCaMS",
+          "departments": [
+            {
+              "departmentId": "computer_science_engineering",
+              "name": "Computer Science and Engineering",
+              "isStem": true
+            },
+            {
+              "departmentId": "mathematical_sciences",
+              "name": "Mathematical Sciences",
+              "isStem": true
+            }
+          ]
+        },
+        {
+          "facultyId": "fims",
+          "name": "Faculty of Integrated Management Science",
+          "shortName": "FIMS",
+          "departments": [
+            {
+              "departmentId": "management_studies",
+              "name": "Management Studies",
+              "isStem": false
+            },
+            {
+              "departmentId": "technical_communication",
+              "name": "Technical Communication",
+              "isStem": false
+            }
+          ]
+        },
+        {
+          "facultyId": "spets",
+          "name": "School of Petroleum Studies",
+          "shortName": "SPetS",
+          "departments": [
+            {
+              "departmentId": "petroleum_natural_gas_engineering",
+              "name": "Petroleum and Natural Gas Engineering",
+              "isStem": true
+            },
+            {
+              "departmentId": "petroleum_geosciences",
+              "name": "Petroleum Geosciences and Engineering",
+              "isStem": true
+            },
+            {
+              "departmentId": "chemical_petrochemical_engineering",
+              "name": "Chemical and Petrochemical Engineering",
+              "isStem": true
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

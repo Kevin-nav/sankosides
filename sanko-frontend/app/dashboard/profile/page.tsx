@@ -18,48 +18,43 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Loader2, School, Check, GraduationCap, Building2, BookOpen, Info } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
-import { useUniversities, useUpdateProfile } from "@/hooks/api";
+import { useUniversityHierarchy } from "@/hooks/convex";
+import { useUpdateProfile } from "@/hooks/api";
 
 // Types for university hierarchy (from single API call)
 interface DepartmentHierarchy {
-    department_id: string;
+    departmentId: string;
     name: string;
-    is_stem: boolean;
+    isStem: boolean;
 }
 
 interface FacultyHierarchy {
-    faculty_id: string;
+    facultyId: string;
     name: string;
-    short_name: string;
+    shortName: string;
     departments: DepartmentHierarchy[];
 }
 
 interface UniversityHierarchy {
-    university_id: string;
+    universityId: string;
     name: string;
-    short_name: string;
+    shortName: string;
     country: string;
-    default_citation_style: string;
-    spelling_variant: string;
-    unit_system: string;
+    defaultCitationStyle: string;
+    spellingVariant: string;
+    unitSystem: string;
     faculties: FacultyHierarchy[];
 }
 
-interface HierarchyResponse {
-    universities: UniversityHierarchy[];
-    cached: boolean;
-    cache_ttl_seconds: number;
-}
-
 export default function ProfilePage() {
-    const { user, dbUser, loading, syncUser } = useAuth();
+    const { user, convexUser, loading } = useAuth();
 
     // Form states
     const [displayName, setDisplayName] = useState("");
 
-    // TanStack Query hooks - replaces manual useState/useEffect
-    const { data: hierarchyData, isPending: loadingHierarchy } = useUniversities();
-    const hierarchy = hierarchyData?.universities ?? [];
+    // Convex hook - direct query for university hierarchy
+    const hierarchy = useUniversityHierarchy() ?? [];
+    const loadingHierarchy = hierarchy === undefined;
     const updateProfile = useUpdateProfile();
 
     // Selection state
@@ -73,21 +68,28 @@ export default function ProfilePage() {
     const [profileSaved, setProfileSaved] = useState(false);
     const [academicSaved, setAcademicSaved] = useState(false);
 
-    // Initialize form values from dbUser
+    // Initialize form values from convexUser
     useEffect(() => {
-        if (dbUser) {
-            setDisplayName(dbUser.displayName || "");
-            if (dbUser.universityId) setSelectedUniversity(dbUser.universityId);
-            if (dbUser.facultyId) setSelectedFaculty(dbUser.facultyId);
-            if (dbUser.departmentId) setSelectedDepartment(dbUser.departmentId);
-            if (dbUser.academicLevel) setSelectedAcademicLevel(dbUser.academicLevel);
-            if (dbUser.academicYear) setSelectedAcademicYear(String(dbUser.academicYear));
+        if (convexUser) {
+            setDisplayName(convexUser.displayName || "");
+            const profile = convexUser.universityProfile as {
+                universityId?: string;
+                facultyId?: string;
+                departmentId?: string;
+                academicLevel?: string;
+                academicYear?: number;
+            } | undefined;
+            if (profile?.universityId) setSelectedUniversity(profile.universityId);
+            if (profile?.facultyId) setSelectedFaculty(profile.facultyId);
+            if (profile?.departmentId) setSelectedDepartment(profile.departmentId);
+            if (profile?.academicLevel) setSelectedAcademicLevel(profile.academicLevel);
+            if (profile?.academicYear) setSelectedAcademicYear(String(profile.academicYear));
         }
-    }, [dbUser]);
+    }, [convexUser]);
 
     // Derived data from hierarchy (no additional fetches needed!)
     const selectedUniversityData = useMemo(() =>
-        hierarchy.find(u => u.university_id === selectedUniversity),
+        hierarchy.find(u => u.universityId === selectedUniversity),
         [hierarchy, selectedUniversity]
     );
 
@@ -97,7 +99,7 @@ export default function ProfilePage() {
     );
 
     const selectedFacultyData = useMemo(() =>
-        faculties.find(f => f.faculty_id === selectedFaculty),
+        faculties.find(f => f.facultyId === selectedFaculty),
         [faculties, selectedFaculty]
     );
 
@@ -107,7 +109,7 @@ export default function ProfilePage() {
     );
 
     const selectedDepartmentData = useMemo(() =>
-        departments.find(d => d.department_id === selectedDepartment),
+        departments.find(d => d.departmentId === selectedDepartment),
         [departments, selectedDepartment]
     );
 
@@ -188,7 +190,7 @@ export default function ProfilePage() {
                             </AvatarFallback>
                         </Avatar>
                         <div className="text-center">
-                            <h3 className="font-semibold text-lg text-foreground">{dbUser?.displayName || displayName || "Scholar"}</h3>
+                            <h3 className="font-semibold text-lg text-foreground">{convexUser?.displayName || displayName || "Scholar"}</h3>
                             <p className="text-sm text-muted-foreground">{user?.email}</p>
                         </div>
 
@@ -197,8 +199,8 @@ export default function ProfilePage() {
                             <div className="w-full">
                                 <div className="rounded-lg bg-primary/5 border border-primary/20 p-3 text-center">
                                     <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1">Institution</p>
-                                    <p className="text-primary font-bold">{selectedUniversityData.short_name}</p>
-                                    {selectedDepartmentData?.is_stem && (
+                                    <p className="text-primary font-bold">{selectedUniversityData.shortName}</p>
+                                    {selectedDepartmentData?.isStem && (
                                         <Badge variant="secondary" className="text-xs mt-1">STEM</Badge>
                                     )}
                                 </div>
@@ -208,9 +210,9 @@ export default function ProfilePage() {
                         <div className="w-full pt-2">
                             <div className="rounded-lg bg-muted p-3 text-center border border-border">
                                 <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1">Plan</p>
-                                <p className="text-primary font-bold">{dbUser?.subscriptionTier === "pro" ? "Pro Scholar" : "Free Tier"}</p>
+                                <p className="text-primary font-bold">{convexUser?.subscriptionTier === "pro" ? "Pro Scholar" : "Free Tier"}</p>
                             </div>
-                            {dbUser?.subscriptionTier !== "pro" && (
+                            {convexUser?.subscriptionTier !== "pro" && (
                                 <Button className="w-full mt-3 bg-gradient-to-r from-emerald-500 to-emerald-700 hover:from-emerald-600 hover:to-emerald-800 text-white shadow-md border-0">
                                     Upgrade to Pro
                                 </Button>
@@ -288,8 +290,8 @@ export default function ProfilePage() {
                                         <SelectGroup>
                                             <SelectLabel>Supported Universities</SelectLabel>
                                             {hierarchy.map((uni) => (
-                                                <SelectItem key={uni.university_id} value={uni.university_id}>
-                                                    {uni.name} ({uni.short_name})
+                                                <SelectItem key={uni.universityId} value={uni.universityId}>
+                                                    {uni.name} ({uni.shortName})
                                                 </SelectItem>
                                             ))}
                                         </SelectGroup>
@@ -315,8 +317,8 @@ export default function ProfilePage() {
                                         </SelectTrigger>
                                         <SelectContent>
                                             {faculties.map((faculty) => (
-                                                <SelectItem key={faculty.faculty_id} value={faculty.faculty_id}>
-                                                    {faculty.name} ({faculty.short_name})
+                                                <SelectItem key={faculty.facultyId} value={faculty.facultyId}>
+                                                    {faculty.name} ({faculty.shortName})
                                                 </SelectItem>
                                             ))}
                                         </SelectContent>
@@ -337,9 +339,9 @@ export default function ProfilePage() {
                                         </SelectTrigger>
                                         <SelectContent>
                                             {departments.map((dept) => (
-                                                <SelectItem key={dept.department_id} value={dept.department_id}>
+                                                <SelectItem key={dept.departmentId} value={dept.departmentId}>
                                                     {dept.name}
-                                                    {dept.is_stem && " (STEM)"}
+                                                    {dept.isStem && " (STEM)"}
                                                 </SelectItem>
                                             ))}
                                         </SelectContent>
@@ -390,9 +392,9 @@ export default function ProfilePage() {
                                         <div className="text-sm">
                                             <p className="font-medium text-foreground mb-1">What this means for your presentations:</p>
                                             <ul className="text-muted-foreground space-y-0.5">
-                                                <li>• <span className="font-medium">Citation Style:</span> {selectedUniversityData.default_citation_style}</li>
-                                                <li>• <span className="font-medium">Spelling:</span> {selectedUniversityData.spelling_variant}</li>
-                                                <li>• <span className="font-medium">Units:</span> {selectedUniversityData.unit_system}</li>
+                                                <li>• <span className="font-medium">Citation Style:</span> {selectedUniversityData.defaultCitationStyle}</li>
+                                                <li>• <span className="font-medium">Spelling:</span> {selectedUniversityData.spellingVariant}</li>
+                                                <li>• <span className="font-medium">Units:</span> {selectedUniversityData.unitSystem}</li>
                                             </ul>
                                         </div>
                                     </div>

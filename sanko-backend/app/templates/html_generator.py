@@ -13,7 +13,18 @@ from app.core.config import SLIDE_WIDTH, SLIDE_HEIGHT
 if TYPE_CHECKING:
     from app.agents.planner import EnrichedSlide as LegacyEnrichedSlide
     from app.routers.generation.models import EnrichedSlide
-    from app.themes import SlideTheme, ColorPalette, UniversityBranding
+from pathlib import Path
+from app.themes import SlideTheme, ColorPalette, UniversityBranding
+
+ASSETS_DIR = Path(__file__).parent / "assets"
+VIEWS_DIR = Path(__file__).parent / "views"
+
+def _load_sdk_asset(filename: str) -> str:
+    """Load a static asset from the SDK directory."""
+    path = ASSETS_DIR / filename
+    if not path.exists():
+        return f"/* Asset not found: {filename} */"
+    return path.read_text(encoding="utf-8")
 
 
 def generate_slide_html_with_branding(
@@ -177,7 +188,6 @@ def generate_slide_html_with_branding(
 async def generate_slide_html_with_db_template(
     slide: Union["EnrichedSlide", "LegacyEnrichedSlide"],
     theme: "SlideTheme",
-    session,  # AsyncSession
     colors: Optional["ColorPalette"] = None,
     branding: Optional["UniversityBranding"] = None,
     slide_number: int = 1,
@@ -185,45 +195,27 @@ async def generate_slide_html_with_db_template(
     layout_style: str = "default",
 ) -> str:
     """
-    Generate HTML for a slide using DATABASE templates with fallback to hardcoded.
+    Generate HTML for a slide using DATABASE templates (or local file fallback).
     
-    This is the preferred function for production slide generation.
-    It first tries to fetch the template from the database, and falls back
-    to the hardcoded Python templates if not found.
-    
-    Args:
-        slide: Enriched slide data
-        theme: Theme configuration  
-        session: AsyncSession for database access
-        colors: Optional color palette override
-        branding: Optional university branding (badge, name)
-        slide_number: Current slide number (1-indexed)
-        total_slides: Total number of slides
-        layout_style: Theme layout style (default, modern, split, etc.)
-        
-    Returns:
-        Complete HTML document with branding
+    This uses the new "Slide SDK" architecture:
+    1. Loads the base.html Jinja2 template
+    2. Injects CSS Grid, Typography, and KaTeX assets
+    3. Renders the content template (from DB or file) into the base frame
     """
-    from app.templates import (
-        select_template_for_slide, 
-        get_db_template_async,
-        render_db_template,
-    )
+    from app.templates import get_db_template_async, render_db_template
     from app.routers.generation.models import EnrichedSlide as NewEnrichedSlide
     from app.themes import UniversityBranding as UB
+    from app.models.schemas import SlideContentType
     from app.core.logging import get_logger
+    from jinja2 import Template
     
     logger = get_logger(__name__)
     
-    # Use default branding if not provided
-    if branding is None:
-        branding = UB()
+    # Defaults
+    branding = branding or UB()
+    colors = colors or theme.colors
     
-    # Use theme colors if not overridden
-    if colors is None:
-        colors = theme.colors
-    
-    # Convert legacy slide if needed
+    # Convert legacy slide
     if not isinstance(slide, NewEnrichedSlide):
         slide = NewEnrichedSlide(
             order=slide.order,
@@ -237,136 +229,98 @@ async def generate_slide_html_with_db_template(
             diagram_mermaid=getattr(slide, 'diagram_mermaid', None),
             speaker_notes=getattr(slide, 'speaker_notes', None),
             formatted_citations=getattr(slide, 'formatted_citations', []),
+            # Add new fields support
+            left_column=getattr(slide, 'left_column', None),
+            right_column=getattr(slide, 'right_column', None),
+            big_stat_number=getattr(slide, 'big_stat_number', None),
+            big_stat_label=getattr(slide, 'big_stat_label', None),
         )
     
-    # Determine template type based on slide content
+    # 1. Determine Template Type
     template_type = _determine_template_type(slide)
     
-    # Try to get database template
-    db_template = await get_db_template_async(session, template_type, layout_style)
+    # 2. Get the Content Template (HTML string)
+    # Try DB first
+    db_template = await get_db_template_async(template_type, layout_style)
     
     if db_template:
-        # Use database template (Jinja2)
-        logger.debug(f"Using DB template: {db_template['template_id']}")
-        slide_content = render_db_template(db_template, slide, theme, colors)
-        css_styles = db_template.get("css_styles", "")
+        content_template_str = db_template["html_template"]
+        custom_css = db_template.get("css_styles", "")
     else:
-        # Fall back to hardcoded Python template
-        logger.debug(f"Falling back to hardcoded template for {template_type}")
-        template = select_template_for_slide(slide)
-        slide_content = template.render(slide, theme, colors)
-        css_styles = ""
+        # Fallback to local file in app/templates/views/
+        # Map types to filenames
+        filename_map = {
+            "content": "content.html",
+            "two_column": "two_column.html",
+            "two_col_image": "two_column.html", # Reuse split
+            "two_col_math": "two_column.html",  # Reuse split
+            "title": "title.html",
+            "timeline": "timeline.html",
+            "big_stat": "big_stat.html",
+            "grid_gallery": "grid_gallery.html",
+            "comparison": "comparison.html",
+        }
+        
+        fname = filename_map.get(template_type, "content.html")
+        file_path = VIEWS_DIR / fname
+        
+        if file_path.exists():
+            content_template_str = file_path.read_text(encoding="utf-8")
+        else:
+            logger.error(f"Template fallback failed for {fname}, using content.html")
+            content_template_str = (VIEWS_DIR / "content.html").read_text(encoding="utf-8")
+        custom_css = ""
+            
+    # 3. Load SDK Assets
+    slide_layout_css = _load_sdk_asset("slide-layout.css")
+    slide_typography_css = _load_sdk_asset("slide-typography.css")
+    katex_loader_js = _load_sdk_asset("katex-loader.js")
     
-    # Generate CSS variables from theme (consistent with both template types)
-    css_vars = _generate_theme_css_vars(theme, colors)
+    # 4. Generate Theme CSS Variables
+    theme_css_vars = _generate_theme_css_vars(theme, colors)
     
-    # Generate layout-specific CSS from slide fields
-    layout_css = _generate_layout_css(slide)
-    css_styles = css_styles + "\n" + layout_css if css_styles else layout_css
+    # 5. Render Final HTML
+    # We use Jinja2 to render the content_template which EXTENDS base.html
+    # So we need to set up a loader that can find base.html
+    from jinja2 import Environment, FileSystemLoader
     
-    # Determine if this is a title slide
-    is_title_slide = slide.content_type == "title" or slide.order == 1
+    env = Environment(loader=FileSystemLoader(str(VIEWS_DIR)))
     
-    # Generate branding header HTML
-    header_html = _generate_branding_header(
-        branding, 
-        is_title_slide, 
-        slide_number, 
-        total_slides
-    )
+    # Create the template from string (but with ability to extend base.html from loader)
+    # Note: Jinja's 'extends' works by path. Since content_template_str starts with {% extends "base.html" %},
+    # it will look for base.html in VIEWS_DIR.
+    # We can't use from_string() directly if we want inheritance from files unless we set up the env right.
+    # Strategy: If it's a file fallback, just load via env.get_template.
+    # If it's a DB string, utilize env.from_string().
     
-    # Generate branding footer HTML (for title slide)
-    footer_html = _generate_branding_footer(branding, is_title_slide)
+    if db_template:
+        template = env.from_string(content_template_str)
+    else:
+        template = env.get_template(fname)
+        
+    # Prepare Context
+    context = {
+        "slide": slide,
+        "theme_css_vars": theme_css_vars,
+        "slide_layout_css": slide_layout_css,
+        "slide_typography_css": slide_typography_css,
+        "katex_loader_js": katex_loader_js,
+        "custom_css": custom_css,
+        "branding": branding,
+        "show_header": (slide_number > 1) or branding.show_on_title_slide,
+        "show_number": (slide_number > 1),
+        "total_slides": total_slides,
+        "template_id": template_type,
+        "slide_classes": f"slide-{template_type}",
+        "content_classes": ""
+    }
     
-    # Combine with branding CSS
-    branding_css = _get_branding_css(branding)
-    
-    html = f'''<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <style>
-{css_vars}
-
-{theme.css_overrides}
-
-{css_styles}
-
-{branding_css}
-
-/* Base slide styles */
-* {{ margin: 0; padding: 0; box-sizing: border-box; }}
-
-.slide-wrapper {{
-    position: relative;
-    width: {SLIDE_WIDTH}px;
-    height: {SLIDE_HEIGHT}px;
-}}
-
-.slide {{
-    width: 100%;
-    height: 100%;
-    padding: var(--spacing-lg);
-    padding-top: 60px; /* Space for header */
-    background: var(--color-background);
-    color: var(--color-text-primary);
-    font-family: var(--font-body);
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-}}
-
-/* Branding header */
-.slide-branding-header {{
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 48px;
-    padding: 8px 24px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    z-index: 100;
-}}
-
-.university-badge {{
-    height: 32px;
-    width: auto;
-    object-fit: contain;
-}}
-
-.slide-number {{
-    font-family: var(--font-body);
-    font-size: 14px;
-    color: var(--color-text-secondary);
-}}
-
-/* Branding footer (title slide only) */
-.slide-branding-footer {{
-    position: absolute;
-    bottom: 16px;
-    left: 24px;
-    right: 24px;
-    text-align: center;
-    font-family: var(--font-body);
-    font-size: 16px;
-    color: var(--color-text-secondary);
-}}
-
-{_get_base_slide_css()}
-    </style>
-</head>
-<body>
-    <div class="slide-wrapper">
-        {header_html}
-        {slide_content}
-        {footer_html}
-    </div>
-</body>
-</html>'''
-    
-    return html
+    try:
+        final_html = template.render(**context)
+        return final_html
+    except Exception as e:
+        logger.error(f"Jinja2 Rendering Failed: {e}", exc_info=True)
+        return f"<h1>Error rendering slide {slide.order}</h1><pre>{e}</pre>"
 
 
 def _determine_template_type(slide: "EnrichedSlide") -> str:
@@ -560,217 +514,10 @@ def _generate_layout_css(slide) -> str:
 
 
 
+# Legacy CSS Generator Removed
 def _get_base_slide_css() -> str:
-    """Get the base CSS for all slide types."""
-    return """
-/* Title slide layout */
-.slide-title {
-    justify-content: center;
-    text-align: center;
-    padding-top: 80px;
-}
-.slide-title .title-content {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    gap: var(--spacing-md);
-}
-.slide-title .main-title {
-    font-family: var(--font-heading);
-    font-size: var(--font-size-title);
-    font-weight: var(--font-weight-title);
-    color: var(--color-primary);
-}
-.slide-title .subtitle {
-    font-size: var(--font-size-heading);
-    color: var(--color-text-secondary);
-}
-
-/* Content slide layout */
-.slide-content .header-region {
-    margin-bottom: var(--spacing-lg);
-}
-.slide-content .slide-title {
-    font-family: var(--font-heading);
-    font-size: var(--font-size-heading);
-    font-weight: var(--font-weight-heading);
-    color: var(--color-primary);
-    text-align: left;
-    justify-content: flex-start;
-}
-.slide-content .content-region {
-    flex: 1;
-}
-.slide-content ul {
-    list-style: none;
-    padding-left: 0;
-}
-.slide-content li {
-    font-size: var(--font-size-body);
-    line-height: 1.7;
-    margin-bottom: var(--spacing-sm);
-    padding-left: var(--spacing-md);
-    position: relative;
-}
-.slide-content li::before {
-    content: '•';
-    color: var(--color-primary);
-    font-weight: bold;
-    position: absolute;
-    left: 0;
-}
-
-/* Diagram styles - PROJECTOR FRIENDLY (use 60-80% of area) */
-.slide-diagram .diagram-container {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    padding: var(--spacing-md);
-}
-.diagram-svg, .mermaid, .mermaid-svg {
-    min-width: 60%;
-    max-width: 90%;
-    min-height: 300px;
-    max-height: 500px;
-}
-
-/* Math/equation styles - LARGER for visibility */
-.equation-wrapper, .math-column {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    background: var(--color-surface);
-    border-radius: var(--radius-md);
-    padding: var(--spacing-lg);
-    min-height: 80px;
-}
-.equation-wrapper img, .equation-wrapper svg {
-    min-height: 50px;
-    max-width: 85%;
-}
-
-/* Chart/graph styles */
-.chart-container {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    flex: 1;
-}
-.chart-container img, .chart-container svg {
-    min-width: 50%;
-    max-width: 90%;
-    min-height: 250px;
-}
-
-/* Caption styling */
-.image-caption, .diagram-caption, .chart-caption {
-    font-size: var(--font-size-caption);
-    color: var(--color-text-secondary);
-    text-align: center;
-    margin-top: var(--spacing-sm);
-    max-width: 80%;
-}
-
-/* Thank You slide - centered, prominent */
-.slide-thank-you {
-    display: flex !important;
-    justify-content: center;
-    align-items: center;
-    text-align: center;
-}
-.slide-thank-you .thank-you-content {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: var(--spacing-lg);
-}
-.slide-thank-you .thank-you-message {
-    font-family: var(--font-heading);
-    font-size: 72px;
-    font-weight: var(--font-weight-title);
-    color: var(--color-primary);
-    margin-bottom: var(--spacing-md);
-}
-.slide-thank-you .author-info {
-    font-size: var(--font-size-body);
-    color: var(--color-text-secondary);
-}
-.slide-thank-you .presenter-name {
-    font-weight: 600;
-    font-size: 28px;
-    color: var(--color-text-primary);
-}
-.slide-thank-you .presenter-email {
-    font-size: 20px;
-    color: var(--color-primary);
-}
-.slide-thank-you .questions-prompt {
-    font-size: 32px;
-    color: var(--color-text-secondary);
-    font-style: italic;
-    margin-top: var(--spacing-lg);
-}
-.slide-thank-you .thank-you-logo {
-    max-height: 80px;
-    margin-bottom: var(--spacing-md);
-}
-
-/* References slide - two-column, smaller font */
-.slide-references {
-    padding-top: 60px;
-}
-.slide-references .references-title {
-    font-size: var(--font-size-heading);
-    color: var(--color-primary);
-    margin-bottom: var(--spacing-md);
-}
-.slide-references .references-list {
-    column-count: 2;
-    column-gap: 32px;
-    font-size: 14px;
-    line-height: 1.6;
-}
-.slide-references .reference-entry {
-    break-inside: avoid;
-    margin-bottom: 10px;
-    text-indent: -20px;
-    padding-left: 20px;
-}
-.slide-references .reference-title {
-    font-style: italic;
-}
-.slide-references .figure-sources {
-    margin-top: var(--spacing-md);
-    padding-top: var(--spacing-sm);
-    border-top: 1px solid var(--color-border);
-    font-size: 12px;
-}
-
-/* Two-column layouts for image/text */
-.columns-container {
-    display: flex;
-    gap: var(--spacing-lg);
-    flex: 1;
-    align-items: center;
-}
-.column {
-    flex: 1;
-}
-.column.visual {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-}
-.column.visual img {
-    max-width: 100%;
-    max-height: 400px;
-    object-fit: contain;
-    border-radius: var(--radius-md);
-}
-"""
+    """DEPRECATED: Using slide-layout.css from SDK instead."""
+    return ""
 
 
 def generate_slide_html_sync(

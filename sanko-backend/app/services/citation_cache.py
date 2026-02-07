@@ -1,29 +1,27 @@
 """
-Citation Cache Service
+Citation Cache Service - Convex Backend
 
-2-tier cache (Redis + PostgreSQL) for academic citations.
+2-tier cache (Redis + Convex) for academic citations.
 Reduces API calls and prevents rate limiting.
 
 Features:
 - Query normalization for cache hits
 - Per-provider rate limiting (1s for Semantic Scholar)
-- Stale-while-revalidate for background refresh
 - Smart provider rotation on rate limits
+- TTL-based expiration in Convex
 """
 
 import json
 import re
 import time
 import hashlib
-from datetime import datetime, timedelta
+import asyncio
 from typing import Optional, List, Dict, Any
 
 import redis
-from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.database import CachedCitation, get_async_session
+from app.core.convex_client import get_convex_client
 from app.core.logging import get_logger
 from app.models.schemas import CitationMetadata
 
@@ -35,7 +33,7 @@ class CitationCacheService:
     2-tier citation cache with smart features.
     
     Tier 1: Redis (hot cache, 6 hour TTL)
-    Tier 2: PostgreSQL (permanent storage)
+    Tier 2: Convex (permanent storage with TTL)
     
     Features:
     - Query normalization
@@ -45,6 +43,7 @@ class CitationCacheService:
     
     # Cache configuration
     REDIS_TTL_SECONDS = 6 * 3600  # 6 hours
+    CONVEX_TTL_HOURS = 168  # 7 days
     STALE_THRESHOLD_HOURS = 24  # Refresh in background if older than this
     
     # Rate limiting per provider (seconds between requests)
@@ -107,21 +106,25 @@ class CitationCacheService:
     
     @classmethod
     def _cache_key(cls, normalized_query: str) -> str:
-        """Generate Redis cache key for a query."""
-        # Use hash for long queries
-        query_hash = hashlib.md5(normalized_query.encode()).hexdigest()[:16]
+        """Generate cache key (hash) for a query."""
+        return hashlib.sha256(normalized_query.encode()).hexdigest()[:32]
+    
+    @classmethod
+    def _redis_cache_key(cls, query_hash: str) -> str:
+        """Generate Redis-specific cache key."""
         return f"citations:{query_hash}"
     
     @classmethod
     async def get_from_redis(cls, query: str) -> Optional[List[CitationMetadata]]:
         """Check Redis for cached results."""
         normalized = cls.normalize_query(query)
-        key = cls._cache_key(normalized)
+        query_hash = cls._cache_key(normalized)
+        redis_key = cls._redis_cache_key(query_hash)
         
         client = cls._get_redis()
         if client:
             try:
-                data = client.get(key)
+                data = client.get(redis_key)
                 if data:
                     citations = json.loads(data)
                     logger.debug(f"Redis cache hit for '{query[:30]}...' ({len(citations)} results)")
@@ -130,49 +133,45 @@ class CitationCacheService:
                 logger.warning(f"Redis get error: {e}")
         
         # Fallback to memory cache
-        if key in cls._memory_cache:
+        if redis_key in cls._memory_cache:
             logger.debug(f"Memory cache hit for '{query[:30]}...'")
-            return [CitationMetadata(**c) for c in cls._memory_cache[key]]
+            return [CitationMetadata(**c) for c in cls._memory_cache[redis_key]]
         
         return None
     
     @classmethod
-    async def get_from_postgres(
-        cls,
-        query: str,
-        session: AsyncSession,
-    ) -> List[CitationMetadata]:
-        """Check PostgreSQL for cached citations matching this query."""
+    async def get_from_convex(cls, query: str) -> List[CitationMetadata]:
+        """Check Convex for cached citations matching this query."""
         normalized = cls.normalize_query(query)
+        query_hash = cls._cache_key(normalized)
         
         try:
-            result = await session.execute(
-                select(CachedCitation)
-                .where(CachedCitation.normalized_query == normalized)
-                .limit(10)
+            convex = get_convex_client()
+            cached = await asyncio.wait_for(
+                asyncio.to_thread(
+                    convex.query,
+                    "citations:getCachedCitations",
+                    {"queryHash": query_hash}
+                ),
+                timeout=10.0
             )
-            rows = result.scalars().all()
             
-            if rows:
-                logger.debug(f"PostgreSQL cache hit for '{query[:30]}...' ({len(rows)} results)")
-                
-                # Update last_accessed_at
-                await session.execute(
-                    update(CachedCitation)
-                    .where(CachedCitation.normalized_query == normalized)
-                    .values(last_accessed_at=datetime.utcnow())
-                )
-                await session.commit()
+            if cached and cached.get("citationData"):
+                citation_data = cached["citationData"]
+                logger.debug(f"Convex cache hit for '{query[:30]}...' ({len(citation_data)} results)")
                 
                 # Convert to CitationMetadata
-                citations = [CitationMetadata(**row.citation_data) for row in rows]
+                citations = [CitationMetadata(**c) for c in citation_data]
                 
                 # Also populate Redis for next time
                 await cls.store_in_redis(query, citations)
                 
                 return citations
+                
+        except asyncio.TimeoutError:
+            logger.warning(f"Convex cache lookup timed out for '{query[:30]}...'")
         except Exception as e:
-            logger.warning(f"PostgreSQL cache lookup failed: {e}")
+            logger.warning(f"Convex cache lookup failed: {e}")
         
         return []
     
@@ -180,7 +179,8 @@ class CitationCacheService:
     async def store_in_redis(cls, query: str, citations: List[CitationMetadata]) -> None:
         """Store results in Redis cache."""
         normalized = cls.normalize_query(query)
-        key = cls._cache_key(normalized)
+        query_hash = cls._cache_key(normalized)
+        redis_key = cls._redis_cache_key(query_hash)
         
         # Convert to JSON-serializable format
         data = [c.model_dump() for c in citations]
@@ -188,54 +188,50 @@ class CitationCacheService:
         client = cls._get_redis()
         if client:
             try:
-                client.setex(key, cls.REDIS_TTL_SECONDS, json.dumps(data, default=str))
+                client.setex(redis_key, cls.REDIS_TTL_SECONDS, json.dumps(data, default=str))
                 logger.debug(f"Stored {len(citations)} citations in Redis for '{query[:30]}...'")
             except Exception as e:
                 logger.warning(f"Redis set error: {e}")
         
         # Always update memory cache as fallback
-        cls._memory_cache[key] = data
+        cls._memory_cache[redis_key] = data
     
     @classmethod
-    async def store_in_postgres(
+    async def store_in_convex(
         cls,
         query: str,
         citations: List[CitationMetadata],
         provider: str,
-        session: AsyncSession,
     ) -> None:
-        """Store results in PostgreSQL for permanent cache."""
+        """Store results in Convex for permanent cache."""
         normalized = cls.normalize_query(query)
+        query_hash = cls._cache_key(normalized)
         
-        for citation in citations:
-            try:
-                # Check if DOI already exists
-                if citation.doi:
-                    existing = await session.execute(
-                        select(CachedCitation).where(CachedCitation.doi == citation.doi)
-                    )
-                    if existing.scalar():
-                        continue  # Skip duplicates
-                
-                # Insert new citation
-                cached = CachedCitation(
-                    normalized_query=normalized,
-                    doi=citation.doi,
-                    arxiv_id=citation.arxiv_id,
-                    citation_data=citation.model_dump(),
-                    provider=provider,
-                )
-                session.add(cached)
-                
-            except Exception as e:
-                logger.warning(f"Failed to cache citation: {e}")
+        # Convert to JSON-serializable format
+        citation_data = [c.model_dump() for c in citations]
         
         try:
-            await session.commit()
-            logger.debug(f"Stored {len(citations)} citations in PostgreSQL for '{query[:30]}...'")
+            convex = get_convex_client()
+            await asyncio.wait_for(
+                asyncio.to_thread(
+                    convex.mutation,
+                    "citations:storeCitations",
+                    {
+                        "queryHash": query_hash,
+                        "normalizedQuery": normalized,
+                        "citationData": citation_data,
+                        "provider": provider,
+                        "ttlHours": cls.CONVEX_TTL_HOURS,
+                    }
+                ),
+                timeout=10.0
+            )
+            logger.debug(f"Stored {len(citations)} citations in Convex for '{query[:30]}...'")
+            
+        except asyncio.TimeoutError:
+            logger.warning(f"Convex store timed out for '{query[:30]}...'")
         except Exception as e:
-            await session.rollback()
-            logger.warning(f"PostgreSQL commit failed: {e}")
+            logger.warning(f"Convex store failed: {e}")
     
     @classmethod
     def should_rate_limit(cls, provider: str) -> bool:
@@ -283,3 +279,21 @@ class CitationCacheService:
             return preferred
         
         return available
+    
+    @classmethod
+    async def get_cache_stats(cls) -> Dict[str, Any]:
+        """Get cache statistics from Convex."""
+        try:
+            convex = get_convex_client()
+            stats = await asyncio.wait_for(
+                asyncio.to_thread(
+                    convex.query,
+                    "citations:getCacheStats",
+                    {}
+                ),
+                timeout=10.0
+            )
+            return stats
+        except Exception as e:
+            logger.warning(f"Failed to get cache stats: {e}")
+            return {"error": str(e)}

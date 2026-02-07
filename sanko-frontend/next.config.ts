@@ -17,7 +17,7 @@ const nextConfig: NextConfig = {
       // This catches any unhandled paths
       {
         source: '/api/generation/:path*',
-        destination: 'http://127.0.0.1:8080/api/generation/:path*',
+        destination: 'http://127.0.0.1:8000/api/generation/:path*',
       },
     ];
   },

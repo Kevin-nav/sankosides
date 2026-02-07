@@ -1,0 +1,560 @@
+{
+  "templates": [
+    {
+      "templateId": "conclusion",
+      "name": "Conclusion",
+      "description": "Closing slide with key takeaways",
+      "contentType": "conclusion",
+      "category": "general",
+      "htmlTemplate": "\n<div class=\"slide slide-conclusion\" data-template=\"conclusion\" data-slide-id=\"{{ slide.order }}\">\n    <div class=\"conclusion-header\">\n        <h2 class=\"slide-title\">{{ slide.title }}</h2>\n    </div>\n    <div class=\"takeaways-region\">\n        {% if slide.bullet_points %}\n        <ul>\n            {% for point in slide.bullet_points %}\n            <li>{{ point }}</li>\n            {% endfor %}\n        </ul>\n        {% endif %}\n    </div>\n    <div class=\"conclusion-footer\">\n        <p>Thank You</p>\n    </div>\n</div>\n",
+      "cssStyles": null,
+      "isActive": true,
+      "isSystem": true,
+      "version": "1.0.0"
+    },
+    {
+      "templateId": "content",
+      "name": "Standard Content",
+      "description": "Title with bullet points",
+      "contentType": "content",
+      "category": "general",
+      "htmlTemplate": "\n<div class=\"slide slide-content\" data-template=\"content\" data-slide-id=\"{{ slide.order }}\">\n    <div class=\"header-region\">\n        <h2 class=\"slide-title\">{{ slide.title }}</h2>\n    </div>\n    <div class=\"content-region\">\n        {% if slide.bullet_points %}\n        <ul>\n            {% for point in slide.bullet_points %}\n            <li>{{ point }}</li>\n            {% endfor %}\n        </ul>\n        {% endif %}\n    </div>\n</div>\n",
+      "cssStyles": null,
+      "isActive": true,
+      "isSystem": true,
+      "version": "1.0.0"
+    },
+    {
+      "templateId": "content_modern",
+      "name": "Modern Content",
+      "description": null,
+      "contentType": "content",
+      "category": "modern",
+      "htmlTemplate": "\n<div class=\"slide slide-content-modern\">\n    <div class=\"header\">\n        <div class=\"accent-dot\"></div>\n        <h2>{{ slide.title }}</h2>\n    </div>\n    \n    <div class=\"content-area\">\n        <ul>\n            {% for point in slide.bullet_points %}\n            <li class=\"card-item\">{{ point }}</li>\n            {% endfor %}\n        </ul>\n    </div>\n</div>\n\n<style>\n.slide-content-modern {\n    padding: var(--spacing-lg) calc(var(--spacing-lg) * 2);\n}\n\n.slide-content-modern .header {\n    display: flex;\n    align-items: center;\n    gap: var(--spacing-md);\n    margin-bottom: calc(var(--spacing-lg) * 1.5);\n    border-bottom: 2px solid var(--color-surface);\n    padding-bottom: var(--spacing-sm);\n}\n\n.slide-content-modern .accent-dot {\n    width: 12px;\n    height: 12px;\n    background: var(--color-accent);\n    border-radius: 2px;\n}\n\n.slide-content-modern h2 {\n    font-size: var(--font-size-heading);\n    color: var(--color-primary);\n    font-weight: 700;\n    margin: 0;\n}\n\n.slide-content-modern ul {\n    display: grid;\n    grid-template-columns: 1fr;\n    gap: var(--spacing-md);\n    list-style: none;\n    padding: 0;\n}\n\n.slide-content-modern li.card-item {\n    background: var(--color-surface);\n    padding: var(--spacing-md) var(--spacing-lg);\n    border-radius: var(--radius-md);\n    border-left: 4px solid var(--color-secondary);\n    font-size: var(--font-size-body);\n    color: var(--color-text-primary);\n    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);\n}\n</style>\n",
+      "cssStyles": "",
+      "isActive": true,
+      "isSystem": true,
+      "version": "1.0"
+    },
+    {
+      "templateId": "content_split",
+      "name": "Split Content",
+      "description": null,
+      "contentType": "content",
+      "category": "split",
+      "htmlTemplate": "\n<div class=\"slide slide-content-split\">\n    <div class=\"sidebar\">\n        <h2>{{ slide.title }}</h2>\n        <div class=\"decoration\"></div>\n    </div>\n    <div class=\"main-content\">\n        <ul>\n            {% for point in slide.bullet_points %}\n            <li>{{ point }}</li>\n            {% endfor %}\n        </ul>\n    </div>\n</div>\n\n<style>\n.slide-content-split {\n    display: flex;\n    padding: 0;\n}\n\n.slide-content-split .sidebar {\n    width: 30%;\n    background: var(--color-surface);\n    padding: var(--spacing-lg);\n    display: flex;\n    flex-direction: column;\n    justify-content: center;\n    border-right: 1px solid var(--color-border);\n}\n\n.slide-content-split .sidebar h2 {\n    font-size: var(--font-size-heading);\n    color: var(--color-primary);\n    font-weight: 800;\n    margin-bottom: var(--spacing-md);\n    text-align: right;\n}\n\n.slide-content-split .decoration {\n    align-self: flex-end;\n    width: 60px;\n    height: 8px;\n    background: var(--color-secondary);\n    border-radius: 4px;\n}\n\n.slide-content-split .main-content {\n    flex: 1;\n    padding: calc(var(--spacing-lg) * 2);\n    display: flex;\n    flex-direction: column;\n    justify-content: center;\n}\n\n.slide-content-split ul {\n    list-style: none;\n    padding: 0;\n}\n\n.slide-content-split li {\n    font-size: var(--font-size-body);\n    margin-bottom: var(--spacing-md);\n    padding-left: var(--spacing-lg);\n    border-left: 2px solid var(--color-border);\n    transition: all 0.3s ease;\n}\n\n.slide-content-split li:hover {\n    border-left-color: var(--color-accent);\n    padding-left: calc(var(--spacing-lg) + 5px);\n}\n</style>\n",
+      "cssStyles": "",
+      "isActive": true,
+      "isSystem": true,
+      "version": "1.0"
+    },
+    {
+      "templateId": "diagram",
+      "name": "Diagram Slide",
+      "description": "Mermaid diagram visualization",
+      "contentType": "diagram",
+      "category": "general",
+      "htmlTemplate": "\n<div class=\"slide slide-diagram\" data-template=\"diagram\" data-slide-id=\"{{ slide.order }}\">\n    <div class=\"header-region\">\n        <h2 class=\"slide-title\">{{ slide.title }}</h2>\n    </div>\n    <div class=\"diagram-container\">\n        {% if slide.diagram_svg %}\n        <div class=\"diagram-svg\">{{ slide.diagram_svg | safe }}</div>\n        {% else %}\n        <div class=\"mermaid\">{{ slide.diagram_mermaid or 'graph TD; A-->B;' }}</div>\n        {% endif %}\n        \n        {% if slide.bullet_points %}\n        <div class=\"diagram-caption\"><p>{{ slide.bullet_points[0] }}</p></div>\n        {% endif %}\n    </div>\n</div>\n",
+      "cssStyles": null,
+      "isActive": true,
+      "isSystem": true,
+      "version": "1.0.0"
+    },
+    {
+      "templateId": "full_image",
+      "name": "Full Screen Image",
+      "description": "Large hero image with overlay title",
+      "contentType": "full_image",
+      "category": "general",
+      "htmlTemplate": "\n<div class=\"slide slide-full-image\" data-template=\"full_image\" data-slide-id=\"{{ slide.order }}\">\n    <div class=\"background-image-container\">\n        <img src=\"{{ slide.image_url or 'https://via.placeholder.com/1280x720?text=Hero+Image' }}\" alt=\"{{ slide.image_alt or 'Full screen image' }}\" class=\"hero-image\" />\n    </div>\n    <div class=\"overlay-content\">\n        <h2 class=\"slide-title\">{{ slide.title }}</h2>\n        {% if slide.image_caption %}\n        <p class=\"image-caption\">{{ slide.image_caption }}</p>\n        {% elif slide.bullet_points %}\n        <p class=\"image-caption\">{{ slide.bullet_points[0] }}</p>\n        {% endif %}\n    </div>\n</div>\n",
+      "cssStyles": null,
+      "isActive": true,
+      "isSystem": true,
+      "version": "1.0.0"
+    },
+    {
+      "templateId": "quote",
+      "name": "Quote",
+      "description": "Large quote with attribution",
+      "contentType": "quote",
+      "category": "general",
+      "htmlTemplate": "\n<div class=\"slide slide-quote\" data-template=\"quote\" data-slide-id=\"{{ slide.order }}\">\n    <div class=\"quote-content\">\n        <blockquote class=\"main-quote\">\n            \"{{ slide.quote_text }}\"\n        </blockquote>\n        <div class=\"quote-attribution\">\n            <span class=\"quote-author\">— {{ slide.quote_author }}</span>\n        </div>\n    </div>\n</div>\n",
+      "cssStyles": null,
+      "isActive": true,
+      "isSystem": true,
+      "version": "1.0.0"
+    },
+    {
+      "templateId": "references",
+      "name": "References Slide",
+      "description": "Bibliography/References slide with formatted citations",
+      "contentType": "references",
+      "category": "general",
+      "htmlTemplate": "\n<div class=\"slide slide-references\" data-template=\"references\" data-slide-id=\"{{ slide.order }}\">\n    <div class=\"header-region\">\n        <h2 class=\"slide-title\">{{ slide.title }}</h2>\n    </div>\n    <div class=\"references-region\">\n        {% if slide.formatted_citations %}\n        <ul class=\"references-list\">\n            {% for citation in slide.formatted_citations %}\n            <li>{{ citation | safe }}</li>\n            {% endfor %}\n        </ul>\n        {% endif %}\n    </div>\n</div>\n",
+      "cssStyles": "\n.slide-references .references-region {\n    flex: 1;\n    overflow-y: auto;\n    padding: var(--spacing-md);\n}\n.references-list {\n    list-style: none;\n    padding-left: 0;\n}\n.references-list li {\n    font-size: 14px;\n    line-height: 1.6;\n    margin-bottom: var(--spacing-sm);\n    padding-left: var(--spacing-md);\n    text-indent: calc(-1 * var(--spacing-md));\n}\n.references-list li em {\n    font-style: italic;\n}\n",
+      "isActive": true,
+      "isSystem": true,
+      "version": "1.0.0"
+    },
+    {
+      "templateId": "section",
+      "name": "Section Divider",
+      "description": "Section title slide",
+      "contentType": "section",
+      "category": "general",
+      "htmlTemplate": "\n<div class=\"slide slide-section\" data-template=\"section\" data-slide-id=\"{{ slide.order }}\">\n    <div class=\"section-content\">\n        <h1 class=\"section-title\">{{ slide.title }}</h1>\n        <div class=\"section-decoration\"></div>\n    </div>\n</div>\n",
+      "cssStyles": null,
+      "isActive": true,
+      "isSystem": true,
+      "version": "1.0.0"
+    },
+    {
+      "templateId": "section_modern",
+      "name": "Modern Section",
+      "description": null,
+      "contentType": "section",
+      "category": "modern",
+      "htmlTemplate": "\n<div class=\"slide slide-section-modern\">\n    <div class=\"accent-bar\"></div>\n    <div class=\"content\">\n        <h1>{{ slide.title }}</h1>\n        <div class=\"section-subtitle\">{{ slide.subtitle }}</div>\n        \n        <div class=\"footer-info\">\n            <span class=\"author\">{{ slide.author }}</span>\n            <span class=\"separator\">|</span>\n            <span class=\"date\">{{ slide.date }}</span>\n        </div>\n    </div>\n</div>\n\n<style>\n.slide-section-modern {\n    display: flex;\n    flex-direction: row;\n    padding: 0;\n    position: relative;\n    background: var(--color-background);\n}\n\n.slide-section-modern .accent-bar {\n    width: 60px;\n    height: 100%;\n    background: var(--color-primary);\n    margin-right: var(--spacing-lg);\n}\n\n.slide-section-modern .content {\n    flex: 1;\n    display: flex;\n    flex-direction: column;\n    justify-content: center;\n    padding: var(--spacing-lg);\n}\n\n.slide-section-modern h1 {\n    font-size: calc(var(--font-size-title) * 1.2);\n    font-weight: 800;\n    color: var(--color-text-primary);\n    margin-bottom: var(--spacing-md);\n    letter-spacing: -0.02em;\n    line-height: 1.1;\n}\n\n.slide-section-modern .section-subtitle {\n    font-size: var(--font-size-heading);\n    color: var(--color-secondary);\n    font-weight: 500;\n    margin-bottom: calc(var(--spacing-lg) * 2);\n}\n\n.slide-section-modern .footer-info {\n    font-size: var(--font-size-body);\n    color: var(--color-text-secondary);\n    display: flex;\n    align-items: center;\n    gap: var(--spacing-sm);\n}\n\n.slide-section-modern .separator {\n    color: var(--color-accent);\n}\n</style>\n",
+      "cssStyles": "",
+      "isActive": true,
+      "isSystem": true,
+      "version": "1.0"
+    },
+    {
+      "templateId": "section_split",
+      "name": "Split Section",
+      "description": null,
+      "contentType": "section",
+      "category": "split",
+      "htmlTemplate": "\n<div class=\"slide slide-title-split\">\n    <div class=\"left-pane\">\n        <h1>{{ slide.title }}</h1>\n    </div>\n    <div class=\"right-pane\">\n        <div class=\"meta-content\">\n            <div class=\"subtitle\">{{ slide.subtitle }}</div>\n            <div class=\"divider\"></div>\n            <div class=\"author-block\">\n                <strong>{{ slide.author }}</strong><br>\n                {{ slide.date }}\n            </div>\n        </div>\n    </div>\n</div>\n\n<style>\n.slide-title-split {\n    display: flex;\n    padding: 0;\n    width: 100%;\n    height: 100%;\n}\n\n.slide-title-split .left-pane {\n    flex: 1;\n    background: var(--color-primary);\n    color: white; /* Force white text on primary block */\n    display: flex;\n    align-items: center;\n    justify-content: center;\n    padding: var(--spacing-lg);\n    text-align: right;\n}\n\n.slide-title-split .left-pane h1 {\n    font-size: calc(var(--font-size-title) * 1.1);\n    font-weight: 900;\n    line-height: 1.1;\n    color: white !important; /* Override theme text color */\n}\n\n.slide-title-split .right-pane {\n    flex: 1;\n    background: var(--color-surface);\n    display: flex;\n    align-items: center;\n    padding: var(--spacing-lg);\n}\n\n.slide-title-split .meta-content {\n    border-left: 1px solid var(--color-border);\n    padding-left: var(--spacing-lg);\n}\n\n.slide-title-split .subtitle {\n    font-size: var(--font-size-heading);\n    color: var(--color-secondary);\n    font-weight: 600;\n    margin-bottom: var(--spacing-lg);\n}\n\n.slide-title-split .divider {\n    width: 40px;\n    height: 4px;\n    background: var(--color-accent);\n    margin-bottom: var(--spacing-lg);\n}\n\n.slide-title-split .author-block {\n    font-size: var(--font-size-body);\n    color: var(--color-text-secondary);\n    line-height: 1.6;\n}\n</style>\n",
+      "cssStyles": "",
+      "isActive": true,
+      "isSystem": true,
+      "version": "1.0"
+    },
+    {
+      "templateId": "thank_you",
+      "name": "Thank You Slide",
+      "description": "Professional thank you closing slide with author info",
+      "contentType": "thank_you",
+      "category": "general",
+      "htmlTemplate": "\n<div class=\"slide slide-thank-you\" data-template=\"thank_you\" data-slide-id=\"{{ slide.order }}\">\n    <div class=\"thank-you-content\">\n        {% if logo_url %}\n        <img class=\"thank-you-logo\" src=\"{{ logo_url }}\" alt=\"Logo\">\n        {% endif %}\n        <h1 class=\"thank-you-message\">Thank You</h1>\n        <div class=\"author-info\">\n            {% if slide.author %}\n            <p class=\"presenter-name\">{{ slide.author }}</p>\n            {% endif %}\n            {% if slide.email %}\n            <p class=\"presenter-email\">{{ slide.email }}</p>\n            {% endif %}\n            {% if slide.date %}\n            <p class=\"presentation-date\">{{ slide.date }}</p>\n            {% endif %}\n        </div>\n        <p class=\"questions-prompt\">Questions?</p>\n    </div>\n</div>\n",
+      "cssStyles": "\n.slide-thank-you {\n    display: flex !important;\n    justify-content: center;\n    align-items: center;\n    text-align: center;\n}\n.thank-you-content {\n    display: flex;\n    flex-direction: column;\n    align-items: center;\n    gap: var(--spacing-lg);\n}\n.thank-you-message {\n    font-size: 72px;\n    font-weight: var(--font-weight-title);\n    color: var(--color-primary);\n    margin-bottom: var(--spacing-md);\n}\n.author-info {\n    font-size: var(--font-size-body);\n    color: var(--color-text-secondary);\n}\n.presenter-name {\n    font-weight: 600;\n    font-size: 28px;\n    color: var(--color-text-primary);\n}\n.presenter-email {\n    font-size: 20px;\n    color: var(--color-primary);\n}\n.questions-prompt {\n    font-size: 32px;\n    color: var(--color-text-secondary);\n    font-style: italic;\n    margin-top: var(--spacing-lg);\n}\n.thank-you-logo {\n    max-height: 80px;\n    margin-bottom: var(--spacing-md);\n}\n",
+      "isActive": true,
+      "isSystem": true,
+      "version": "1.0.0"
+    },
+    {
+      "templateId": "title",
+      "name": "Title Slide",
+      "description": "Opening slide with title, subtitle, and author info",
+      "contentType": "title",
+      "category": "general",
+      "htmlTemplate": "\n<div class=\"slide slide-title\" data-template=\"title\" data-slide-id=\"{{ slide.order }}\">\n    <div class=\"title-content\">\n        <h1 class=\"main-title\">{{ slide.title }}</h1>\n        <p class=\"subtitle\">{{ slide.bullet_points[0] if slide.bullet_points else '' }}</p>\n    </div>\n    <div class=\"title-footer\">\n        <span class=\"author\">Presented by Author</span>\n        <span class=\"date\">{{ current_date }}</span>\n    </div>\n</div>\n",
+      "cssStyles": null,
+      "isActive": true,
+      "isSystem": true,
+      "version": "1.0.0"
+    },
+    {
+      "templateId": "title_modern",
+      "name": "Modern Title",
+      "description": null,
+      "contentType": "title",
+      "category": "modern",
+      "htmlTemplate": "\n<div class=\"slide slide-title-modern\">\n    <div class=\"accent-bar\"></div>\n    <div class=\"content\">\n        <h1>{{ slide.title }}</h1>\n        <div class=\"subtitle\">{{ slide.subtitle }}</div>\n        \n        <div class=\"footer-info\">\n            <span class=\"author\">{{ slide.author }}</span>\n            <span class=\"separator\">|</span>\n            <span class=\"date\">{{ slide.date }}</span>\n        </div>\n    </div>\n</div>\n\n<style>\n.slide-title-modern {\n    display: flex;\n    flex-direction: row;\n    padding: 0;\n    position: relative;\n    background: var(--color-background);\n}\n\n.slide-title-modern .accent-bar {\n    width: 60px;\n    height: 100%;\n    background: var(--color-primary);\n    margin-right: var(--spacing-lg);\n}\n\n.slide-title-modern .content {\n    flex: 1;\n    display: flex;\n    flex-direction: column;\n    justify-content: center;\n    padding: var(--spacing-lg);\n}\n\n.slide-title-modern h1 {\n    font-size: calc(var(--font-size-title) * 1.2);\n    font-weight: 800;\n    color: var(--color-text-primary);\n    margin-bottom: var(--spacing-md);\n    letter-spacing: -0.02em;\n    line-height: 1.1;\n}\n\n.slide-title-modern .subtitle {\n    font-size: var(--font-size-heading);\n    color: var(--color-secondary);\n    font-weight: 500;\n    margin-bottom: calc(var(--spacing-lg) * 2);\n}\n\n.slide-title-modern .footer-info {\n    font-size: var(--font-size-body);\n    color: var(--color-text-secondary);\n    display: flex;\n    align-items: center;\n    gap: var(--spacing-sm);\n}\n\n.slide-title-modern .separator {\n    color: var(--color-accent);\n}\n</style>\n",
+      "cssStyles": "",
+      "isActive": true,
+      "isSystem": true,
+      "version": "1.0"
+    },
+    {
+      "templateId": "title_split",
+      "name": "Split Title",
+      "description": null,
+      "contentType": "title",
+      "category": "split",
+      "htmlTemplate": "\n<div class=\"slide slide-title-split\">\n    <div class=\"left-pane\">\n        <h1>{{ slide.title }}</h1>\n    </div>\n    <div class=\"right-pane\">\n        <div class=\"meta-content\">\n            <div class=\"subtitle\">{{ slide.subtitle }}</div>\n            <div class=\"divider\"></div>\n            <div class=\"author-block\">\n                <strong>{{ slide.author }}</strong><br>\n                {{ slide.date }}\n            </div>\n        </div>\n    </div>\n</div>\n\n<style>\n.slide-title-split {\n    display: flex;\n    padding: 0;\n    width: 100%;\n    height: 100%;\n}\n\n.slide-title-split .left-pane {\n    flex: 1;\n    background: var(--color-primary);\n    color: white; /* Force white text on primary block */\n    display: flex;\n    align-items: center;\n    justify-content: center;\n    padding: var(--spacing-lg);\n    text-align: right;\n}\n\n.slide-title-split .left-pane h1 {\n    font-size: calc(var(--font-size-title) * 1.1);\n    font-weight: 900;\n    line-height: 1.1;\n    color: white !important; /* Override theme text color */\n}\n\n.slide-title-split .right-pane {\n    flex: 1;\n    background: var(--color-surface);\n    display: flex;\n    align-items: center;\n    padding: var(--spacing-lg);\n}\n\n.slide-title-split .meta-content {\n    border-left: 1px solid var(--color-border);\n    padding-left: var(--spacing-lg);\n}\n\n.slide-title-split .subtitle {\n    font-size: var(--font-size-heading);\n    color: var(--color-secondary);\n    font-weight: 600;\n    margin-bottom: var(--spacing-lg);\n}\n\n.slide-title-split .divider {\n    width: 40px;\n    height: 4px;\n    background: var(--color-accent);\n    margin-bottom: var(--spacing-lg);\n}\n\n.slide-title-split .author-block {\n    font-size: var(--font-size-body);\n    color: var(--color-text-secondary);\n    line-height: 1.6;\n}\n</style>\n",
+      "cssStyles": "",
+      "isActive": true,
+      "isSystem": true,
+      "version": "1.0"
+    },
+    {
+      "templateId": "two_col_image",
+      "name": "Two Column Image",
+      "description": "Bullet points on the left, image on the right",
+      "contentType": "two_col_image",
+      "category": "general",
+      "htmlTemplate": "\n<div class=\"slide slide-two-col-image\" data-template=\"two_col_image\" data-slide-id=\"{{ slide.order }}\">\n    <div class=\"header-region\">\n        <h2 class=\"slide-title\">{{ slide.title }}</h2>\n    </div>\n    <div class=\"columns-container\">\n        <div class=\"column content-column\">\n            {% if slide.bullet_points %}\n            <ul>\n                {% for point in slide.bullet_points %}\n                <li>{{ point }}</li>\n                {% endfor %}\n            </ul>\n            {% endif %}\n        </div>\n        <div class=\"column image-column\">\n            <div class=\"image-wrapper\">\n                 <img src=\"{{ slide.image_url or 'https://via.placeholder.com/600x400?text=Placeholder+Image' }}\" alt=\"{{ slide.image_alt or 'Slide image' }}\" />\n                 {% if slide.image_caption %}\n                 <p class=\"image-caption\">{{ slide.image_caption }}</p>\n                 {% endif %}\n            </div>\n        </div>\n    </div>\n</div>\n",
+      "cssStyles": null,
+      "isActive": true,
+      "isSystem": true,
+      "version": "1.0.0"
+    },
+    {
+      "templateId": "two_col_math",
+      "name": "Two Column Math",
+      "description": "Text on left, Equation on right",
+      "contentType": "two_col_math",
+      "category": "general",
+      "htmlTemplate": "\n<div class=\"slide slide-two-col-math\" data-template=\"two_col_math\" data-slide-id=\"{{ slide.order }}\">\n    <div class=\"header-region\">\n        <h2 class=\"slide-title\">{{ slide.title }}</h2>\n    </div>\n    <div class=\"columns-container\">\n        <div class=\"column content-column\">\n            {% if slide.bullet_points %}\n            <ul>\n                {% for point in slide.bullet_points %}\n                <li>{{ point }}</li>\n                {% endfor %}\n            </ul>\n            {% endif %}\n        </div>\n        <div class=\"column math-column\">\n            <div class=\"equation-wrapper\">\n                {% if slide.equation_svg %}\n                <div class=\"math-svg\">{{ slide.equation_svg | safe }}</div>\n                {% else %}\n                <div class=\"latex-content\">$${{ slide.equation_latex or 'E = mc^2' }}$$</div>\n                {% endif %}\n            </div>\n        </div>\n    </div>\n</div>\n",
+      "cssStyles": null,
+      "isActive": true,
+      "isSystem": true,
+      "version": "1.0.0"
+    },
+    {
+      "templateId": "two_column",
+      "name": "Two Column",
+      "description": "Split layout for side-by-side content",
+      "contentType": "two_column",
+      "category": "general",
+      "htmlTemplate": "\n<div class=\"slide slide-two-column\" data-template=\"two_column\" data-slide-id=\"{{ slide.order }}\">\n    <div class=\"header-region\">\n        <h2 class=\"slide-title\">{{ slide.title }}</h2>\n    </div>\n    <div class=\"columns-container\">\n        <div class=\"column left-column\">\n            {% if slide.left_points %}\n            <ul>\n                {% for point in slide.left_points %}\n                <li>{{ point }}</li>\n                {% endfor %}\n            </ul>\n            {% endif %}\n        </div>\n        <div class=\"column right-column\">\n            {% if slide.right_points %}\n            <ul>\n                {% for point in slide.right_points %}\n                <li>{{ point }}</li>\n                {% endfor %}\n            </ul>\n            {% endif %}\n        </div>\n    </div>\n</div>\n",
+      "cssStyles": null,
+      "isActive": true,
+      "isSystem": true,
+      "version": "1.0.0"
+    }
+  ],
+  "palettes": [
+    {
+      "name": "Academic Blue",
+      "category": "academic",
+      "colors": {
+        "accent": "#2B6CB0",
+        "border": "#E2E8F0",
+        "primary": "#1A365D",
+        "surface": "#F7FAFC",
+        "secondary": "#C53030",
+        "background": "#FFFFFF",
+        "text_primary": "#2D3748",
+        "text_secondary": "#718096"
+      },
+      "isDefault": false,
+      "isSystem": true
+    },
+    {
+      "name": "Dracula",
+      "category": "dark",
+      "colors": {
+        "accent": "#8BE9FD",
+        "border": "#44475A",
+        "primary": "#BD93F9",
+        "surface": "#44475A",
+        "secondary": "#FF79C6",
+        "background": "#282A36",
+        "text_primary": "#F8F8F2",
+        "text_secondary": "#6272A4"
+      },
+      "isDefault": false,
+      "isSystem": true
+    },
+    {
+      "name": "Minimal Dark",
+      "category": "minimal",
+      "colors": {
+        "accent": "#3B82F6",
+        "border": "#374151",
+        "primary": "#F9FAFB",
+        "surface": "#1F2937",
+        "secondary": "#9CA3AF",
+        "background": "#111827",
+        "text_primary": "#F9FAFB",
+        "text_secondary": "#9CA3AF"
+      },
+      "isDefault": false,
+      "isSystem": true
+    },
+    {
+      "name": "Modern Indigo",
+      "category": "modern",
+      "colors": {
+        "accent": "#14B8A6",
+        "border": "#E2E8F0",
+        "primary": "#6366F1",
+        "surface": "#F8FAFC",
+        "secondary": "#EC4899",
+        "background": "#FFFFFF",
+        "text_primary": "#0F172A",
+        "text_secondary": "#64748B"
+      },
+      "isDefault": true,
+      "isSystem": true
+    },
+    {
+      "name": "Night Blue",
+      "category": "dark",
+      "colors": {
+        "accent": "#A6DA95",
+        "border": "#494D64",
+        "primary": "#8AADF4",
+        "surface": "#363A4F",
+        "secondary": "#F5A97F",
+        "background": "#24273A",
+        "text_primary": "#CAD3F5",
+        "text_secondary": "#A5ADCB"
+      },
+      "isDefault": false,
+      "isSystem": true
+    },
+    {
+      "name": "Pro Modern",
+      "category": "modern",
+      "colors": {
+        "accent": "#F59E0B",
+        "border": "#E5E7EB",
+        "primary": "#2563EB",
+        "surface": "#F3F4F6",
+        "secondary": "#3B82F6",
+        "background": "#FFFFFF",
+        "text_primary": "#111827",
+        "text_secondary": "#4B5563"
+      },
+      "isDefault": false,
+      "isSystem": true
+    },
+    {
+      "name": "Simple White",
+      "category": "minimal",
+      "colors": {
+        "accent": "#0000EE",
+        "border": "#DDDDDD",
+        "primary": "#000000",
+        "surface": "#F5F5F5",
+        "secondary": "#333333",
+        "background": "#FFFFFF",
+        "text_primary": "#000000",
+        "text_secondary": "#666666"
+      },
+      "isDefault": false,
+      "isSystem": true
+    },
+    {
+      "name": "Solarized Light",
+      "category": "minimal",
+      "colors": {
+        "accent": "#268BD2",
+        "border": "#EEE8D5",
+        "primary": "#586E75",
+        "surface": "#EEE8D5",
+        "secondary": "#D33682",
+        "background": "#FDF6E3",
+        "text_primary": "#657B83",
+        "text_secondary": "#93A1A1"
+      },
+      "isDefault": false,
+      "isSystem": true
+    },
+    {
+      "name": "UMaT Official",
+      "category": "academic",
+      "colors": {
+        "accent": "#1E3A5F",
+        "border": "#D4AF37",
+        "primary": "#1E3A5F",
+        "surface": "#F0F4F8",
+        "secondary": "#D4AF37",
+        "background": "#FFFFFF",
+        "text_primary": "#000000",
+        "text_secondary": "#333333"
+      },
+      "isDefault": false,
+      "isSystem": true
+    }
+  ],
+  "themes": [
+    {
+      "themeId": "academic",
+      "name": "Academic",
+      "description": "Clean, professional theme for university presentations",
+      "paletteIndex": 0,
+      "typography": {
+        "font_body": "Source Sans Pro",
+        "font_heading": "Merriweather",
+        "font_size_body": "24px",
+        "font_size_title": "56px",
+        "font_size_heading": "44px"
+      },
+      "spacing": {
+        "lg": "36px",
+        "md": "24px"
+      },
+      "borders": {
+        "radius_md": "4px"
+      },
+      "cssOverrides": "\n/* Academic: Left-aligned, formal, serif accents */\n.slide-title {\n    align-items: flex-start;\n    text-align: left;\n    padding-left: 100px;\n}\n\n.slide-title h1 {\n    border-left: 5px solid var(--color-primary);\n    padding-left: 28px;\n}\n\n.slide-title .subtitle {\n    padding-left: 32px;\n    font-style: italic;\n}\n\n.header-region h2 {\n    border-bottom: 2px solid var(--color-border);\n    padding-bottom: 16px;\n}\n\n.slide-content li::before {\n    content: \"■\";\n    font-size: 0.6em;\n    top: 0.4em;\n}\n\n.slide-section {\n    align-items: flex-start;\n    text-align: left;\n    padding-left: 100px;\n}\n\n.slide-quote blockquote {\n    text-align: left;\n    border-left: 4px solid var(--color-secondary);\n    padding-left: 32px;\n}\n",
+      "layoutStyle": "default",
+      "isActive": true,
+      "isSystem": true
+    },
+    {
+      "themeId": "dracula",
+      "name": "Dracula",
+      "description": "Dark theme with vibrant purple and pink accents. Based on draculatheme.com",
+      "paletteIndex": 1,
+      "typography": {
+        "font_body": "Lato",
+        "font_heading": "League Gothic",
+        "font_size_body": "24px",
+        "font_size_title": "72px",
+        "font_size_heading": "48px"
+      },
+      "spacing": {
+        "lg": "36px",
+        "md": "20px"
+      },
+      "borders": {
+        "radius_md": "8px"
+      },
+      "cssOverrides": "\n/* Dracula: Dramatic, uppercase titles, gothic feel */\n.slide-title h1 {\n    text-transform: uppercase;\n    letter-spacing: 6px;\n    border-bottom: 4px solid var(--color-secondary);\n    padding-bottom: 24px;\n}\n\n.slide-title .subtitle {\n    letter-spacing: 2px;\n    opacity: 0.9;\n}\n\n.header-region h2 {\n    text-transform: uppercase;\n    letter-spacing: 3px;\n}\n\n.slide-content li::before {\n    content: \"›\";\n    font-size: 1.6em;\n    font-weight: bold;\n    color: var(--color-secondary);\n    top: -0.1em;\n}\n\n.slide-section h1,\n.slide-section h2 {\n    text-transform: uppercase;\n    letter-spacing: 8px;\n    text-shadow: 0 0 40px var(--color-secondary);\n}\n\n.slide-quote blockquote {\n    border-top: 2px solid var(--color-secondary);\n    border-bottom: 2px solid var(--color-secondary);\n    padding: 32px 0;\n}\n",
+      "layoutStyle": "default",
+      "isActive": true,
+      "isSystem": true
+    },
+    {
+      "themeId": "modern",
+      "name": "Modern",
+      "description": "Bold, contemporary design with vibrant colors",
+      "paletteIndex": 3,
+      "typography": {
+        "font_body": "Inter",
+        "font_heading": "Inter",
+        "font_size_body": "24px",
+        "font_size_title": "56px",
+        "font_size_heading": "44px"
+      },
+      "spacing": {
+        "lg": "40px",
+        "md": "24px"
+      },
+      "borders": {
+        "radius_md": "16px"
+      },
+      "cssOverrides": "\n/* Modern: Centered, rounded, subtle shadows */\n.slide-title h1 {\n    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);\n    -webkit-background-clip: text;\n    -webkit-text-fill-color: transparent;\n    background-clip: text;\n}\n\n.slide-content li::before {\n    content: \"\";\n    width: 10px;\n    height: 10px;\n    background: var(--color-accent);\n    border-radius: 50%;\n    top: 0.5em;\n}\n\n.slide-section {\n    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);\n}\n\n.header-region h2 {\n    padding-bottom: 12px;\n    border-bottom: 3px solid var(--color-accent);\n    display: inline-block;\n}\n",
+      "layoutStyle": "modern",
+      "isActive": true,
+      "isSystem": true
+    },
+    {
+      "themeId": "night",
+      "name": "Night",
+      "description": "Modern dark theme with blue-gray tones and soft accents",
+      "paletteIndex": 4,
+      "typography": {
+        "font_body": "Inter",
+        "font_heading": "Inter",
+        "font_size_body": "24px",
+        "font_size_title": "58px",
+        "font_size_heading": "44px"
+      },
+      "spacing": {
+        "lg": "42px",
+        "md": "26px"
+      },
+      "borders": {
+        "radius_md": "12px"
+      },
+      "cssOverrides": "\n/* Night: Floating cards, soft glows, modern dark UI */\n.slide {\n    background: linear-gradient(180deg, var(--color-background) 0%, #1e2030 100%);\n}\n\n.slide-title h1 {\n    text-shadow: 0 0 60px var(--color-primary);\n}\n\n.header-region h2 {\n    background: var(--color-surface);\n    padding: 16px 28px;\n    border-radius: 8px;\n    display: inline-block;\n    box-shadow: 0 4px 20px rgba(0,0,0,0.3);\n}\n\n.slide-content li {\n    background: var(--color-surface);\n    padding: 16px 24px;\n    border-radius: 8px;\n    margin-bottom: 16px;\n    box-shadow: 0 2px 12px rgba(0,0,0,0.2);\n}\n\n.slide-content li::before {\n    content: \"○\";\n    color: var(--color-accent);\n    position: static;\n    margin-right: 16px;\n}\n\n.slide-section {\n    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);\n    box-shadow: inset 0 0 100px rgba(0,0,0,0.3);\n}\n\n.slide-quote {\n    background: var(--color-surface);\n    border-radius: 24px;\n    margin: 40px;\n    box-shadow: 0 8px 40px rgba(0,0,0,0.4);\n}\n",
+      "layoutStyle": "split",
+      "isActive": true,
+      "isSystem": true
+    },
+    {
+      "themeId": "pro_modern",
+      "name": "Pro Modern",
+      "description": "High-end corporate style with sidebar",
+      "paletteIndex": 5,
+      "typography": {
+        "font_body": "Inter",
+        "font_heading": "Outfit",
+        "font_size_body": "18px",
+        "font_size_title": "48px",
+        "font_size_heading": "32px"
+      },
+      "spacing": {
+        "lg": "32px",
+        "md": "24px"
+      },
+      "borders": {
+        "radius_md": "12px"
+      },
+      "cssOverrides": "\n    /* Sidebar Layout Override */\n    .slide {\n        padding-left: 120px !important; /* Make room for sidebar */\n    }\n    .slide::before {\n        content: '';\n        position: absolute;\n        top: 0;\n        left: 0;\n        bottom: 0;\n        width: 100px;\n        background: var(--color-primary);\n        z-index: 0;\n    }\n    .slide::after {\n        content: '';\n        position: absolute;\n        top: 0;\n        left: 100px;\n        bottom: 0;\n        width: 10px;\n        background: rgba(0,0,0,0.05);\n        z-index: 0;\n    }\n    .slide-title {\n        padding-left: var(--spacing-lg) !important; /* Reset padding for title */\n        background: var(--color-primary);\n        color: white !important;\n    }\n    .slide-title .main-title {\n        color: white !important;\n    }\n    .slide-title .subtitle, .slide-title .author, .slide-title .date {\n        color: rgba(255,255,255,0.9) !important;\n    }\n    .slide-title::before, .slide-title::after {\n        display: none; /* Remove sidebar from title slide */\n    }\n    \n    /* Decoration */\n    .slide-content .header-region {\n        border-bottom: 2px solid var(--color-surface);\n        padding-bottom: var(--spacing-sm);\n    }\n    \n    .academic-info {\n        margin-top: var(--spacing-md);\n        padding-top: var(--spacing-md);\n        border-top: 1px solid rgba(255,255,255,0.2);\n    }\n        ",
+      "layoutStyle": "modern",
+      "isActive": true,
+      "isSystem": true
+    },
+    {
+      "themeId": "simple",
+      "name": "Simple",
+      "description": "Clean, minimalist black-on-white design for maximum clarity",
+      "paletteIndex": 6,
+      "typography": {
+        "font_body": "Palatino Linotype",
+        "font_heading": "Georgia",
+        "font_size_body": "24px",
+        "font_size_title": "56px",
+        "font_size_heading": "44px"
+      },
+      "spacing": {
+        "lg": "36px",
+        "md": "24px"
+      },
+      "borders": {
+        "radius_md": "0px"
+      },
+      "cssOverrides": "\n/* Simple: Maximum whitespace, no decorations, classic typography */\n.slide-title {\n    align-items: flex-start;\n    text-align: left;\n}\n\n.slide-title h1 {\n    font-weight: 400;\n    line-height: 1.2;\n}\n\n.slide-title .subtitle {\n    font-style: italic;\n    margin-top: 16px;\n}\n\n.header-region h2 {\n    font-weight: 400;\n}\n\n.slide-content li::before {\n    content: \"—\";\n    font-weight: normal;\n}\n\n.slide-content li {\n    padding-left: 48px;\n}\n\n.slide-section {\n    background: var(--color-background);\n    color: var(--color-text-primary);\n    border-top: 1px solid var(--color-border);\n    border-bottom: 1px solid var(--color-border);\n}\n\n.slide-quote blockquote {\n    font-size: calc(var(--font-size-heading) * 1.3);\n    font-weight: 400;\n}\n\n.slide-quote .author {\n    font-style: italic;\n}\n",
+      "layoutStyle": "default",
+      "isActive": true,
+      "isSystem": true
+    },
+    {
+      "themeId": "solarized",
+      "name": "Solarized",
+      "description": "Warm cream tones with excellent readability. Based on Ethan Schoonover's Solarized palette",
+      "paletteIndex": 7,
+      "typography": {
+        "font_body": "Lato",
+        "font_heading": "Playfair Display",
+        "font_size_body": "24px",
+        "font_size_title": "58px",
+        "font_size_heading": "44px"
+      },
+      "spacing": {
+        "lg": "34px",
+        "md": "22px"
+      },
+      "borders": {
+        "radius_md": "2px"
+      },
+      "cssOverrides": "\n/* Solarized: Classic, warm, elegant serif */\n.slide-title h1 {\n    font-weight: 400;\n    font-style: italic;\n}\n\n.slide-title .subtitle {\n    letter-spacing: 1px;\n}\n\n.header-region h2 {\n    font-weight: 400;\n    border-bottom: 1px solid var(--color-border);\n    padding-bottom: 12px;\n}\n\n.slide-content li::before {\n    content: \"—\";\n    font-weight: normal;\n    color: var(--color-accent);\n}\n\n.slide-section {\n    background: var(--color-surface);\n    color: var(--color-primary);\n}\n\n.slide-section h1,\n.slide-section h2 {\n    font-weight: 400;\n    font-style: italic;\n}\n\n.slide-quote blockquote {\n    font-weight: 400;\n    font-size: calc(var(--font-size-heading) * 1.2);\n}\n",
+      "layoutStyle": "default",
+      "isActive": true,
+      "isSystem": true
+    },
+    {
+      "themeId": "umat",
+      "name": "UMaT Official",
+      "description": "Official University of Mines and Technology theme",
+      "paletteIndex": 8,
+      "typography": {
+        "font_body": "Arial",
+        "font_heading": "Arial",
+        "font_size_body": "24px",
+        "font_size_title": "56px",
+        "font_size_heading": "44px"
+      },
+      "spacing": {
+        "lg": "32px",
+        "md": "24px"
+      },
+      "borders": {
+        "radius_md": "0px"
+      },
+      "cssOverrides": "\n    /* UMaT Specific Styles */\n    .slide-title .main-title {\n        color: var(--color-primary);\n        text-transform: uppercase;\n        border-bottom: 2px solid var(--color-secondary);\n        padding-bottom: 1rem;\n        margin-bottom: 1rem;\n    }\n    .slide-title {\n        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);\n        border: 10px solid var(--color-primary);\n    }\n    .university-badge {\n        filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));\n    }\n    .slide-number {\n        font-weight: bold;\n        color: var(--color-primary);\n    }\n    /* Figure titles below, Table titles above */\n    .slide-image .image-caption {\n        margin-top: 10px;\n        order: 2; /* Ensure it is visually below if flex used */\n        font-style: italic;\n    }\n    \n    /* Academic Info */\n    .degree-statement {\n        font-style: italic;\n        margin-top: 24px;\n        font-size: var(--font-size-body);\n        color: var(--color-text-secondary);\n    }\n    .supervisor-info {\n        margin-top: 12px;\n        font-weight: bold;\n        color: var(--color-text-primary);\n    }\n        ",
+      "layoutStyle": "default",
+      "isActive": true,
+      "isSystem": true
+    }
+  ]
+}

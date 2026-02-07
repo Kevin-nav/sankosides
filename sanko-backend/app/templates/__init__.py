@@ -86,13 +86,16 @@ def select_template_for_slide(slide: EnrichedSlide) -> BaseTemplate:
 # DATABASE TEMPLATE FUNCTIONS
 # =============================================================================
 
+# =============================================================================
+# DATABASE TEMPLATE FUNCTIONS
+# =============================================================================
+
 async def get_db_template_async(
-    session,
     template_type: str,
     layout_style: str = "default",
 ) -> Optional[Dict[str, Any]]:
     """
-    Fetch a template from the database with caching.
+    Fetch a template from the database (Convex) with caching.
     
     Priority:
     1. Variant specific: {template_type}_{layout_style}
@@ -100,16 +103,14 @@ async def get_db_template_async(
     3. Returns None (caller should fall back to hardcoded)
     
     Args:
-        session: AsyncSession from SQLAlchemy
         template_type: Base template type (title, content, section, etc.)
         layout_style: Theme layout style (default, modern, split, etc.)
         
     Returns:
         Dict with template data or None if not found
     """
-    from sqlalchemy import select
-    from app.core.template_models import SlideTemplate
     from app.services.unified_cache import template_cache
+    from app.core.convex_client import get_convex_client
     
     # Build cache key
     cache_key = f"db:{template_type}:{layout_style}"
@@ -120,50 +121,57 @@ async def get_db_template_async(
         logger.debug(f"DB template cache hit: {cache_key}")
         return cached
     
+    client = get_convex_client()
+    
     # Build list of template IDs to try
     target_ids = []
     if layout_style and layout_style != "default":
         target_ids.append(f"{template_type}_{layout_style}")
     target_ids.append(template_type)
     
-    # Query database
-    query = select(SlideTemplate).where(
-        SlideTemplate.template_id.in_(target_ids),
-        SlideTemplate.is_active == True
-    )
-    result = await session.execute(query)
-    found_templates = {t.template_id: t for t in result.scalars().all()}
-    
-    # Pick the best match
-    template = None
-    
-    # Try specific variant first
-    if layout_style and layout_style != "default":
-        template = found_templates.get(f"{template_type}_{layout_style}")
-    
-    # Fall back to base type
-    if not template:
-        template = found_templates.get(template_type)
-    
-    if not template:
-        logger.debug(f"No DB template found for {template_type}/{layout_style}")
-        template_cache.set(cache_key, None)  # Cache the miss
+    try:
+        # Fetch templates from Convex
+        # We fetch explicitly by ID
+        found_templates = {}
+        for tid in target_ids:
+            tmpl = client.query("templates:getTemplateById", {"templateId": tid})
+            if tmpl:
+                found_templates[tmpl["templateId"]] = tmpl
+        
+        # Pick the best match
+        template = None
+        
+        # Try specific variant first
+        if layout_style and layout_style != "default":
+            template = found_templates.get(f"{template_type}_{layout_style}")
+        
+        # Fall back to base type
+        if not template:
+            template = found_templates.get(template_type)
+        
+        if not template:
+            logger.debug(f"No DB template found for {template_type}/{layout_style}")
+            template_cache.set(cache_key, None)  # Cache the miss
+            return None
+        
+        # Convert to dict for caching and return
+        template_dict = {
+            "id": template.get("_id"),
+            "template_id": template.get("templateId"),
+            "name": template.get("name"),
+            "html_template": template.get("htmlTemplate"),
+            "css_styles": template.get("cssStyles", ""),
+            "content_type": template.get("contentType"),
+        }
+        
+        template_cache.set(cache_key, template_dict)
+        logger.debug(f"DB template cached: {cache_key}")
+        
+        return template_dict
+        
+    except Exception as e:
+        logger.error(f"Failed to fetch template from Convex: {e}")
         return None
-    
-    # Convert to dict for caching and return
-    template_dict = {
-        "id": str(template.id),
-        "template_id": template.template_id,
-        "name": template.name,
-        "html_template": template.html_template,
-        "css_styles": template.css_styles,
-        "content_type": template.content_type,
-    }
-    
-    template_cache.set(cache_key, template_dict)
-    logger.debug(f"DB template cached: {cache_key}")
-    
-    return template_dict
 
 
 def render_db_template(

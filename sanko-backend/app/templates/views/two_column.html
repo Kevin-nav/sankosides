@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="header-region col-12">
+    <h2 class="slide-title">{{ slide.title }}</h2>
+</div>
+
+<!-- Left Column (Points) -->
+<div class="col-start-1 col-6 text-col">
+    {% if slide.left_column %}
+    <h3>{{ slide.left_column.title }}</h3>
+    <ul>
+        {% for point in slide.left_column.content %}
+        <li>{{ point }}</li>
+        {% endfor %}
+    </ul>
+    {% elif slide.bullet_points %}
+    {# Fallback if not explicitly split in data #}
+    <ul>
+        {% for point in slide.bullet_points %}
+        <li>{{ point }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+</div>
+
+<!-- Right Column (Visual or Points) -->
+<div class="col-start-7 col-6">
+    {% if slide.image_url %}
+    <div class="visual-col">
+        <img src="{{ slide.image_url }}" alt="{{ slide.image_alt or 'Slide image' }}">
+        {% if slide.image_caption %}
+        <p class="image-caption">{{ slide.image_caption }}</p>
+        {% endif %}
+    </div>
+    {% elif slide.right_column %}
+    <div class="text-col">
+        <h3>{{ slide.right_column.title }}</h3>
+        <ul>
+            {% for point in slide.right_column.content %}
+            <li>{{ point }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

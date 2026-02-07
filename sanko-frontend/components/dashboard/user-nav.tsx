@@ -16,7 +16,7 @@ import { useAuth } from "@/components/auth-provider";
 import { useRouter } from "next/navigation";
 
 export function UserNav() {
-    const { user, dbUser, signOut } = useAuth();
+    const { user, convexUser, signOut } = useAuth();
     const router = useRouter();
 
     const handleSignOut = async () => {
@@ -39,7 +39,7 @@ export function UserNav() {
             <DropdownMenuContent className="w-56" align="end" forceMount>
                 <DropdownMenuLabel className="font-normal">
                     <div className="flex flex-col space-y-1">
-                        <p className="text-sm font-medium leading-none">{dbUser?.displayName || user.displayName || "User"}</p>
+                        <p className="text-sm font-medium leading-none">{convexUser?.displayName || user.displayName || "User"}</p>
                         <p className="text-xs leading-none text-muted-foreground">
                             {user.email}
                         </p>

@@ -5,7 +5,7 @@ This script sets the Windows-specific asyncio event loop policy BEFORE
 starting uvicorn, which is required for Playwright to work on Windows.
 
 Usage:
-    python run.py  # Default: --reload --port 8080
+    python run.py  # Default: --reload --port 8000
     python run.py --port 3000 --no-reload
 """
 
@@ -25,7 +25,7 @@ import argparse
 
 def main():
     parser = argparse.ArgumentParser(description="Run SankoSlides Backend")
-    parser.add_argument("--port", type=int, default=8080, help="Port to run on")
+    parser.add_argument("--port", type=int, default=8000, help="Port to run on")
     parser.add_argument("--host", default="127.0.0.1", help="Host to bind to")
     parser.add_argument("--no-reload", action="store_true", help="Disable auto-reload")
     args = parser.parse_args()

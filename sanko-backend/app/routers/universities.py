@@ -1,20 +1,19 @@
 """
-University API Router - Optimized with Redis Caching.
+University API Router - Convex Backend.
 
 Single `/hierarchy` endpoint returns ALL university data in one response.
-Cached in Upstash Redis for 1 hour - eliminates DB queries for every user.
+Uses Convex for data storage and Redis for L1 caching.
 """
 
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import text
+from fastapi import APIRouter, HTTPException
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel
 from datetime import datetime
 import json
 import redis
+import asyncio
 
-from app.core.database import get_async_session
+from app.core.convex_client import get_convex_client
 from app.core.config import settings
 from app.core.logging import get_logger
 
@@ -172,14 +171,12 @@ CACHE_KEY = "universities:hierarchy:full"
 
 
 @router.get("/hierarchy", response_model=HierarchyResponse)
-async def get_full_hierarchy(
-    session: AsyncSession = Depends(get_async_session),
-):
+async def get_full_hierarchy():
     """
     Get the complete university hierarchy in ONE call.
     
     Returns all universities with their faculties and departments nested.
-    Cached in Redis for 1 hour - shared across all users.
+    Data is fetched from Convex and cached in Redis for 1 hour.
     
     This eliminates:
     - Multiple API calls for cascading dropdowns
@@ -196,80 +193,66 @@ async def get_full_hierarchy(
             cache_ttl_seconds=UniversityCache.CACHE_TTL_SECONDS,
         )
     
-    logger.info("Cache miss - fetching university hierarchy from database")
+    logger.info("Cache miss - fetching university hierarchy from Convex")
     
-    # Single optimized query to get everything
-    query = """
-        SELECT 
-            u.university_id, u.name as uni_name, u.short_name as uni_short,
-            u.country, u.default_citation_style, u.spelling_variant, u.unit_system,
-            f.faculty_id, f.name as fac_name, f.short_name as fac_short,
-            d.department_id, d.name as dept_name, d.is_stem
-        FROM universities u
-        LEFT JOIN faculties f ON f.university_id = u.id AND f.is_active = true
-        LEFT JOIN departments d ON d.faculty_id = f.id AND d.is_active = true
-        WHERE u.is_active = true
-        ORDER BY u.name, f.display_order, f.name, d.display_order, d.name
-    """
-    
-    result = await session.execute(text(query))
-    rows = result.fetchall()
-    
-    # Build hierarchical structure
-    universities_map: Dict[str, dict] = {}
-    faculties_map: Dict[str, Dict[str, dict]] = {}
-    
-    for row in rows:
-        uni_id = row.university_id
+    try:
+        # Get Convex client and query the full hierarchy
+        convex = get_convex_client()
         
-        # Create university if not exists
-        if uni_id not in universities_map:
-            universities_map[uni_id] = {
-                "university_id": uni_id,
-                "name": row.uni_name,
-                "short_name": row.uni_short,
-                "country": row.country,
-                "default_citation_style": row.default_citation_style,
-                "spelling_variant": row.spelling_variant,
-                "unit_system": row.unit_system,
-                "faculties": [],
-            }
-            faculties_map[uni_id] = {}
+        # Execute the Convex query (synchronous call in thread)
+        hierarchy = await asyncio.wait_for(
+            asyncio.to_thread(convex.query, "universities:getFullHierarchy", {}),
+            timeout=30.0
+        )
         
-        # Add faculty if exists
-        if row.faculty_id and row.faculty_id not in faculties_map[uni_id]:
-            faculty = {
-                "faculty_id": row.faculty_id,
-                "name": row.fac_name,
-                "short_name": row.fac_short,
-                "departments": [],
-            }
-            faculties_map[uni_id][row.faculty_id] = faculty
-            universities_map[uni_id]["faculties"].append(faculty)
-        
-        # Add department if exists
-        if row.department_id and row.faculty_id:
-            faculty = faculties_map[uni_id].get(row.faculty_id)
-            if faculty:
-                # Avoid duplicates
-                if not any(d["department_id"] == row.department_id for d in faculty["departments"]):
-                    faculty["departments"].append({
-                        "department_id": row.department_id,
-                        "name": row.dept_name,
-                        "is_stem": row.is_stem,
+        # Transform Convex response to match our API schema
+        # Convex returns camelCase, we need snake_case for API compatibility
+        universities_list = []
+        for uni in hierarchy:
+            faculties_list = []
+            for fac in uni.get("faculties", []):
+                departments_list = []
+                for dept in fac.get("departments", []):
+                    departments_list.append({
+                        "department_id": dept.get("departmentId"),
+                        "name": dept.get("name"),
+                        "is_stem": dept.get("isStem", False),
                     })
-    
-    universities_list = list(universities_map.values())
-    
-    # Cache the result
-    UniversityCache.set(CACHE_KEY, universities_list)
-    logger.info(f"Cached {len(universities_list)} universities in Redis")
-    
-    return HierarchyResponse(
-        universities=[UniversityHierarchy(**u) for u in universities_list],
-        cached=False,
-        cache_ttl_seconds=UniversityCache.CACHE_TTL_SECONDS,
-    )
+                
+                faculties_list.append({
+                    "faculty_id": fac.get("facultyId"),
+                    "name": fac.get("name"),
+                    "short_name": fac.get("shortName"),
+                    "departments": departments_list,
+                })
+            
+            universities_list.append({
+                "university_id": uni.get("universityId"),
+                "name": uni.get("name"),
+                "short_name": uni.get("shortName"),
+                "country": uni.get("country"),
+                "default_citation_style": uni.get("defaultCitationStyle"),
+                "spelling_variant": uni.get("spellingVariant"),
+                "unit_system": uni.get("unitSystem"),
+                "faculties": faculties_list,
+            })
+        
+        # Cache the result
+        UniversityCache.set(CACHE_KEY, universities_list)
+        logger.info(f"Cached {len(universities_list)} universities from Convex")
+        
+        return HierarchyResponse(
+            universities=[UniversityHierarchy(**u) for u in universities_list],
+            cached=False,
+            cache_ttl_seconds=UniversityCache.CACHE_TTL_SECONDS,
+        )
+        
+    except asyncio.TimeoutError:
+        logger.error("Convex query timed out")
+        raise HTTPException(status_code=504, detail="Database query timed out")
+    except Exception as e:
+        logger.error(f"Failed to fetch hierarchy from Convex: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # =============================================================================
@@ -280,7 +263,7 @@ async def get_full_hierarchy(
 async def invalidate_cache():
     """
     Invalidate the university cache.
-    Call after updating university data in the database.
+    Call after updating university data in Convex.
     """
     count = UniversityCache.flush_pattern("universities:*")
     logger.info(f"Invalidated {count} cache entries")
@@ -301,4 +284,5 @@ async def cache_status():
         "redis_connected": client is not None,
         "hierarchy_cached": cached is not None,
         "university_count": len(cached) if cached else 0,
+        "data_source": "convex",
     }

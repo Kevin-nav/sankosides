@@ -16,6 +16,8 @@ import React from "react";
 import { MetricsDashboard } from "./metrics-dashboard";
 import { cn } from "@/lib/utils";
 import { Brain, Sparkles, BookOpen, FileText, Layers, Eye, ChevronRight } from "lucide-react";
+import { useCreateProject } from "@/hooks/convex";
+import { Id } from "@/convex/_generated/dataModel";
 
 const PipelineStages = ({ currentStage }: { currentStage: string | null }) => {
     const stages = [
@@ -69,7 +71,8 @@ interface MetricsSummary {
 }
 
 export function PlaygroundWorkspace() {
-    const { user } = useAuth();
+    const { user, convexUserId } = useAuth();
+    const createProject = useCreateProject();
 
     // Configuration State
     const [prompts, setPrompts] = useState<PromptRegistry | null>(null);
@@ -94,6 +97,10 @@ export function PlaygroundWorkspace() {
     const [currentThinking, setCurrentThinking] = useState<string>("");
     const [currentStage, setCurrentStage] = useState<string | null>(null);
 
+    // Convex Project State - for real-time progress tracking
+    const [convexProjectId, setConvexProjectId] = useState<Id<"projects"> | null>(null);
+    const [isCreatingProject, setIsCreatingProject] = useState(false);
+
     // Initialize View Mode logic
     useEffect(() => {
         if (isCompleted && activeSessionId) setViewMode('result');
@@ -101,6 +108,30 @@ export function PlaygroundWorkspace() {
         else if (showBlueprint) setViewMode('blueprint');
         else setViewMode('chat');
     }, [isCompleted, isGenerating, showBlueprint, activeSessionId]);
+
+    // Auto-create Convex project on initial load for real-time tracking
+    useEffect(() => {
+        if (!convexUserId || convexProjectId || isCreatingProject) return;
+
+        async function createInitialProject() {
+            setIsCreatingProject(true);
+            try {
+                const newProjectId = await createProject({
+                    title: `Playground: ${topic || 'Untitled'}`,
+                    description: "Auto-created by playground for real-time tracking",
+                    userId: convexUserId!,
+                });
+                setConvexProjectId(newProjectId);
+                console.log("[Playground] Created Convex project for real-time tracking:", newProjectId);
+            } catch (e) {
+                console.warn("[Playground] Failed to create Convex project:", e);
+            } finally {
+                setIsCreatingProject(false);
+            }
+        }
+
+        createInitialProject();
+    }, [convexUserId, convexProjectId, isCreatingProject, topic, createProject]);
 
     // Data Fetching
     useEffect(() => {
@@ -145,42 +176,28 @@ export function PlaygroundWorkspace() {
         fetchPrompts();
     }, []);
 
-    // Metric Polling
+    // Static metrics placeholder - remove polling to reduce server load
+    // TODO: Migrate to Convex subscription if real-time metrics are needed
     useEffect(() => {
-        async function fetchMetrics() {
-            try {
-                const res = await fetch("/api/metrics/summary");
-                if (res.ok) {
-                    setMetrics(await res.json());
-                } else {
-                    throw new Error("Metrics API Failed");
-                }
-            } catch (e) {
-                // Mock Metrics
-                setMetrics({
-                    total_agents: 12,
-                    successful_agents: 10,
-                    failed_agents: 2,
-                    total_tokens: 15420,
-                    total_input_tokens: 5000,
-                    total_output_tokens: 10420,
-                    total_thinking_tokens: 2300,
-                    total_duration_ms: 45000,
-                    total_cost_usd: 0.045,
-                    agents: {}
-                });
-            }
-        }
-        fetchMetrics();
-        const interval = setInterval(fetchMetrics, 5000);
-        return () => clearInterval(interval);
+        setMetrics({
+            total_agents: 0,
+            successful_agents: 0,
+            failed_agents: 0,
+            total_tokens: 0,
+            total_input_tokens: 0,
+            total_output_tokens: 0,
+            total_thinking_tokens: 0,
+            total_duration_ms: 0,
+            total_cost_usd: 0,
+            agents: {}
+        });
     }, []);
 
     const handlePromptChange = (val: string) => {
         setEditedPrompts(prev => ({ ...prev, [selectedPromptKey]: val }));
     };
 
-    const handleReset = () => {
+    const handleReset = async () => {
         setSessionKey(prev => prev + 1);
         setActiveSessionId(null);
         setShowBlueprint(false);
@@ -190,6 +207,25 @@ export function PlaygroundWorkspace() {
         setCurrentStage(null);
         setActiveAgent(null);
         setCurrentThinking("");
+        setConvexProjectId(null);
+
+        // Create a new Convex project for this session
+        if (convexUserId) {
+            setIsCreatingProject(true);
+            try {
+                const newProjectId = await createProject({
+                    title: `Playground: ${topic || 'Untitled'}`,
+                    description: "Auto-created by playground for testing",
+                    userId: convexUserId,
+                });
+                setConvexProjectId(newProjectId);
+                console.log("[Playground] Created Convex project:", newProjectId);
+            } catch (e) {
+                console.warn("[Playground] Failed to create Convex project, continuing without:", e);
+            } finally {
+                setIsCreatingProject(false);
+            }
+        }
     };
 
     const handleSavePrompts = async () => {
@@ -343,16 +379,27 @@ export function PlaygroundWorkspace() {
                         <div className="flex-1 relative overflow-hidden flex flex-col">
                             {viewMode === 'chat' && (
                                 <div className="animate-in fade-in zoom-in-95 duration-500 h-full">
-                                    <ClarifierChat
-                                        key={`chat-${sessionKey}`}
-                                        projectId="playground-dummy"
-                                        mode="deep_research"
-                                        topic={topic}
-                                        onOrderComplete={handleOrderComplete}
-                                        promptOverrides={editedPrompts}
-                                        onAgentChange={setActiveAgent}
-                                        onThinkingUpdate={setCurrentThinking}
-                                    />
+                                    {isCreatingProject || !convexProjectId ? (
+                                        <div className="h-full flex items-center justify-center">
+                                            <div className="text-center space-y-2">
+                                                <Loader2 className="w-6 h-6 animate-spin text-emerald-500 mx-auto" />
+                                                <p className="text-sm text-neutral-400 font-mono">
+                                                    {isCreatingProject ? "Creating project..." : "Waiting for authentication..."}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <ClarifierChat
+                                            key={`chat-${sessionKey}`}
+                                            projectId={convexProjectId}
+                                            mode="deep_research"
+                                            topic={topic}
+                                            onOrderComplete={handleOrderComplete}
+                                            promptOverrides={editedPrompts}
+                                            onAgentChange={setActiveAgent}
+                                            onThinkingUpdate={setCurrentThinking}
+                                        />
+                                    )}
                                 </div>
                             )}
 
@@ -384,6 +431,7 @@ export function PlaygroundWorkspace() {
                                         {activeSessionId && (
                                             <GenerationProgress
                                                 sessionId={activeSessionId}
+                                                convexProjectId={convexProjectId || undefined}
                                                 onComplete={handleGenerationComplete}
                                                 onStageChange={setCurrentStage}
                                             />

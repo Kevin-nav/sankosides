@@ -9,6 +9,8 @@ import { Check, GripVertical, Plus, Trash2, Edit2, Send, Wand2, Loader2 } from "
 import { useAuth } from "@/components/auth-provider";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
 
 interface SlideSkeleton {
     order: number;
@@ -45,9 +47,31 @@ export function BlueprintReview({ sessionId, onApprove }: BlueprintReviewProps) 
 
     const [loadingMessage, setLoadingMessage] = useState("Loading blueprint...");
 
+    // Real-time progress from Convex
+    const progress = useQuery(api.generation.getProgressBySession, { sessionId: sessionId || "" });
+
+    // Effect to handle Convex updates
+    useEffect(() => {
+        if (progress?.blueprint) {
+            console.log("Blueprint received via Convex:", progress.blueprint);
+            processSkeleton(progress.blueprint);
+            setLoading(false);
+            return;
+        }
+
+        if (progress?.message) {
+            setLoadingMessage(progress.message);
+        }
+
+    }, [progress]);
+
+    // Initial load fallback (for existing sessions or direct link access)
     useEffect(() => {
         if (!sessionId || !user) return;
-        loadBlueprint();
+        // Only fetch if we don't have it from Convex yet
+        if (!skeleton) {
+            loadBlueprint();
+        }
     }, [sessionId, user]);
 
     async function loadBlueprint() {
@@ -58,76 +82,18 @@ export function BlueprintReview({ sessionId, onApprove }: BlueprintReviewProps) 
         });
         if (res.ok) {
             const data = await res.json();
-
-            // If skeleton exists, render it
             if (data.skeleton) {
                 processSkeleton(data.skeleton);
                 setLoading(false);
-                return;
-            }
-
-            // Check if outline is already ready (status is awaiting_outline_approval)
-            if (['awaiting_outline_approval', 5].includes(data.status)) {
-                // Skeleton should exist but wasn't returned - refetch directly
-                setLoadingMessage("Loading outline...");
-                await refetchSkeleton();
-                return;
-            }
-
-            // If still generating, start SSE with fallback polling
-            if (['clarification_complete', 3].includes(data.status)) {
-                setLoadingMessage("Generating outline...");
-                startSSE();
-                startFallbackPolling(); // In case SSE misses events
-            } else {
-                setLoadingMessage("Waiting for generation...");
-                startSSE();
-                startFallbackPolling();
             }
         } else {
-            setLoading(false);
+            // If failed to load and no Convex data, keep loading state
+            // The user might be in a deep research phase taking longer
+            console.log("Blueprint not ready yet via API");
         }
     }
 
-    async function refetchSkeleton() {
-        if (!user) return;
-        const token = await user.getIdToken();
-        const res = await fetch(`/api/generate/blueprint/${sessionId}`, {
-            headers: { "Authorization": `Bearer ${token}` }
-        });
-        if (res.ok) {
-            const data = await res.json();
-            if (data.skeleton) {
-                processSkeleton(data.skeleton);
-                setLoading(false);
-            }
-        }
-    }
-
-    function startFallbackPolling() {
-        const pollInterval = setInterval(async () => {
-            if (!user || !loading) {
-                clearInterval(pollInterval);
-                return;
-            }
-            try {
-                const token = await user.getIdToken();
-                const res = await fetch(`/api/generate/blueprint/${sessionId}`, {
-                    headers: { "Authorization": `Bearer ${token}` }
-                });
-                if (res.ok) {
-                    const data = await res.json();
-                    if (data.skeleton) {
-                        processSkeleton(data.skeleton);
-                        setLoading(false);
-                        clearInterval(pollInterval);
-                    }
-                }
-            } catch (e) {
-                console.error("Polling error:", e);
-            }
-        }, 3000); // Poll every 3 seconds as fallback
-    }
+    // Polling and SSE removed - replaced by Convex subscription
 
     function processSkeleton(skeletonData: any) {
         const slides = (skeletonData.slides || []).map((s: any) => ({
@@ -145,32 +111,7 @@ export function BlueprintReview({ sessionId, onApprove }: BlueprintReviewProps) 
         });
     }
 
-    function startSSE() {
-        console.log("Starting SSE for outline...");
-        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
-        const eventSource = new EventSource(`${backendUrl}/api/generation/stream/${sessionId}`);
-
-        eventSource.onmessage = (event) => {
-            // Keep alive
-        };
-
-        eventSource.addEventListener("blueprint_ready", (event) => {
-            const data = JSON.parse(event.data);
-            console.log("Blueprint Received via SSE:", data);
-            if (data.skeleton) {
-                processSkeleton(data.skeleton);
-                setLoading(false);
-                eventSource.close();
-            }
-        });
-
-        eventSource.onerror = (error) => {
-            console.error("SSE Error:", error);
-            eventSource.close();
-        };
-
-        return () => eventSource.close();
-    }
+    // startSSE removed
 
     const onDragEnd = (result: DropResult) => {
         if (!result.destination || !skeleton) return;
@@ -235,7 +176,7 @@ export function BlueprintReview({ sessionId, onApprove }: BlueprintReviewProps) 
             }
 
             // Step 2: Start generation (this kicks off the Planner agent)
-            const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
+            const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
             const generateRes = await fetch(`${backendUrl}/api/generation/generate/${sessionId}`, {
                 method: "POST",
                 headers: {

@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="header-region col-12">
+    <h2 class="slide-title">{{ slide.title }}</h2>
+</div>
+
+<!-- Main Content -->
+<div class="col-start-2 col-10 visual-col">
+    <div class="big-stat-wrapper">
+        <div class="big-stat-number">
+            {{ slide.big_stat_number | default("0%") }}
+        </div>
+        <div class="big-stat-label">
+            {{ slide.big_stat_label | default(slide.bullet_points[0] if slide.bullet_points else "") }}
+        </div>
+
+        {% if slide.bullet_points and slide.bullet_points|length > 1 %}
+        <div class="sub-points" style="margin-top: 32px; text-align: left;">
+            <ul>
+                {% for point in slide.bullet_points[1:] %}
+                <li>{{ point }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -107,7 +107,7 @@ All tasks follow a strict lifecycle:
 
         **Manual Verification Steps:**
         1.  **Ensure the server is running.**
-        2.  **Execute the following command in your terminal:** `curl -X POST http://localhost:8080/api/v1/users -d '{"name": "test"}'`
+        2.  **Execute the following command in your terminal:** `curl -X POST http://localhost:8000/api/v1/users -d '{"name": "test"}'`
         3.  **Confirm that you receive:** A JSON response with a status of `201 Created`.
         ```
 

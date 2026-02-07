@@ -6,20 +6,17 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription }
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Layers, Play, X, ChevronLeft, ChevronRight, Maximize2 } from "lucide-react";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useTemplates, useThemes, getPreviewUrl, useTemplatePreview } from "@/hooks/api";
-import { useQueryClient } from "@tanstack/react-query";
+import { useTemplates, useThemes, getPreviewUrl } from "@/hooks/convex";
 
 // Slide types to cycle through in the preview
 const PREVIEW_SLIDE_TYPES = ["title", "content", "two_column", "section", "conclusion"];
 
 export default function TemplatesPage() {
     const { loading: authLoading } = useAuth();
-    const queryClient = useQueryClient();
-
-    // TanStack Query hooks - replaces manual useState/useEffect
-    const { data: templates = [], isPending: templatesLoading } = useTemplates();
-    const { data: themes = [], isPending: themesLoading } = useThemes();
-    const loading = templatesLoading || themesLoading;
+    // Convex hooks - direct queries, no API round-trip
+    const templates = useTemplates() ?? [];
+    const themes = useThemes() ?? [];
+    const loading = templates === undefined || themes === undefined;
 
     // Fullscreen Preview State
     const [previewOpen, setPreviewOpen] = useState(false);
@@ -98,25 +95,34 @@ export default function TemplatesPage() {
 
     const currentSlideType = PREVIEW_SLIDE_TYPES[currentSlideIndex];
 
-    // Fetch preview HTML eagerly when modal is open
-    const { data: previewHtml, isLoading: previewLoading } = useTemplatePreview(
-        previewOpen && selectedTheme ? selectedTheme.theme_id : null,
-        currentSlideType
-    );
+    // Fetch preview HTML (still uses backend for Jinja2 rendering)
+    const [previewHtml, setPreviewHtml] = useState<string>("");
+    const [previewLoading, setPreviewLoading] = useState(false);
+
+    useEffect(() => {
+        if (!previewOpen || !selectedTheme) return;
+        setPreviewLoading(true);
+        const url = getPreviewUrl(selectedTheme.themeId, currentSlideType);
+        fetch(url)
+            .then(res => res.text())
+            .then(html => {
+                setPreviewHtml(html);
+                setPreviewLoading(false);
+            })
+            .catch(() => setPreviewLoading(false));
+    }, [previewOpen, selectedTheme, currentSlideType]);
+
+    // Prefetch cache for preview HTML
+    const previewCache = useRef<Map<string, string>>(new Map());
 
     // Prefetch on hover
     const prefetchTheme = (themeId: string) => {
-        // Prefetch just the title slide for instant "Click -> Open" feel
-        queryClient.prefetchQuery({
-            queryKey: ["template-preview", themeId, "title"],
-            queryFn: async () => {
-                const url = getPreviewUrl(themeId, "title");
-                const res = await fetch(url);
-                if (!res.ok) throw new Error("Failed to load preview");
-                return res.text();
-            },
-            staleTime: 5 * 60 * 1000
-        });
+        if (previewCache.current.has(themeId)) return;
+        const url = getPreviewUrl(themeId, "title");
+        fetch(url)
+            .then(res => res.text())
+            .then(html => previewCache.current.set(themeId, html))
+            .catch(() => { });
     };
 
     if (authLoading || loading) {
@@ -142,10 +148,10 @@ export default function TemplatesPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {themes.map((theme) => (
                         <Card
-                            key={theme.id}
+                            key={theme._id}
                             className="group bg-neutral-900 border-neutral-800 hover:border-neutral-600 transition-all cursor-pointer overflow-hidden"
                             onClick={() => openPreview(theme)}
-                            onMouseEnter={() => prefetchTheme(theme.theme_id)}
+                            onMouseEnter={() => prefetchTheme(theme.themeId)}
                         >
                             {/* Color Preview Bar */}
                             <div className="h-3 flex">
@@ -153,7 +159,7 @@ export default function TemplatesPage() {
                                     <div
                                         key={i}
                                         className="flex-1"
-                                        style={{ backgroundColor: color }}
+                                        style={{ backgroundColor: color as string }}
                                     />
                                 ))}
                             </div>
@@ -186,7 +192,7 @@ export default function TemplatesPage() {
                                         <div
                                             key={i}
                                             className="w-5 h-5 rounded-full border border-neutral-700"
-                                            style={{ backgroundColor: color }}
+                                            style={{ backgroundColor: color as string }}
                                         />
                                     ))}
                                 </div>

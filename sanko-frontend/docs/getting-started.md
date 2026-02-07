@@ -8,7 +8,7 @@ This guide walks you through setting up the SankoSlides frontend for local devel
 - **npm** (comes with Node.js) or pnpm
 - **Firebase Project** — [Create one](https://console.firebase.google.com/)
 - **Neon Database** — [Create free account](https://neon.tech/)
-- **sanko-backend** running at `localhost:8080`
+- **sanko-backend** running at `localhost:8000`
 
 ## Step 1: Clone & Install
 
@@ -62,7 +62,7 @@ GOOGLE_APPLICATION_CREDENTIALS=./your-service-account.json
 DATABASE_URL=postgresql://user:pass@host/db?sslmode=require
 
 # Backend
-NEXT_PUBLIC_API_URL=http://localhost:8080
+NEXT_PUBLIC_API_URL=http://localhost:8000
 ```
 
 ## Step 5: Start Development
@@ -80,7 +80,7 @@ The frontend requires the Python backend to be running:
 ```bash
 cd ../sanko-backend
 # Follow backend setup instructions
-uvicorn main:app --reload --port 8080
+uvicorn main:app --reload --port 8000
 ```
 
 ---

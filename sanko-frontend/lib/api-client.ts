@@ -1,7 +1,7 @@
 // lib/api-client.ts
 // Generic API client for SankoSlides backend
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 export class APIError extends Error {
     constructor(

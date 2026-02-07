@@ -272,9 +272,9 @@ PLAUSIBLE_DOMAIN=beta.sankoslides.com
 
 | File | Purpose |
 |------|---------|
-| [`/sanko-backend/app/models/university_context.py`](file:///c:/Users/Kevin/Projects/personal_projects/sankoslides/sanko-backend/app/models/university_context.py) | University-specific rules (UMaT config) |
-| [`/sanko-backend/app/crew/tools/academic_search_tool.py`](file:///c:/Users/Kevin/Projects/personal_projects/sankoslides/sanko-backend/app/crew/tools/academic_search_tool.py) | Citation search (CrossRef, OpenAlex) |
-| [`/docs/slop.md`](file:///c:/Users/Kevin/Projects/personal_projects/sankoslides/docs/slop.md) | Design feedback and improvement checklist |
+| [`/sanko-backend/app/models/university_context.py`](../sanko-backend/app/models/university_context.py) | University-specific rules (UMaT config) |
+| [`/sanko-backend/app/crew/tools/academic_search_tool.py`](../sanko-backend/app/crew/tools/academic_search_tool.py) | Citation search (CrossRef, OpenAlex) |
+| [`/docs/slop.md`](../docs/slop.md) | Design feedback and improvement checklist |
 
 ---
 
@@ -292,4 +292,4 @@ When writing copy or making changes, these are the core differentiators:
 
 ## Contact
 
-For questions about this project, refer to the main [README.md](file:///c:/Users/Kevin/Projects/personal_projects/sankoslides/README.md).
+For questions about this project, refer to the main [README.md](../README.md).

@@ -66,7 +66,7 @@ export const templateApi = {
     },
 
     getPreviewUrl: (themeId: string, templateType: string = 'title') => {
-        // Construct standard API URL but ensure it points to backend port 8080
+        // Construct standard API URL but ensure it points to backend port 8000
         const baseUrl = api.getBaseUrl();
         return `${baseUrl}/api/themes/${themeId}/preview?template_type=${templateType}`;
     }

@@ -36,6 +36,10 @@ class SlideContentType(str, Enum):
     CONCLUSION = "conclusion"
     REFERENCES = "references"   # Dedicated references slide
     THANK_YOU = "thank_you"     # Simple thank you slide
+    TIMELINE = "timeline"
+    BIG_STAT = "big_stat"
+    GRID_GALLERY = "grid_gallery"
+    COMPARISON = "comparison"
 
 
 # =============================================================================
@@ -405,7 +409,7 @@ class ResearchNeed(BaseModel):
     """A claim or fact that needs academic backing."""
     claim: str = Field(..., description="The claim or statement needing support")
     query: str = Field(..., description="Search query to find supporting papers")
-    intent: Literal["statistic", "definition", "methodology", "finding", "common_fact"] = Field(
+    intent: Literal["statistic", "definition", "methodology", "finding", "common_fact", "fact"] = Field(
         default="finding",
         description="What type of support is needed"
     )

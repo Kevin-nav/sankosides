@@ -190,26 +190,106 @@ async def download_image_with_headers(url: str, timeout: float = 10.0) -> Option
     return None
 
 
+async def get_or_generate_ai_first(
+    description: str,
+    style: str = "professional",
+) -> str:
+    """
+    AI-First image strategy: Generate image if not cached.
+    
+    This is the preferred method for getting images in the AI-first strategy.
+    
+    Args:
+        description: What the image should depict
+        style: Style for the image (professional, academic, minimal, etc.)
+        
+    Returns:
+        R2 URL of the image (either cached or newly generated)
+    """
+    # Check generation cache first (by description hash)
+    desc_hash = hashlib.md5(f"{description}::{style}".encode()).hexdigest()
+    cache_key = f"img_gen:{desc_hash}"
+    
+    cached_url = RedisCache.get(cache_key)
+    if cached_url:
+        logger.info(f"[IMAGE_PIPELINE] AI cache hit for: {description[:50]}...")
+        return cached_url
+    
+    # Generate new image
+    logger.info(f"[IMAGE_PIPELINE] Generating AI image for: {description[:50]}...")
+    url = await generate_ai_image(description, style)
+    
+    # Cache the result
+    RedisCache.set(cache_key, url, ttl=REDIS_TTL)
+    
+    return url
+
+
+async def generate_ai_image(description: str, style: str = "professional") -> str:
+    """
+    Generate image with AI using optimized prompt.
+    
+    Args:
+        description: Image description
+        style: Style preset
+        
+    Returns:
+        R2 URL of generated image
+    """
+    from app.crew.tools.image_generation_tool import NanoBananaImageTool
+    
+    # Build optimized prompt
+    optimized_prompt = f"""Professional image for presentation slide:
+
+Subject: {description}
+
+Requirements:
+- High resolution, suitable for projection
+- Clean composition with clear focal point
+- No text overlays or watermarks
+- Visually engaging but not distracting
+- Modern, polished aesthetic"""
+
+    tool = NanoBananaImageTool()
+    result = await tool.generate_asset(
+        optimized_prompt, 
+        style=style,
+        upload_to_r2=True
+    )
+    
+    if result.success and result.file_path:
+        return result.file_path
+    else:
+        logger.error(f"[IMAGE_PIPELINE] AI generation failed: {result.error}")
+        # Return a styled placeholder instead of raising
+        return "https://via.placeholder.com/1600x900/2563eb/ffffff?text=Image+Generation+Failed"
+
+
 async def download_with_fallbacks(
     urls: list[str], 
     description: str,
-    max_attempts: int = 5,
-    ai_fallback_threshold: int = 2,
+    max_attempts: int = 3,
+    ai_first: bool = True,
 ) -> Tuple[str, bool]:
     """
-    Download image with multi-source fallback and AI generation.
+    Get image with AI-first strategy.
     
     Args:
-        urls: List of image URLs to try
-        description: Image description (for AI fallback)
-        max_attempts: Maximum URLs to try before giving up
-        ai_fallback_threshold: After this many failures, switch to AI
+        urls: List of image URLs to try (if ai_first=False)
+        description: Image description (for AI generation)
+        max_attempts: Maximum URLs to try if not AI-first
+        ai_first: If True, generate with AI immediately (default)
         
     Returns:
         Tuple of (image_url, is_ai_generated)
     """
-    failed_count = 0
+    # AI-First strategy: generate immediately
+    if ai_first:
+        logger.info(f"[IMAGE_PIPELINE] AI-first: generating image for '{description[:50]}...'")
+        url = await get_or_generate_ai_first(description)
+        return url, True
     
+    # Legacy: Try URLs first, then AI fallback
     for url in urls[:max_attempts]:
         # Check cache first
         cached = await ImageCacheService.get(url)
@@ -223,49 +303,9 @@ async def download_with_fallbacks(
             # Store in cache and return
             r2_url = await ImageCacheService.store(url, image_data)
             return r2_url, False
-        
-        failed_count += 1
-        
-        # After threshold failures, switch to AI immediately
-        if failed_count >= ai_fallback_threshold:
-            logger.info(f"[IMAGE_PIPELINE] {failed_count} failures, switching to AI generation")
-            break
     
-    # AI fallback with optimized prompt
-    logger.info(f"[IMAGE_PIPELINE] Generating AI image for: {description[:50]}...")
-    return await generate_fallback_image(description), True
+    # All URLs failed, use AI
+    logger.info(f"[IMAGE_PIPELINE] URL downloads failed, generating AI image")
+    url = await get_or_generate_ai_first(description)
+    return url, True
 
-
-async def generate_fallback_image(description: str) -> str:
-    """
-    Generate image with AI using optimized prompt.
-    
-    Args:
-        description: Image description
-        
-    Returns:
-        R2 URL of generated image
-    """
-    from app.crew.tools.image_generation_tool import NanoBananaImageTool
-    
-    # Optimize prompt for better quality
-    optimized_prompt = f"""Professional image for academic presentation:
-
-Subject: {description}
-
-Requirements:
-- High quality, professional photography style
-- Clean composition, well-lit
-- Suitable for educational/business presentation
-- No text overlays unless specifically requested
-- Modern, clean aesthetic"""
-    
-    tool = NanoBananaImageTool()
-    result = await tool.generate_asset(optimized_prompt, upload_to_r2=True)
-    
-    if result.success:
-        return result.file_path
-    else:
-        logger.error(f"[IMAGE_PIPELINE] AI generation failed: {result.error}")
-        # Return a placeholder or raise
-        raise ValueError(f"Failed to generate image: {result.error}")

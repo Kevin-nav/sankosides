@@ -13,18 +13,15 @@ Features:
 import hashlib
 import json
 import time
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Any
 from contextlib import asynccontextmanager
 from datetime import datetime
 
 import aioboto3
 from botocore.config import Config
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.core.config import settings
 from app.core.logging import get_logger
-from app.core.database import PDFCache, get_async_session
+from app.core.database import get_db
 from app.models.schemas import KnowledgeBase
 
 logger = get_logger(__name__)
@@ -243,7 +240,7 @@ class PDFCacheService:
     @staticmethod
     async def get_cached(
         file_hash: str,
-        db_session: AsyncSession,
+        client: Any,
     ) -> Optional[KnowledgeBase]:
         """
         Get cached KnowledgeBase for a file hash.
@@ -268,11 +265,15 @@ class PDFCacheService:
             logger.info(f"PDF KB L2 cache HIT: {file_hash[:16]}...")
             return KnowledgeBase(**cached_dict)
         
-        # L3: Check PostgreSQL
-        result = await db_session.execute(
-            select(PDFCache).where(PDFCache.file_hash == file_hash)
-        )
-        cache_entry = result.scalar_one_or_none()
+        # L3: Check Convex
+        if not settings.enable_convex_cache:
+            # Explicitly disabled
+            logger.info(f"PDF KB L3 cache lookup DISABLED (feature flag): {file_hash[:16]}...")
+            return None
+
+        # TODO: Implement Convex lookup when schema is ready
+        # result = await db_session.execute(...)
+        cache_entry = None
         
         if cache_entry:
             logger.info(f"PDF KB L3 cache HIT: {file_hash[:16]}... (populating L2)")
@@ -291,7 +292,7 @@ class PDFCacheService:
         file_hash: str,
         r2_key: str,
         knowledge_base: KnowledgeBase,
-        db_session: AsyncSession,
+        client: Any,
         original_filename: Optional[str] = None,
         file_size_bytes: Optional[int] = None,
         processing_time_ms: Optional[int] = None,
@@ -312,20 +313,15 @@ class PDFCacheService:
         
         kb_dict = knowledge_base.model_dump()
         
-        # Save to L3 (PostgreSQL)
-        cache_entry = PDFCache(
-            file_hash=file_hash,
-            r2_key=r2_key,
-            knowledge_base=kb_dict,
-            original_filename=original_filename,
-            sections_count=len(knowledge_base.sections),
-            file_size_bytes=file_size_bytes,
-            processing_time_ms=processing_time_ms,
-            model_version="gemini-3-flash-preview",
-        )
-        
-        db_session.add(cache_entry)
-        await db_session.commit()
+        # Save to L3 (Convex)
+        if not settings.enable_convex_cache:
+            logger.info("PDF KB L3 cache save DISABLED (feature flag)")
+        else:
+            # TODO: Implement Convex mutation to save cache
+            # cache_entry = PDFCache(...)
+            # db_session.add(cache_entry)
+            # await db_session.commit()
+            pass
         
         # Also populate L2 (Redis) for faster future access
         pdf_kb_cache.set(file_hash, kb_dict, skip_l1=True)
@@ -333,12 +329,15 @@ class PDFCacheService:
         logger.info(f"Cached KnowledgeBase (L2+L3) for hash: {file_hash[:16]}...")
     
     @staticmethod
-    async def exists(file_hash: str, db_session: AsyncSession) -> bool:
+    async def exists(file_hash: str, client: Any) -> bool:
         """Check if a file hash exists in cache."""
-        result = await db_session.execute(
-            select(PDFCache.file_hash).where(PDFCache.file_hash == file_hash)
-        )
-        return result.scalar_one_or_none() is not None
+        if not settings.enable_convex_cache:
+            logger.debug(f"PDF KB L3 cache existence check DISABLED (feature flag): {file_hash[:16]}...")
+            return False
+
+        # TODO: Implement Convex existence check
+        # result = await db_session.execute(...)
+        return False
 
 
 # Global singleton instances

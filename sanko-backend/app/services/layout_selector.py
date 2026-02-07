@@ -12,12 +12,10 @@ Key Features:
 
 import random
 from typing import Optional, List, Dict, Any
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.layout_models import LayoutPreset
 from app.models.schemas import RefinedSlide, SlideContentType
 from app.core.logging import get_logger
+from app.core.convex_client import get_convex_client
 
 logger = get_logger(__name__)
 
@@ -103,13 +101,13 @@ class LayoutSelector:
     
     def __init__(self):
         self._in_memory_cache: Optional[List[Dict[str, Any]]] = None
+        self.convex_client = get_convex_client()
     
     async def select_for_slide(
         self,
         slide: RefinedSlide,
         previous_layout_id: Optional[str] = None,
         user_preference: Optional[str] = None,
-        db_session: Optional[AsyncSession] = None,
     ) -> Dict[str, Any]:
         """
         Select the best layout for this slide.
@@ -118,22 +116,20 @@ class LayoutSelector:
             slide: The refined slide to select a layout for
             previous_layout_id: The layout used on the previous slide (to avoid repetition)
             user_preference: User's explicitly chosen layout (takes priority)
-            db_session: Database session for fetching layouts
             
         Returns:
             Layout preset dict with preset_id, regions, etc.
         """
         # 1. If user explicitly chose a layout, use it
         if user_preference:
-            layout = await self._get_preset(user_preference, db_session)
+            layout = await self._get_preset(user_preference)
             if layout:
                 logger.debug(f"Using user-preferred layout: {user_preference}")
                 return layout
         
         # 2. Get compatible layouts for this content type
         compatible = await self._get_compatible_layouts(
-            slide.content_type.value if isinstance(slide.content_type, SlideContentType) else slide.content_type,
-            db_session
+            slide.content_type.value if isinstance(slide.content_type, SlideContentType) else slide.content_type
         )
         
         if not compatible:
@@ -154,7 +150,6 @@ class LayoutSelector:
         self,
         slides: List[RefinedSlide],
         user_preferences: Optional[Dict[int, str]] = None,
-        db_session: Optional[AsyncSession] = None,
     ) -> Dict[int, Dict[str, Any]]:
         """
         Select layouts for all slides in a presentation with variety.
@@ -162,7 +157,6 @@ class LayoutSelector:
         Args:
             slides: List of slides to assign layouts to
             user_preferences: Dict mapping slide.order to preset_id for user-locked layouts
-            db_session: Database session
             
         Returns:
             Dict mapping slide.order to selected layout
@@ -177,7 +171,6 @@ class LayoutSelector:
                 slide=slide,
                 previous_layout_id=previous_layout_id,
                 user_preference=user_pref,
-                db_session=db_session,
             )
             result[slide.order] = layout
             previous_layout_id = layout["preset_id"]
@@ -191,20 +184,17 @@ class LayoutSelector:
     async def _get_preset(
         self,
         preset_id: str,
-        db_session: Optional[AsyncSession],
     ) -> Optional[Dict[str, Any]]:
         """Get a specific layout preset by ID."""
-        # Try database first
-        if db_session:
-            query = select(LayoutPreset).where(
-                LayoutPreset.preset_id == preset_id,
-                LayoutPreset.is_active == True
-            )
-            result = await db_session.execute(query)
-            preset = result.scalar_one_or_none()
-            if preset:
-                return self._preset_to_dict(preset)
-        
+        try:
+            # Fetch from Convex
+            dataset = self.convex_client.query("layoutPresets:getById", {"presetId": preset_id})
+            
+            if dataset:
+                return self._convex_to_dict(dataset)
+        except Exception as e:
+            logger.error(f"Failed to fetch layout preset from Convex: {e}")
+            
         # Fall back to defaults
         for layout in DEFAULT_LAYOUTS:
             if layout["preset_id"] == preset_id:
@@ -215,22 +205,24 @@ class LayoutSelector:
     async def _get_compatible_layouts(
         self,
         content_type: str,
-        db_session: Optional[AsyncSession],
     ) -> List[Dict[str, Any]]:
         """Get all layouts compatible with this content type."""
         compatible = []
         
-        # Try database first
-        if db_session:
-            query = select(LayoutPreset).where(LayoutPreset.is_active == True)
-            result = await db_session.execute(query)
-            db_presets = result.scalars().all()
+        try:
+            # Fetch all active layouts from Convex
+            active_layouts = self.convex_client.query("layoutPresets:getActive", {})
             
-            for preset in db_presets:
-                if preset.content_types and content_type in preset.content_types:
-                    compatible.append(self._preset_to_dict(preset))
+            for preset in active_layouts:
+                config = preset.get("config", {})
+                cts = config.get("content_types", [])
+                if cts and content_type in cts:
+                    compatible.append(self._convex_to_dict(preset))
+                    
+        except Exception as e:
+            logger.error(f"Failed to fetch layouts from Convex: {e}")
         
-        # If no DB layouts, use defaults
+        # If no DB layouts or error, use defaults
         if not compatible:
             for layout in DEFAULT_LAYOUTS:
                 if content_type in layout.get("content_types", []):
@@ -269,20 +261,21 @@ class LayoutSelector:
         
         return layouts[-1]
     
-    def _preset_to_dict(self, preset: LayoutPreset) -> Dict[str, Any]:
-        """Convert a LayoutPreset model to a dict."""
+    def _convex_to_dict(self, preset: Dict[str, Any]) -> Dict[str, Any]:
+        """Convert a Convex layout preset to the internal dict format."""
+        config = preset.get("config", {})
         return {
-            "id": str(preset.id),
-            "preset_id": preset.preset_id,
-            "name": preset.name,
-            "description": preset.description,
-            "category": preset.category,
-            "content_types": preset.content_types or [],
-            "variety_group": preset.variety_group,
-            "variety_weight": preset.variety_weight or 1.0,
-            "regions": preset.regions or {},
-            "css_grid": preset.css_grid,
-            "thumbnail_url": preset.thumbnail_url,
+            "id": preset.get("_id"),
+            "preset_id": preset.get("presetId"),
+            "name": preset.get("name"),
+            "description": preset.get("description"),
+            "category": config.get("category"),
+            "content_types": config.get("content_types", []),
+            "variety_group": config.get("variety_group"),
+            "variety_weight": config.get("variety_weight", 1.0),
+            "regions": config.get("regions", {}),
+            "css_grid": config.get("css_grid"),
+            "thumbnail_url": config.get("thumbnail_url"),
         }
 
 

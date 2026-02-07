@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="header-region col-12">
+    <h2 class="slide-title">{{ slide.title }}</h2>
+</div>
+
+<!-- Comparison Left -->
+<div class="col-start-1 col-6"
+    style="background: rgba(59, 130, 246, 0.1); border-radius: var(--radius-md); padding: var(--spacing-md);">
+    <h3 style="text-align: center; color: var(--color-primary);">Pros / Option A</h3>
+    <ul>
+        {% if slide.left_column %}
+        {% for point in slide.left_column.content %}
+        <li>{{ point }}</li>
+        {% endfor %}
+        {% else %}
+        {% for point in slide.bullet_points[:(slide.bullet_points|length // 2)] %}
+        <li>{{ point }}</li>
+        {% endfor %}
+        {% endif %}
+    </ul>
+</div>
+
+<!-- Comparison Right -->
+<div class="col-start-7 col-6"
+    style="background: rgba(239, 68, 68, 0.1); border-radius: var(--radius-md); padding: var(--spacing-md);">
+    <h3 style="text-align: center; color: var(--color-accent);">Cons / Option B</h3>
+    <ul>
+        {% if slide.right_column %}
+        {% for point in slide.right_column.content %}
+        <li>{{ point }}</li>
+        {% endfor %}
+        {% else %}
+        {% for point in slide.bullet_points[(slide.bullet_points|length // 2):] %}
+        <li>{{ point }}</li>
+        {% endfor %}
+        {% endif %}
+    </ul>
+</div>
+{% endblock %}

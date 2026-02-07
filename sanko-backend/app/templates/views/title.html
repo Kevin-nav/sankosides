@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="title-slide col-12 visual-col">
+    <div class="title-content">
+        <h1>{{ slide.title }}</h1>
+        {% if slide.subtitle %}
+        <div class="subtitle">{{ slide.subtitle }}</div>
+        {% endif %}
+
+        <div class="presenter-info" style="margin-top: 48px;">
+            {% if branding.university_name %}
+            <div class="university-name">{{ branding.university_name }}</div>
+            {% endif %}
+
+            {% if slide.presenter_name %}
+            <div class="presenter-name">{{ slide.presenter_name }}</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

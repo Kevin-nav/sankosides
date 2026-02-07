@@ -40,8 +40,9 @@ from app.crew.flows.slide_generation import (
 )
 from app.crew.flows.metrics import MetricsCollector
 from app.core.logging import get_logger
-from app.core.database import get_async_session
+from app.core.database import get_db
 from app.services.storage import get_storage_service, PDFCacheService
+from app.services.convex_service import get_convex_service
 
 logger = get_logger(__name__)
 
@@ -261,9 +262,11 @@ async def start_session_endpoint(
         uploaded_files = []
         cache_hits = 0
         
-        # Get DB session for cache lookups
-        async for db_session in get_async_session():
-            for file in files:
+        # Get Convex client for cache lookups
+        client = get_db()
+        
+        # We process files directly
+        for file in files:
                 # Validate file
                 validate_upload_file(file)
                 
@@ -278,7 +281,9 @@ async def start_session_endpoint(
                 )
                 
                 # Check cache for existing KnowledgeBase
-                cached_kb = await cache_service.get_cached(file_hash, db_session)
+                # TODO: Implement Convex cache lookup
+                # cached_kb = await cache_service.get_cached(file_hash, client)
+                cached_kb = None 
                 if cached_kb:
                     cache_hits += 1
                 
@@ -289,7 +294,6 @@ async def start_session_endpoint(
                     "size_bytes": len(file_data),
                     "cached": cached_kb is not None,
                 })
-            break  # Only need one iteration of the generator
         
         # Store file info in state for synthesis
         state.uploaded_files = uploaded_files
@@ -342,75 +346,78 @@ async def upload_files(files: List[UploadFile] = File(...)):
     total_cached = 0
     files_to_process = []  # Files that need background synthesis
     
-    async for db_session in get_async_session():
-        for file in files:
-            logger.info(f"[UPLOAD] Processing file: {file.filename}")
-            
-            # Validate file
-            validate_upload_file(file)
-            logger.info(f"[UPLOAD]   ✓ File validation passed")
-            
-            # Check file size (20MB limit)
-            file_data = await file.read()
-            file_size_mb = len(file_data) / 1024 / 1024
-            logger.info(f"[UPLOAD]   File size: {file_size_mb:.2f}MB")
-            
-            if len(file_data) > 20 * 1024 * 1024:  # 20MB
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"File '{file.filename}' exceeds 20MB limit ({file_size_mb:.1f}MB)"
-                )
-            
-            # Upload to R2 (with deduplication)
-            logger.info(f"[UPLOAD]   Uploading to R2...")
-            file_hash, r2_key, was_duplicate = await storage.upload_file(
-                file_data=file_data,
-                original_filename=file.filename,
-                content_type=file.content_type or "application/pdf",
+    # async for db_session in get_async_session():
+    # client = get_db()
+    
+    # Just run once
+    for file in files:
+        logger.info(f"[UPLOAD] Processing file: {file.filename}")
+        
+        # Validate file
+        validate_upload_file(file)
+        logger.info(f"[UPLOAD]   ✓ File validation passed")
+        
+        # Check file size (20MB limit)
+        file_data = await file.read()
+        file_size_mb = len(file_data) / 1024 / 1024
+        logger.info(f"[UPLOAD]   File size: {file_size_mb:.2f}MB")
+        
+        if len(file_data) > 20 * 1024 * 1024:  # 20MB
+            raise HTTPException(
+                status_code=400,
+                detail=f"File '{file.filename}' exceeds 20MB limit ({file_size_mb:.1f}MB)"
             )
-            logger.info(f"[UPLOAD]   ✓ R2 upload complete: hash={file_hash[:16]}... (duplicate={was_duplicate})")
-            
-            # Check cache for existing KnowledgeBase (this means Gemini has already processed it)
-            logger.info(f"[UPLOAD]   Checking if Gemini has processed this PDF...")
-            cached_kb = await cache_service.get_cached(file_hash, db_session)
-            is_cached = cached_kb is not None
-            sections_count = len(cached_kb.sections) if cached_kb else None
-            
-            # Check if already being processed
-            existing_job = get_processing_status(file_hash)
-            is_processing = existing_job and existing_job.status in [ProcessingStatus.QUEUED, ProcessingStatus.PROCESSING]
-            
-            if is_cached:
-                total_cached += 1
-                logger.info(f"[UPLOAD]   ✓ CACHE HIT: Gemini already processed - {sections_count} sections extracted")
-            elif is_processing:
-                logger.info(f"[UPLOAD]   ⏳ Already processing in background")
-            else:
-                # Queue for background processing
-                logger.info(f"[UPLOAD]   🚀 Queuing for background synthesis")
-                files_to_process.append({
-                    "file_hash": file_hash,
-                    "r2_key": r2_key,
-                    "filename": file.filename,
-                })
-                # Create job tracker
-                job = ProcessingJob(
-                    file_hash=file_hash,
-                    filename=file.filename,
-                    r2_key=r2_key,
-                    status=ProcessingStatus.QUEUED,
-                )
-                set_processing_status(job)
-            
-            results.append(FileUploadResult(
+        
+        # Upload to R2 (with deduplication)
+        logger.info(f"[UPLOAD]   Uploading to R2...")
+        file_hash, r2_key, was_duplicate = await storage.upload_file(
+            file_data=file_data,
+            original_filename=file.filename,
+            content_type=file.content_type or "application/pdf",
+        )
+        logger.info(f"[UPLOAD]   ✓ R2 upload complete: hash={file_hash[:16]}... (duplicate={was_duplicate})")
+        
+        # Check cache for existing KnowledgeBase (this means Gemini has already processed it)
+        logger.info(f"[UPLOAD]   Checking if Gemini has processed this PDF...")
+        # TODO: Implement Convex cache lookup
+        cached_kb = None # await cache_service.get_cached(file_hash, get_db())
+        is_cached = cached_kb is not None
+        sections_count = len(cached_kb.sections) if cached_kb else None
+        
+        # Check if already being processed
+        existing_job = get_processing_status(file_hash)
+        is_processing = existing_job and existing_job.status in [ProcessingStatus.QUEUED, ProcessingStatus.PROCESSING]
+        
+        if is_cached:
+            total_cached += 1
+            logger.info(f"[UPLOAD]   ✓ CACHE HIT: Gemini already processed - {sections_count} sections extracted")
+        elif is_processing:
+            logger.info(f"[UPLOAD]   ⏳ Already processing in background")
+        else:
+            # Queue for background processing
+            logger.info(f"[UPLOAD]   🚀 Queuing for background synthesis")
+            files_to_process.append({
+                "file_hash": file_hash,
+                "r2_key": r2_key,
+                "filename": file.filename,
+            })
+            # Create job tracker
+            job = ProcessingJob(
                 file_hash=file_hash,
                 filename=file.filename,
-                size_bytes=len(file_data),
                 r2_key=r2_key,
-                cached=is_cached,
-                sections_count=sections_count,
-            ))
-        break  # Only need one iteration of the generator
+                status=ProcessingStatus.QUEUED,
+            )
+            set_processing_status(job)
+        
+        results.append(FileUploadResult(
+            file_hash=file_hash,
+            filename=file.filename,
+            size_bytes=len(file_data),
+            r2_key=r2_key,
+            cached=is_cached,
+            sections_count=sections_count,
+        ))
     
     # Start background synthesis for uncached files
     if files_to_process:
@@ -501,16 +508,17 @@ async def get_file_processing_status(file_hash: str):
         # Check if it's already cached
         cache_service = PDFCacheService()
         try:
-            async for db_session in get_async_session():
-                cached_kb = await cache_service.get_cached(file_hash, db_session)
-                if cached_kb:
-                    return {
-                        "file_hash": file_hash,
-                        "status": "completed",
-                        "cached": True,
-                        "sections_count": len(cached_kb.sections),
-                    }
-                break
+            # TODO: Convex cache lookup
+            # async for db_session in get_async_session():
+            #    cached_kb = await cache_service.get_cached(file_hash, db_session)
+            cached_kb = None
+            if cached_kb:
+                return {
+                    "file_hash": file_hash,
+                    "status": "completed",
+                    "cached": True,
+                    "sections_count": len(cached_kb.sections),
+                }
         except Exception:
             pass
         
@@ -574,9 +582,11 @@ async def clarify_session(session_id: str, request: ClarifyRequest):
                 logger.info(f"[CLARIFY]   Checking if Gemini has processed this PDF...")
                 cached_kb = None
                 try:
-                    async for db_session in get_async_session():
-                        cached_kb = await cache_service.get_cached(file_hash, db_session)
-                        break
+                    # TODO: Convex cache lookup
+                    # async for db_session in get_async_session():
+                    #     cached_kb = await cache_service.get_cached(file_hash, db_session)
+                    #     break
+                    pass
                 except Exception as e:
                     logger.warning(f"[CLARIFY]   Cache check failed: {e}")
                 
@@ -892,10 +902,45 @@ async def start_generation(session_id: str, background_tasks: BackgroundTasks):
 
 
 async def _run_generation_task(session_id: str, state: FlowState):
-    """Background task for generation."""
+    """Background task for generation with Convex progress tracking."""
+    convex = get_convex_service()
+    project_id = getattr(state, 'project_id', None)
+    
     try:
+        # Start Convex progress tracking if we have a project ID
+        if project_id:
+            try:
+                await convex.start_generation(project_id, session_id)
+            except Exception as e:
+                logger.warning(f"[CONVEX] Failed to start progress tracking: {e}")
+        
+        # Update progress: Generating slides
+        if project_id:
+            try:
+                await convex.update_progress(
+                    session_id=session_id,
+                    current_step="generating",
+                    step_progress=0,
+                    total_slides=state.total_slides,
+                    message="Starting slide generation..."
+                )
+            except Exception as e:
+                logger.warning(f"[CONVEX] Failed to update progress: {e}")
+        
+        # Run the actual generation
         await run_generation(session_id, state)
         save_session(state)
+        
+        # Complete Convex progress tracking
+        if project_id:
+            try:
+                slides_data = None
+                if state.generated_presentation:
+                    slides_data = state.generated_presentation.model_dump()
+                await convex.complete_generation(session_id, slides_data)
+            except Exception as e:
+                logger.warning(f"[CONVEX] Failed to complete progress: {e}")
+        
     except Exception as e:
         error_str = str(e)
         logger.error(f"Generation failed: {e}")
@@ -912,6 +957,13 @@ async def _run_generation_task(session_id: str, state: FlowState):
             state.error_message = f"Generation failed: {str(e)[:200]}"
         
         save_session(state)
+        
+        # Report failure to Convex
+        if project_id:
+            try:
+                await convex.fail_generation(session_id, state.error_message or str(e))
+            except Exception as convex_err:
+                logger.warning(f"[CONVEX] Failed to report failure: {convex_err}")
 
 
 async def _run_outline_generation_task(session_id: str, state: FlowState):
@@ -928,6 +980,33 @@ async def _run_outline_generation_task(session_id: str, state: FlowState):
         
         save_session(state)
         logger.info(f"[OUTLINE_TASK] save_session() completed for session {session_id}")
+        
+        # Sync with Convex
+        try:
+            if state.project_id:
+                convex = get_convex_service()
+                logger.info(f"[OUTLINE_TASK] Syncing blueprint to Convex for project {state.project_id}")
+                
+                # Ensure progress record exists before calling save_outline
+                # (save_outline calls updateProgress which requires an existing record)
+                try:
+                    await convex.start_generation(state.project_id, session_id)
+                    logger.info(f"[OUTLINE_TASK] ✅ Started Convex progress tracking")
+                except Exception as start_err:
+                    logger.warning(f"[OUTLINE_TASK] start_generation failed (may already exist): {start_err}")
+                
+                # Format skeleton for frontend
+                # We reuse the same structure the polling endpoint returns
+                if state.skeleton:
+                    # We send the whole skeleton model dump
+                    await convex.save_outline(session_id, state.skeleton.model_dump())
+                    logger.info(f"[OUTLINE_TASK] ✅ Blueprint synced to Convex")
+                else:
+                    logger.warning("[OUTLINE_TASK] ⚠️ No skeleton to sync")
+        except Exception as convex_err:
+            logger.error(f"[OUTLINE_TASK] ❌ Convex sync failed: {convex_err}")
+            # Non-fatal, frontend can fallback to polling if implemented or just wait
+            
         logger.info(f"[OUTLINE_TASK] ✅ Outline generation complete - frontend should now detect skeleton")
     except Exception as e:
         error_str = str(e)
