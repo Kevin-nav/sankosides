@@ -59,3 +59,50 @@ export const getProjects = query({
             .collect();
     }
 });
+
+// Update user preferences
+export const updatePreferences = mutation({
+    args: {
+        firebaseUid: v.string(),
+        preferences: v.any(),
+    },
+    handler: async (ctx, args) => {
+        const user = await ctx.db
+            .query("users")
+            .withIndex("by_firebase_uid", (q) => q.eq("firebaseUid", args.firebaseUid))
+            .first();
+
+        if (!user) {
+            throw new Error("User not found");
+        }
+
+        await ctx.db.patch(user._id, {
+            preferences: args.preferences,
+            updatedAt: Date.now(),
+        });
+    },
+});
+
+// Update university profile
+export const updateUniversityProfile = mutation({
+    args: {
+        firebaseUid: v.string(),
+        universityProfile: v.any(),
+    },
+    handler: async (ctx, args) => {
+        const user = await ctx.db
+            .query("users")
+            .withIndex("by_firebase_uid", (q) => q.eq("firebaseUid", args.firebaseUid))
+            .first();
+
+        if (!user) {
+            throw new Error("User not found");
+        }
+
+        await ctx.db.patch(user._id, {
+            universityProfile: args.universityProfile,
+            updatedAt: Date.now(),
+        });
+    },
+});
+

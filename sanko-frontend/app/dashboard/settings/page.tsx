@@ -10,6 +10,8 @@ import { Switch } from "@/components/ui/switch";
 import { useTheme } from "next-themes";
 import { Loader2, Palette, FileText, AlertTriangle, Check } from "lucide-react";
 import { useState, useEffect } from "react";
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -23,8 +25,11 @@ import {
 } from "@/components/ui/alert-dialog";
 
 export default function SettingsPage() {
-    const { user, dbUser, loading, syncUser, signOut } = useAuth();
+    const { user, convexUser, loading, signOut } = useAuth();
     const { setTheme } = useTheme();
+
+    // Convex mutation for updating preferences
+    const updatePreferences = useMutation(api.users.updatePreferences);
 
     // Preferences state
     const [citationStyle, setCitationStyle] = useState("apa");
@@ -36,10 +41,10 @@ export default function SettingsPage() {
     const [prefsSaved, setPrefsSaved] = useState(false);
     const [deletingAccount, setDeletingAccount] = useState(false);
 
-    // Initialize from dbUser preferences
+    // Initialize from convexUser preferences
     useEffect(() => {
-        if (dbUser?.preferences) {
-            const prefs = dbUser.preferences as {
+        if (convexUser?.preferences) {
+            const prefs = convexUser.preferences as {
                 citationStyle?: string;
                 aspectRatio?: string;
                 includeTitleSlide?: boolean;
@@ -48,7 +53,7 @@ export default function SettingsPage() {
             if (prefs.aspectRatio) setAspectRatio(prefs.aspectRatio);
             if (prefs.includeTitleSlide !== undefined) setIncludeTitleSlide(prefs.includeTitleSlide);
         }
-    }, [dbUser]);
+    }, [convexUser]);
 
     const handleSavePreferences = async () => {
         if (!user) return;
@@ -56,27 +61,19 @@ export default function SettingsPage() {
         setPrefsSaved(false);
 
         try {
-            const token = await user.getIdToken();
-            const res = await fetch("/api/user/preferences", {
-                method: "PUT",
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
+            // Use Convex mutation directly - no API call needed
+            await updatePreferences({
+                firebaseUid: user.uid,
+                preferences: {
                     citationStyle,
                     aspectRatio,
                     includeTitleSlide,
-                }),
+                },
             });
 
-            if (res.ok) {
-                await syncUser();
-                setPrefsSaved(true);
-                setTimeout(() => setPrefsSaved(false), 2000);
-            } else {
-                console.error("Failed to save preferences");
-            }
+            // UI will update automatically via Convex subscription
+            setPrefsSaved(true);
+            setTimeout(() => setPrefsSaved(false), 2000);
         } catch (error) {
             console.error("Error saving preferences:", error);
         } finally {

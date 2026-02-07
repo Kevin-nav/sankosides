@@ -8,8 +8,12 @@
  * @module
  */
 
+import type * as citations from "../citations.js";
+import type * as generation from "../generation.js";
+import type * as layoutPresets from "../layoutPresets.js";
 import type * as projects from "../projects.js";
 import type * as templates from "../templates.js";
+import type * as universities from "../universities.js";
 import type * as users from "../users.js";
 
 import type {
@@ -19,8 +23,12 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  citations: typeof citations;
+  generation: typeof generation;
+  layoutPresets: typeof layoutPresets;
   projects: typeof projects;
   templates: typeof templates;
+  universities: typeof universities;
   users: typeof users;
 }>;
 

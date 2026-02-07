@@ -2,7 +2,8 @@
  * Generation Session API Hooks
  * 
  * TanStack Query hooks for AI generation sessions.
- * Uses polling for reliable progress updates.
+ * Progress tracking has moved to Convex real-time (see @/hooks/convex/use-generation).
+ * These hooks are now primarily for triggering backend actions.
  */
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -49,7 +50,10 @@ export interface StartSessionResponse {
 
 /**
  * Hook to poll session status
- * Used as reliable alternative/complement to SSE
+ * 
+ * @deprecated Use `useGenerationProgress` from '@/hooks/convex' instead.
+ * This polling hook is no longer needed as Convex provides real-time updates.
+ * Kept for backwards compatibility but will be removed in a future version.
  */
 export function useSessionStatus(
     sessionId: string | null,

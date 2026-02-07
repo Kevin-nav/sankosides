@@ -195,8 +195,9 @@ class NanoBananaImageTool:
             for candidate in response.candidates:
                 for part in candidate.content.parts:
                     if part.inline_data:
-                        # Decode image data
-                        image_data = base64.b64decode(part.inline_data.data)
+                        # Google GenAI SDK returns raw bytes, NOT base64 encoded
+                        # Using the data directly - no decode needed
+                        image_data = part.inline_data.data
                         
                         # Generate filename
                         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -322,3 +323,60 @@ class NanoBananaImageTool:
             prompt=prompt,
             style=style
         )
+    
+    async def generate_for_slide(
+        self,
+        subject: str,
+        slide_context: str = "",
+        style_preset: str = "academic",
+    ) -> GeneratedAsset:
+        """
+        Generate an image specifically optimized for presentation slides.
+        
+        This is the primary method for the AI-first image strategy.
+        
+        Args:
+            subject: What the image should depict
+            slide_context: Additional context about the slide/presentation
+            style_preset: One of 'academic', 'corporate', 'creative', 'minimal', 'technical'
+            
+        Returns:
+            GeneratedAsset with the generated image URL
+        """
+        # Style presets optimized for presentations
+        style_map = {
+            "academic": "professional, clean, educational, suitable for academic presentation, modern illustration",
+            "corporate": "professional, business-appropriate, polished, corporate aesthetic, clean lines",
+            "creative": "vibrant, artistic, visually engaging, modern design, creative illustration",
+            "minimal": "minimalist, clean composition, simple, lots of whitespace, subtle colors",
+            "technical": "technical diagram style, informative, precise, engineering aesthetic",
+        }
+        
+        style = style_map.get(style_preset, style_map["academic"])
+        
+        # Build optimized prompt for slides
+        prompt_parts = [
+            f"Subject: {subject}",
+            "Purpose: Professional presentation slide image",
+            "Composition: Clean, centered focal point, balanced layout",
+        ]
+        
+        if slide_context:
+            prompt_parts.append(f"Context: {slide_context}")
+        
+        prompt_parts.extend([
+            "Requirements:",
+            "- High resolution (1600x900 or similar widescreen)",
+            "- No text overlays or watermarks",
+            "- Suitable for projection on large screens",
+            "- Professional quality",
+        ])
+        
+        full_prompt = "\n".join(prompt_parts)
+        
+        return await self.generate_asset(
+            prompt=full_prompt,
+            style=style,
+            upload_to_r2=True,
+        )
+

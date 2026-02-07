@@ -31,7 +31,7 @@ export default function BetaWelcomeEmail({ name, email = '' }: BetaWelcomeEmailP
                     {/* Header */}
                     <Section style={header}>
                         <Heading style={logoText}>
-                            <span style={logoAccent}>Sanko</span>Slides
+                            <span style={logoAccent}>Sanko</span>Sides
                         </Heading>
                     </Section>
 

@@ -3,49 +3,9 @@
 import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, CheckCircle2, XCircle, Brain, Cpu, Zap, Activity, Terminal, Search, Image as ImageIcon, FileText, WifiOff } from "lucide-react";
-import { useSessionStatus } from "@/hooks/api";
-
-interface AgentEvent {
-    type: "start" | "thinking" | "complete" | "error" | "pipeline_start" | "pipeline_complete" | "pipeline_error" | "tool_call" | "tool_result" | "tool_phase" | "stage_start" | "stage_complete" | "stage_change" | "qa_iteration" | "slide_progress" | "progress";
-    agent?: string;
-    // QA iteration fields
-    slide?: number;
-    iteration?: number;
-    max_iterations?: number;
-    score?: number;
-    issues?: string[];
-    text?: string;
-    model?: string;
-    thinking_level?: string;
-    stats?: {
-        duration_ms?: number;
-        cost?: number;
-        citations_found?: number;
-        images_verified?: number;
-        slides?: number;
-        score?: number;
-        iterations?: number;
-    };
-    message?: string;
-    success?: boolean;
-    average_visual_score?: number;
-    total_slides?: number;
-    error?: string;
-    // Tool call fields
-    tool?: string;
-    action?: string;
-    input?: Record<string, any>;
-    result?: string;
-    phase?: string;
-    // Stage change fields
-    stage?: string;
-    stage_number?: number;
-    total_stages?: number;
-    status?: string;
-    description?: string;
-    reason?: string;
-}
+import { Loader2, CheckCircle2, XCircle, Brain, Cpu, Zap, Activity, Terminal } from "lucide-react";
+import { useGenerationProgress } from "@/hooks/convex";
+import { Id } from "@/convex/_generated/dataModel";
 
 interface AgentState {
     name: string;
@@ -72,13 +32,14 @@ interface ToolCall {
 
 interface GenerationProgressProps {
     sessionId: string;
+    convexProjectId?: Id<"projects">; // Convex project ID for real-time sync
     onComplete?: (result: any) => void;
     onStageChange?: (stage: string | null) => void;
 }
 
 const AGENT_ORDER = ["planner", "refiner", "citation_auditor", "final_slides", "generator", "visual_qa"];
 
-export function GenerationProgress({ sessionId, onComplete, onStageChange }: GenerationProgressProps) {
+export function GenerationProgress({ sessionId, convexProjectId, onComplete, onStageChange }: GenerationProgressProps) {
     const [agents, setAgents] = useState<Record<string, AgentState>>(() => {
         const initial: Record<string, AgentState> = {};
         AGENT_ORDER.forEach(name => {
@@ -99,350 +60,76 @@ export function GenerationProgress({ sessionId, onComplete, onStageChange }: Gen
     } | null>(null);
 
     const thinkingRef = useRef<HTMLDivElement>(null);
-    const [sseConnected, setSseConnected] = useState(false);
 
-    // Polling fallback
-    const { data: sessionStatus } = useSessionStatus(sessionId, {
-        refetchInterval: 2000,
-        enabled: pipelineStatus !== "complete" && pipelineStatus !== "error",
-    });
+    // Convex real-time progress - THE primary source of truth
+    const convexProgress = useGenerationProgress(convexProjectId || null);
 
-    // Sync polling status with local state
+    // Sync Convex progress with local state
     useEffect(() => {
-        if (!sessionStatus) return;
+        if (!convexProgress) return;
 
-        // 1. Sync Pipeline Status
-        if (sessionStatus.status === "completed" && pipelineStatus !== "complete") {
+        console.log("[GenerationProgress] Convex sync:", convexProgress);
+
+        // Sync status from Convex - currentStep values: 'initializing', 'complete', 'error', or agent names
+        const step = convexProgress.currentStep;
+        if (step === "complete" && pipelineStatus !== "complete") {
             setPipelineStatus("complete");
-            setPipelineResult({ success: true, visualScore: 0.95 }); // Default high score if missed
+            setPipelineResult({ success: true, visualScore: 0.95 });
             onComplete?.({ success: true });
-        } else if (sessionStatus.status === "failed" && pipelineStatus !== "error") {
+
+            // Mark all agents as complete
+            setAgents(prev => {
+                const next = { ...prev };
+                AGENT_ORDER.forEach(name => {
+                    next[name] = { ...next[name], status: "complete" };
+                });
+                return next;
+            });
+            setCurrentAgent(null);
+        } else if (step === "error" && pipelineStatus !== "error") {
             setPipelineStatus("error");
             setPipelineResult({ success: false });
-            onComplete?.({ success: false });
-        } else if (pipelineStatus === "idle" && (sessionStatus.status === "generating" || sessionStatus.status === "active")) {
+            onComplete?.({ success: false, error: convexProgress.message ?? undefined });
+        } else if (pipelineStatus === "idle" && step && step !== "complete" && step !== "error") {
             setPipelineStatus("running");
         }
 
-        // 2. Sync Current Agent based on current_stage
-        if (sessionStatus.current_stage) {
-            const mappedAgent = sessionStatus.current_stage === "qa" || sessionStatus.current_stage === "visual_qa"
-                ? "visual_qa"
-                : sessionStatus.current_stage;
+        // Sync current stage from Convex (if currentStep is an agent name)
+        if (step && step !== "complete" && step !== "error" && step !== "initializing") {
+            const agentName = step === "qa" ? "visual_qa" : step;
+            if (AGENT_ORDER.includes(agentName) && agentName !== currentAgent) {
+                setCurrentAgent(agentName);
+                onStageChange?.(agentName);
 
-            // Only update if it's a valid agent and different from current or if current is null
-            if (AGENT_ORDER.includes(mappedAgent)) {
-                // Mark previous agents as complete
-                const agentIndex = AGENT_ORDER.indexOf(mappedAgent);
+                // Mark previous agents complete
+                const agentIndex = AGENT_ORDER.indexOf(agentName);
                 setAgents(prev => {
                     const next = { ...prev };
-                    let changed = false;
-
-                    // Mark previous agents complete
                     for (let i = 0; i < agentIndex; i++) {
-                        const name = AGENT_ORDER[i];
-                        if (next[name].status !== "complete") {
-                            next[name] = { ...next[name], status: "complete" };
-                            changed = true;
+                        if (next[AGENT_ORDER[i]].status !== "complete") {
+                            next[AGENT_ORDER[i]] = { ...next[AGENT_ORDER[i]], status: "complete" };
                         }
                     }
-
-                    // Mark current agent running if not already
-                    if (next[mappedAgent].status !== "running" && next[mappedAgent].status !== "complete") {
-                        next[mappedAgent] = {
-                            ...next[mappedAgent],
-                            status: "running",
-                            start_time: next[mappedAgent].start_time || Date.now(),
-                        };
-                        changed = true;
+                    if (next[agentName].status !== "running") {
+                        next[agentName] = { ...next[agentName], status: "running", start_time: Date.now() };
                     }
-
-                    return changed ? next : prev;
+                    return next;
                 });
-
-                if (currentAgent !== mappedAgent) {
-                    setCurrentAgent(mappedAgent);
-                    onStageChange?.(mappedAgent);
-                }
             }
         }
-    }, [sessionStatus, pipelineStatus, currentAgent, onComplete, onStageChange]);
 
-    // Connect to event stream
-    useEffect(() => {
-        if (!sessionId) return;
-
-        // Use direct backend URL for SSE to bypass Next.js proxy buffering
-        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
-        const url = `${backendUrl}/api/generation/stream/${sessionId}`;
-        const es = new EventSource(url);
-
-        es.onopen = () => {
-            console.log("🔗 Connected to generation stream");
-            setSseConnected(true);
-        };
-
-        es.onerror = (e) => {
-            console.error("SSE error:", e);
-            setSseConnected(false);
-        };
-
-        // Listen for various event types
-        const handleEvent = (event: MessageEvent) => {
-            // Skip empty or undefined data (heartbeats, malformed events)
-            if (!event.data || event.data === "undefined") {
-                return;
-            }
-
-            try {
-                const data: AgentEvent = JSON.parse(event.data);
-                console.log("📨 Event received:", data);
-
-                switch (data.type) {
-                    case "pipeline_start":
-                        setPipelineStatus("running");
-                        break;
-
-                    case "start":
-                        if (data.agent) {
-                            setCurrentAgent(data.agent);
-                            onStageChange?.(data.agent);
-                            setAgents(prev => ({
-                                ...prev,
-                                [data.agent!]: {
-                                    ...prev[data.agent!],
-                                    status: "running",
-                                    model: data.model,
-                                    thinking_level: data.thinking_level,
-                                    start_time: Date.now(),
-                                    thinking_chunks: [],
-                                    toolCalls: [],
-                                }
-                            }));
-                        }
-                        break;
-
-                    case "tool_phase":
-                        if (data.agent && data.phase) {
-                            setAgents(prev => ({
-                                ...prev,
-                                [data.agent!]: {
-                                    ...prev[data.agent!],
-                                    currentPhase: data.phase,
-                                }
-                            }));
-                        }
-                        break;
-
-                    case "tool_call":
-                        if (data.agent && data.tool) {
-                            const newToolCall: ToolCall = {
-                                tool: data.tool,
-                                action: data.action || "call",
-                                input: data.input,
-                                pending: true,
-                            };
-                            setAgents(prev => ({
-                                ...prev,
-                                [data.agent!]: {
-                                    ...prev[data.agent!],
-                                    toolCalls: [...prev[data.agent!].toolCalls, newToolCall]
-                                }
-                            }));
-                        }
-                        break;
-
-                    case "tool_result":
-                        if (data.agent && data.tool) {
-                            setAgents(prev => {
-                                const agentState = prev[data.agent!];
-                                const updatedToolCalls = [...agentState.toolCalls];
-                                // Find the last pending call for this tool
-                                const idx = updatedToolCalls.findLastIndex(tc => tc.tool === data.tool && tc.pending);
-                                if (idx !== -1) {
-                                    updatedToolCalls[idx] = {
-                                        ...updatedToolCalls[idx],
-                                        result: data.result,
-                                        success: data.success,
-                                        pending: false,
-                                    };
-                                }
-                                return {
-                                    ...prev,
-                                    [data.agent!]: {
-                                        ...agentState,
-                                        toolCalls: updatedToolCalls
-                                    }
-                                };
-                            });
-                        }
-                        break;
-
-                    case "thinking":
-                        if (data.agent && data.text) {
-                            setAgents(prev => ({
-                                ...prev,
-                                [data.agent!]: {
-                                    ...prev[data.agent!],
-                                    thinking_chunks: [...prev[data.agent!].thinking_chunks, data.text!]
-                                }
-                            }));
-                            // Auto-scroll
-                            if (thinkingRef.current) {
-                                thinkingRef.current.scrollTop = thinkingRef.current.scrollHeight;
-                            }
-                        }
-                        break;
-
-                    case "complete":
-                        if (data.agent) {
-                            setAgents(prev => ({
-                                ...prev,
-                                [data.agent!]: {
-                                    ...prev[data.agent!],
-                                    status: "complete",
-                                    duration_ms: data.stats?.duration_ms,
-                                    cost: data.stats?.cost,
-                                }
-                            }));
-                            setCurrentAgent(null);
-                        }
-                        break;
-
-                    case "error":
-                        if (data.agent) {
-                            setAgents(prev => ({
-                                ...prev,
-                                [data.agent!]: {
-                                    ...prev[data.agent!],
-                                    status: "error",
-                                    error: data.message,
-                                }
-                            }));
-                        }
-                        break;
-
-                    case "pipeline_complete":
-                        setPipelineStatus("complete");
-                        setPipelineResult({
-                            success: data.success ?? true,
-                            visualScore: data.average_visual_score,
-                        });
-                        onComplete?.({ success: true, average_visual_score: data.average_visual_score });
-                        es.close();
-                        break;
-
-                    case "pipeline_error":
-                        setPipelineStatus("error");
-                        setPipelineResult({ success: false });
-                        onComplete?.({ success: false });
-                        es.close();
-                        break;
-
-                    case "stage_start":
-                        // Handle stage_start events from FlowEventEmitter
-                        if (data.stage) {
-                            const agentName = data.stage === "qa" || data.stage === "visual_qa" ? "visual_qa" : data.stage;
-                            console.log(`📍 Stage START: ${agentName}`);
-                            setCurrentAgent(agentName);
-                            onStageChange?.(agentName);
-                            setAgents(prev => ({
-                                ...prev,
-                                [agentName]: {
-                                    ...prev[agentName],
-                                    status: "running",
-                                    start_time: Date.now(),
-                                    thinking_chunks: [],
-                                    toolCalls: [],
-                                }
-                            }));
-                        }
-                        break;
-
-                    case "stage_complete":
-                        // Handle stage_complete events from FlowEventEmitter
-                        if (data.stage) {
-                            const agentName = data.stage === "qa" || data.stage === "visual_qa" ? "visual_qa" : data.stage;
-                            console.log(`✅ Stage COMPLETE: ${agentName}`, data.result);
-                            setAgents(prev => ({
-                                ...prev,
-                                [agentName]: {
-                                    ...prev[agentName],
-                                    status: "complete",
-                                }
-                            }));
-                            setCurrentAgent(null);
-                        }
-                        break;
-
-                    case "stage_change":
-                        // Handle stage transition events (legacy)
-                        if (data.stage && data.status) {
-                            const agentName = data.stage === "qa" ? "visual_qa" : data.stage;
-                            if (agentName === "render") {
-                                // Render stage doesn't have an agent in AGENT_ORDER, skip
-                                console.log(`Stage: ${data.stage} - ${data.status}`);
-                            } else {
-                                setAgents(prev => {
-                                    const agentState = prev[agentName] || { name: agentName, status: "pending", thinking_chunks: [], toolCalls: [] };
-                                    return {
-                                        ...prev,
-                                        [agentName]: {
-                                            ...agentState,
-                                            status: data.status === "started" ? "running" :
-                                                data.status === "completed" ? "complete" :
-                                                    data.status === "error" ? "error" :
-                                                        data.status === "skipped" ? "complete" : agentState.status,
-                                            error: data.error || data.reason,
-                                        }
-                                    };
-                                });
-                                if (data.status === "started") {
-                                    setCurrentAgent(agentName);
-                                }
-                            }
-                        }
-                        break;
-
-                    case "qa_iteration":
-                        // Handle QA iteration progress
-                        setQaProgress({
-                            currentSlide: data.slide ?? 1,
-                            totalSlides: data.total_slides ?? 1,
-                            currentIteration: data.iteration ?? 1,
-                            maxIterations: data.max_iterations ?? 3,
-                            score: data.score ?? 0,
-                            issues: data.issues ?? [],
-                        });
-                        break;
-                }
-            } catch (e) {
-                console.error("Failed to parse event:", e);
-            }
-        };
-
-        // Register for all event types
-        es.addEventListener("start", handleEvent);
-        es.addEventListener("thinking", handleEvent);
-        es.addEventListener("complete", handleEvent);
-        es.addEventListener("error", handleEvent);
-        es.addEventListener("pipeline_start", handleEvent);
-        es.addEventListener("pipeline_complete", handleEvent);
-        es.addEventListener("pipeline_error", handleEvent);
-        es.addEventListener("tool_call", handleEvent);
-        es.addEventListener("tool_result", handleEvent);
-        es.addEventListener("tool_phase", handleEvent);
-        es.addEventListener("stage_start", handleEvent);
-        es.addEventListener("stage_complete", handleEvent);
-        es.addEventListener("stage_change", handleEvent);
-        es.addEventListener("qa_iteration", handleEvent);
-        es.addEventListener("slide_progress", handleEvent);
-        es.addEventListener("progress", handleEvent);
-
-        return () => {
-            es.close();
-        };
-    }, [sessionId, onComplete, onStageChange]);
+        // Sync slide progress info from Convex
+        if (convexProgress.currentSlideIndex !== undefined && convexProgress.totalSlides) {
+            setQaProgress(prev => ({
+                currentSlide: convexProgress.currentSlideIndex! + 1,
+                totalSlides: convexProgress.totalSlides!,
+                currentIteration: prev?.currentIteration ?? 1,
+                maxIterations: prev?.maxIterations ?? 3,
+                score: prev?.score ?? (convexProgress.stepProgress / 100),
+                issues: prev?.issues ?? [],
+            }));
+        }
+    }, [convexProgress, pipelineStatus, currentAgent, onComplete, onStageChange]);
 
     const currentAgentState = currentAgent ? agents[currentAgent] : null;
 
@@ -457,12 +144,6 @@ export function GenerationProgress({ sessionId, onComplete, onStageChange }: Gen
                             <div className="flex items-center gap-2">
                                 <Activity className="h-4 w-4 text-emerald-500" />
                                 Mission Control
-                                {!sseConnected && pipelineStatus === "running" && (
-                                    <Badge variant="outline" className="ml-2 border-amber-500/30 text-amber-500 bg-amber-500/10 text-[10px] h-5 px-1.5">
-                                        <WifiOff className="h-3 w-3 mr-1" />
-                                        Polling
-                                    </Badge>
-                                )}
                             </div>
                             <Badge variant={
                                 pipelineStatus === "running" ? "default" :
@@ -602,27 +283,36 @@ export function GenerationProgress({ sessionId, onComplete, onStageChange }: Gen
                                 </div>
                             )}
 
-                            {/* Thinking Stream */}
-                            <div className="space-y-1.5">
-                                <div className="text-xs font-medium text-emerald-500/70 uppercase tracking-wider flex items-center gap-1.5">
-                                    <Activity className="h-3 w-3" />
-                                    Thinking Stream
+                            {/* Convex Progress Info */}
+                            {convexProgress && convexProgress.message && (
+                                <div className="space-y-1.5">
+                                    <div className="text-xs font-medium text-emerald-500/70 uppercase tracking-wider flex items-center gap-1.5">
+                                        <Activity className="h-3 w-3" />
+                                        Status
+                                    </div>
+                                    <div className="bg-black/40 rounded-lg p-3 font-mono text-xs text-emerald-300/90 leading-relaxed border border-white/5 shadow-inner">
+                                        {convexProgress.message}
+                                    </div>
                                 </div>
-                                <div
-                                    ref={thinkingRef}
-                                    className="h-40 overflow-y-auto bg-black/40 rounded-lg p-3 font-mono text-xs text-emerald-300/90 leading-relaxed border border-white/5 shadow-inner scrollbar-thin scrollbar-thumb-emerald-900/50"
-                                >
-                                    {currentAgentState.thinking_chunks.length === 0 ? (
-                                        <span className="text-neutral-500 animate-pulse italic">Initializing thought process...</span>
-                                    ) : (
-                                        currentAgentState.thinking_chunks.map((chunk, i) => (
-                                            <span key={i}>{chunk}</span>
-                                        ))
-                                    )}
-                                </div>
-                            </div>
+                            )}
 
-                            {/* Tool Calls */}
+                            {/* Progress Bar */}
+                            {convexProgress && convexProgress.stepProgress > 0 && (
+                                <div className="space-y-1.5">
+                                    <div className="flex items-center justify-between text-xs">
+                                        <span className="text-neutral-400">Progress</span>
+                                        <span className="text-emerald-400 font-mono">{convexProgress.stepProgress}%</span>
+                                    </div>
+                                    <div className="w-full bg-neutral-800 rounded-full h-2 overflow-hidden">
+                                        <div
+                                            className="bg-emerald-500 h-full transition-all duration-300"
+                                            style={{ width: `${convexProgress.stepProgress}%` }}
+                                        />
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Tool Calls (if any were tracked) */}
                             {currentAgentState.toolCalls.length > 0 && (
                                 <div className="space-y-2">
                                     <div className="text-xs font-medium text-muted-foreground flex items-center gap-1.5 uppercase tracking-wider">

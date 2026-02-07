@@ -42,6 +42,7 @@ from app.crew.flows.metrics import MetricsCollector
 from app.core.logging import get_logger
 from app.core.database import get_db
 from app.services.storage import get_storage_service, PDFCacheService
+from app.services.convex_service import get_convex_service
 
 logger = get_logger(__name__)
 
@@ -901,10 +902,45 @@ async def start_generation(session_id: str, background_tasks: BackgroundTasks):
 
 
 async def _run_generation_task(session_id: str, state: FlowState):
-    """Background task for generation."""
+    """Background task for generation with Convex progress tracking."""
+    convex = get_convex_service()
+    project_id = getattr(state, 'project_id', None)
+    
     try:
+        # Start Convex progress tracking if we have a project ID
+        if project_id:
+            try:
+                await convex.start_generation(project_id, session_id)
+            except Exception as e:
+                logger.warning(f"[CONVEX] Failed to start progress tracking: {e}")
+        
+        # Update progress: Generating slides
+        if project_id:
+            try:
+                await convex.update_progress(
+                    session_id=session_id,
+                    current_step="generating",
+                    step_progress=0,
+                    total_slides=state.total_slides,
+                    message="Starting slide generation..."
+                )
+            except Exception as e:
+                logger.warning(f"[CONVEX] Failed to update progress: {e}")
+        
+        # Run the actual generation
         await run_generation(session_id, state)
         save_session(state)
+        
+        # Complete Convex progress tracking
+        if project_id:
+            try:
+                slides_data = None
+                if state.generated_presentation:
+                    slides_data = state.generated_presentation.model_dump()
+                await convex.complete_generation(session_id, slides_data)
+            except Exception as e:
+                logger.warning(f"[CONVEX] Failed to complete progress: {e}")
+        
     except Exception as e:
         error_str = str(e)
         logger.error(f"Generation failed: {e}")
@@ -921,6 +957,13 @@ async def _run_generation_task(session_id: str, state: FlowState):
             state.error_message = f"Generation failed: {str(e)[:200]}"
         
         save_session(state)
+        
+        # Report failure to Convex
+        if project_id:
+            try:
+                await convex.fail_generation(session_id, state.error_message or str(e))
+            except Exception as convex_err:
+                logger.warning(f"[CONVEX] Failed to report failure: {convex_err}")
 
 
 async def _run_outline_generation_task(session_id: str, state: FlowState):
@@ -937,6 +980,33 @@ async def _run_outline_generation_task(session_id: str, state: FlowState):
         
         save_session(state)
         logger.info(f"[OUTLINE_TASK] save_session() completed for session {session_id}")
+        
+        # Sync with Convex
+        try:
+            if state.project_id:
+                convex = get_convex_service()
+                logger.info(f"[OUTLINE_TASK] Syncing blueprint to Convex for project {state.project_id}")
+                
+                # Ensure progress record exists before calling save_outline
+                # (save_outline calls updateProgress which requires an existing record)
+                try:
+                    await convex.start_generation(state.project_id, session_id)
+                    logger.info(f"[OUTLINE_TASK] ✅ Started Convex progress tracking")
+                except Exception as start_err:
+                    logger.warning(f"[OUTLINE_TASK] start_generation failed (may already exist): {start_err}")
+                
+                # Format skeleton for frontend
+                # We reuse the same structure the polling endpoint returns
+                if state.skeleton:
+                    # We send the whole skeleton model dump
+                    await convex.save_outline(session_id, state.skeleton.model_dump())
+                    logger.info(f"[OUTLINE_TASK] ✅ Blueprint synced to Convex")
+                else:
+                    logger.warning("[OUTLINE_TASK] ⚠️ No skeleton to sync")
+        except Exception as convex_err:
+            logger.error(f"[OUTLINE_TASK] ❌ Convex sync failed: {convex_err}")
+            # Non-fatal, frontend can fallback to polling if implemented or just wait
+            
         logger.info(f"[OUTLINE_TASK] ✅ Outline generation complete - frontend should now detect skeleton")
     except Exception as e:
         error_str = str(e)

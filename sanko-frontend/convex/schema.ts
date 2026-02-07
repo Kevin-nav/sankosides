@@ -83,4 +83,110 @@ export default defineSchema({
         createdAt: v.number(),
         updatedAt: v.number(),
     }).index("by_theme_id", ["themeId"]),
+
+    // =========================================================================
+    // University Hierarchy (migrated from Neon PostgreSQL)
+    // =========================================================================
+
+    // Universities table
+    universities: defineTable({
+        universityId: v.string(), // e.g., 'knust', 'ug'
+        name: v.string(),
+        shortName: v.string(),
+        country: v.string(),
+        defaultCitationStyle: v.string(), // 'apa', 'ieee', etc.
+        spellingVariant: v.string(), // 'british', 'american'
+        unitSystem: v.string(), // 'metric', 'imperial'
+        createdAt: v.number(),
+        updatedAt: v.number(),
+    }).index("by_university_id", ["universityId"]),
+
+    // Faculties table
+    faculties: defineTable({
+        universityId: v.id("universities"),
+        facultyId: v.string(), // e.g., 'engineering'
+        name: v.string(),
+        shortName: v.string(),
+        createdAt: v.number(),
+        updatedAt: v.number(),
+    }).index("by_university", ["universityId"])
+        .index("by_faculty_id", ["facultyId"]),
+
+    // Departments table
+    departments: defineTable({
+        facultyId: v.id("faculties"),
+        departmentId: v.string(), // e.g., 'computer_engineering'
+        name: v.string(),
+        isStem: v.boolean(),
+        createdAt: v.number(),
+        updatedAt: v.number(),
+    }).index("by_faculty", ["facultyId"])
+        .index("by_department_id", ["departmentId"]),
+
+    // =========================================================================
+    // Citation Cache (migrated from Neon PostgreSQL)
+    // =========================================================================
+
+    cachedCitations: defineTable({
+        queryHash: v.string(), // SHA256 of normalized query
+        normalizedQuery: v.string(),
+        citationData: v.any(), // Array of citation objects
+        provider: v.string(), // 'semantic_scholar', 'crossref', etc.
+        createdAt: v.number(),
+        expiresAt: v.number(), // TTL for cache invalidation
+    }).index("by_query_hash", ["queryHash"]),
+
+    // =========================================================================
+    // Layout Presets (migrated from Neon PostgreSQL)
+    // =========================================================================
+
+    layoutPresets: defineTable({
+        presetId: v.string(),
+        name: v.string(),
+        description: v.optional(v.string()),
+        config: v.any(), // Layout configuration JSON
+        isSystem: v.boolean(),
+        createdAt: v.number(),
+        updatedAt: v.number(),
+    }).index("by_preset_id", ["presetId"]),
+
+    // =========================================================================
+    // Survey Responses
+    // =========================================================================
+
+    surveyResponses: defineTable({
+        userId: v.optional(v.id("users")),
+        responses: v.any(), // Survey answers JSON
+        createdAt: v.number(),
+    }),
+
+    // =========================================================================
+    // Generation Progress (Real-time AI Generation Tracking)
+    // =========================================================================
+
+    generationProgress: defineTable({
+        projectId: v.id("projects"),
+        sessionId: v.string(), // Playground session UUID from backend
+
+        // Progress tracking
+        currentStep: v.string(), // 'initializing', 'parsing', 'outlining', 'generating', 'rendering', 'complete', 'error'
+        stepProgress: v.number(), // 0-100 percentage
+
+        // Slide generation progress
+        currentSlideIndex: v.optional(v.number()),
+        totalSlides: v.optional(v.number()),
+
+        // Status messages
+        message: v.optional(v.string()), // Current action description
+        error: v.optional(v.string()), // Error message if failed
+
+        // Blueprint Data (Added for polling migration)
+        blueprint: v.optional(v.any()), // Generated skeleton
+        clarificationStatus: v.optional(v.string()), // e.g. 'blueprint_ready'
+
+        // Timestamps
+        createdAt: v.number(),
+        updatedAt: v.number(),
+    }).index("by_project_id", ["projectId"])
+        .index("by_session_id", ["sessionId"]),
 });

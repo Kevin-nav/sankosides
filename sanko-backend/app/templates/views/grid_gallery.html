@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="header-region col-12">
+    <h2 class="slide-title">{{ slide.title }}</h2>
+</div>
+
+<!-- Grid Items (Up to 4) -->
+<div class="col-12"
+    style="display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: var(--grid-gap); height: 100%;">
+    {% for point in slide.bullet_points[:4] %}
+    <div class="grid-card" style="
+        background: var(--color-surface); 
+        padding: var(--spacing-md); 
+        border-radius: var(--radius-md);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    ">
+        <p>{{ point }}</p>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

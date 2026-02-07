@@ -22,7 +22,7 @@ from app.core.logging import get_logger
 from app.api.routers.generation import router as generation_router
 from app.export.router import router as export_router
 # from app.routers.universities import router as universities_router
-# from app.api.routers.templates import router as templates_router
+from app.api.routers.templates import router as templates_router
 
 # Initialize logging
 logger = get_logger(__name__)
@@ -77,7 +77,7 @@ app.add_middleware(
 app.include_router(generation_router, prefix="/api", tags=["Generation"])
 app.include_router(export_router, prefix="/api", tags=["Export"])
 # app.include_router(universities_router, prefix="/api", tags=["Universities"])
-# app.include_router(templates_router, prefix="/api", tags=["Templates"])
+app.include_router(templates_router, prefix="/api", tags=["Templates"])
 
 
 @app.get("/")

@@ -1,0 +1,93 @@
+<!DOCTYPE html><!-- FIXED VERSION FORCE OVERWRITE -->
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ slide.title }}</title>
+
+    <!-- KaTeX CSS (Injected or CDN) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+
+    <style>
+        /* 1. Theme Variables (Injected by Backend) */
+            {
+                {
+                theme_css_vars | safe
+            }
+        }
+
+        /* 2. Slide SDK (Layout & Typography) */
+            {
+                {
+                slide_layout_css | safe
+            }
+        }
+
+            {
+                {
+                slide_typography_css | safe
+            }
+        }
+
+        /* 3. Custom Template CSS (Injected from DB) */
+            {
+                {
+                custom_css | safe
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="slide-wrapper">
+        <div class="slide {{ slide_classes }}" data-template="{{ template_id }}" data-slide-id="{{ slide.order }}">
+
+            <!-- Branding Header -->
+            {% if show_header %}
+            <div class="slide-header">
+                {% if branding.university_badge_url %}
+                <img class="university-badge" src="{{ branding.university_badge_url }}" alt="Logo"
+                    style="height: 40px;">
+                {% endif %}
+
+                {% if template_id != 'title' %}
+                <h1 class="slide-title">{{ slide.title }}</h1>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            <!-- Main Content Block -->
+            <div class="slide-content {{ content_classes }}">
+                {% block content %}{% endblock %}
+            </div>
+
+            <!-- Footer -->
+            <div class="slide-footer">
+                <div class="footer-left">
+                    {% if branding.university_name and template_id == 'title' %}
+                    {{ branding.university_name }}
+                    {% endif %}
+                </div>
+
+                <div class="footer-right">
+                    {% if show_number %}
+                    <span class="slide-number">{{ slide.order }} / {{ total_slides }}</span>
+                    {% endif %}
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- KaTeX JS (Injected or CDN) -->
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Math Loader -->
+    <script>
+        { { katex_loader_js | safe } }
+    </script>
+</body>
+
+</html>

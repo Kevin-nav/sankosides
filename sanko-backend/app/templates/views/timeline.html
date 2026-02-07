@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="header-region col-12">
+    <h2 class="slide-title">{{ slide.title }}</h2>
+</div>
+
+<div class="timeline-container col-12">
+    {% for point in slide.bullet_points %}
+    <div class="timeline-item" style="flex: 1; padding: 0 10px; position: relative;">
+        <!-- Step Number -->
+        <div class="step-num" style="
+            font-size: 48px; 
+            font-weight: 800; 
+            color: var(--color-accent);
+            opacity: 0.3;
+            margin-bottom: -20px;
+        ">{{ loop.index }}</div>
+
+        <!-- Connector Line -->
+        <div class="connector" style="
+            height: 4px; 
+            background: var(--color-secondary); 
+            margin-bottom: 24px;
+            width: 100%;
+        "></div>
+
+        <!-- Content -->
+        <div class="step-content">
+            <p style="font-size: 20px; line-height: 1.4;">{{ point }}</p>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

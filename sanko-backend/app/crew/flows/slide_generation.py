@@ -3011,7 +3011,6 @@ IMPORTANT:
         
         # Get theme and branding configuration
         from app.themes import get_theme, UniversityBranding
-        from app.core.database import get_async_session_local
         
         theme = get_theme(self.state.order_form.theme_id or "modern")
         
@@ -3028,9 +3027,6 @@ IMPORTANT:
         
         total_slides = len(self.state.refined_content.slides)
         
-        # Get the async session factory (safely initializes DB if needed)
-        AsyncSessionLocal = get_async_session_local()
-        
         # Assign layouts to slides using the variety engine
         from app.services.layout_selector import get_layout_selector
         layout_selector = get_layout_selector()
@@ -3039,12 +3035,10 @@ IMPORTANT:
         user_layout_preferences = getattr(self.state.order_form, 'template_preferences', {}) or {}
         
         # Select layouts for all slides with variety
-        async with AsyncSessionLocal() as layout_session:
-            slide_layouts = await layout_selector.select_for_presentation(
-                slides=self.state.refined_content.slides,
-                user_preferences=user_layout_preferences,
-                db_session=layout_session,
-            )
+        slide_layouts = await layout_selector.select_for_presentation(
+            slides=self.state.refined_content.slides,
+            user_preferences=user_layout_preferences,
+        )
         
         # Apply selected layouts to slides
         for slide in self.state.refined_content.slides:
@@ -3055,23 +3049,19 @@ IMPORTANT:
                 logger.debug(f"Slide {slide.order}: assigned layout '{layout.get('preset_id')}'")
         
         
-        # Generate slides in parallel with SEPARATE sessions per task
-        # SQLAlchemy AsyncSession does NOT support concurrent operations on the same session
-        # Each task creates its own session to avoid "concurrent operations not permitted" errors
-        async def generate_with_own_session(slide, slide_number):
-            async with AsyncSessionLocal() as session:
-                return await self._generate_slide_html_with_db_template(
-                    slide, 
-                    theme, 
-                    branding, 
-                    session,
-                    slide_number=slide_number,
-                    total_slides=total_slides,
-                    layout_style=layout_style,
-                )
+        # Generate slides in parallel
+        async def generate_slide(slide, slide_number):
+            return await self._generate_slide_html_with_db_template(
+                slide, 
+                theme, 
+                branding, 
+                slide_number=slide_number,
+                total_slides=total_slides,
+                layout_style=layout_style,
+            )
         
         tasks = [
-            generate_with_own_session(slide, i+1)
+            generate_slide(slide, i+1)
             for i, slide in enumerate(self.state.refined_content.slides)
         ]
         
@@ -3097,7 +3087,6 @@ IMPORTANT:
         refined: RefinedSlide,
         theme,
         branding,
-        session,  # AsyncSession
         slide_number: int,
         total_slides: int,
         layout_style: str = "default",
@@ -3134,7 +3123,6 @@ IMPORTANT:
         html = await generate_slide_html_with_db_template(
             slide=enriched,
             theme=theme,
-            session=session,
             colors=theme.colors,
             branding=branding,
             slide_number=slide_number,
