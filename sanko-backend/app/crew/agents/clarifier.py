@@ -124,6 +124,94 @@ Present a clean summary of ALL settings including source type, then ask: "Ready 
 """
 
 
+# Wizard Mode: Returns structured questions with selectable options for the frontend wizard UI
+WIZARD_MODE_SYSTEM_PROMPT = """You are an AI assistant helping users configure their presentation requirements.
+
+## YOUR ROLE
+You are the backend brain for a wizard-style interface. The frontend displays your questions as **selectable choice cards**.
+
+## RESPONSE FORMAT - ALWAYS USE THIS JSON STRUCTURE
+
+When you need to ask a question, respond with ONLY this JSON format:
+```json
+{
+  "type": "question",
+  "question_text": "Your question here?",
+  "field_key": "target_audience",
+  "suggested_options": [
+    {"id": "undergrad", "label": "Undergraduate Students", "icon": "🎓", "description": "General college students"},
+    {"id": "graduate", "label": "Graduate Researchers", "icon": "🔬", "description": "Masters/PhD level"},
+    {"id": "industry", "label": "Industry Professionals", "icon": "💼", "description": "Working professionals"},
+    {"id": "general", "label": "General Public", "icon": "🌍", "description": "Non-specialists"}
+  ],
+  "allow_custom": true,
+  "allow_multiple": false
+}
+```
+
+When all requirements are gathered, respond with:
+```json
+{
+  "type": "summary",
+  "collected_data": {
+    "presentation_title": "...",
+    "target_audience": "...",
+    "target_slides": 10,
+    "focus_areas": ["..."],
+    "tone": "academic",
+    "emphasis_style": "detailed"
+  },
+  "is_complete": true
+}
+```
+
+## FIELD KEYS AND SUGGESTED OPTIONS
+
+For `target_audience`:
+- undergrad, graduate, industry, general, mixed
+
+For `slide_count`:
+- 5 (brief), 10 (standard), 15 (detailed), 20 (comprehensive), auto (AI decides)
+
+For `emphasis_style`:
+- detailed (in-depth with examples)
+- concise (key points only)
+- visual (emphasis on graphics/diagrams)
+
+For `focus_areas` (allow_multiple: true):
+- Generate contextually relevant options based on the topic/document
+
+## RULES
+
+1. Output ONLY valid JSON - no markdown, no explanation text
+2. The frontend handles display - you just provide the structured data
+3. `field_key` must match: target_audience, slide_count, emphasis_style, focus_areas, tone, special_requests
+4. If the user already provided info (via wizard_data), acknowledge it and ask the NEXT missing field
+5. Be smart about context - if user uploaded a document, generate focus_areas options from it
+
+## EXAMPLE SEQUENCE
+
+User sends: {"wizard_data": {"topic": "Machine Learning", "audience": "undergrad"}, "request_next_question": true}
+
+Your response:
+```json
+{
+  "type": "question",
+  "question_text": "What aspects of Machine Learning should we emphasize?",
+  "field_key": "focus_areas",
+  "suggested_options": [
+    {"id": "basics", "label": "Fundamentals & Theory", "icon": "📚", "description": "Core concepts and algorithms"},
+    {"id": "practical", "label": "Practical Applications", "icon": "🛠️", "description": "Real-world use cases"},
+    {"id": "code", "label": "Code & Implementation", "icon": "💻", "description": "Hands-on coding examples"},
+    {"id": "ethics", "label": "Ethics & Implications", "icon": "⚖️", "description": "Societal impact and concerns"}
+  ],
+  "allow_custom": true,
+  "allow_multiple": true
+}
+```
+"""
+
+
 
 def create_clarifier_agent(llm=None, tools=None) -> Agent:
     """
@@ -288,6 +376,78 @@ Respond naturally and gather missing information.""",
     )
 
 
+def create_wizard_clarification_task(
+    agent: Agent,
+    wizard_data: dict,
+    user_answer: Optional[str] = None,
+    knowledge_base: Optional[KnowledgeBase] = None,
+    university_context: Optional["UniversityContext"] = None,
+) -> Task:
+    """
+    Create a task for wizard-mode clarification with structured JSON responses.
+    
+    Args:
+        agent: The Clarifier agent
+        wizard_data: Data already collected by the wizard UI (topic, audience, etc.)
+        user_answer: Optional answer to the last question
+        knowledge_base: Optional extracted content from user documents
+        university_context: Optional university context for institution-specific defaults
+        
+    Returns:
+        CrewAI Task configured for wizard-mode clarification
+    """
+    context_injection = ""
+    
+    # Add document context if available
+    if knowledge_base:
+        section_list = "\n".join([f"- {s.title}" for s in knowledge_base.sections])
+        context_injection = f"""
+## DOCUMENT CONTEXT
+The user uploaded a document with these sections:
+{section_list}
+
+Use these sections to generate relevant focus_areas options.
+"""
+    
+    # Format wizard data for the AI
+    wizard_data_str = "\n".join([f"- {k}: {v}" for k, v in wizard_data.items()])
+    
+    # Build the prompt
+    if user_answer:
+        prompt = f"""The user answered your last question.
+
+User's Answer: {user_answer}
+
+Previously Collected Data:
+{wizard_data_str}
+{context_injection}
+
+Based on this answer and the data already collected, determine the next question to ask.
+If all required fields are filled, return a summary response.
+
+Required fields: topic, target_audience, slide_count, focus_areas, emphasis_style
+Optional (use defaults if not specified): tone, special_requests"""
+    else:
+        prompt = f"""The wizard has collected this data so far:
+
+{wizard_data_str}
+{context_injection}
+
+Determine what information is still missing and ask the NEXT required question.
+Return a structured question with suggested_options.
+
+Required fields: topic, target_audience, slide_count, focus_areas, emphasis_style
+Optional (use defaults if not specified): tone, special_requests"""
+    
+    return Task(
+        description=prompt,
+        expected_output="""A valid JSON response in one of these formats:
+1. A question object with type, question_text, field_key, and suggested_options
+2. A summary object with type: "summary", collected_data, and is_complete: true""",
+        agent=agent,
+    )
+
+
 # Agent configuration as YAML-compatible dict (for reference)
 CLARIFIER_CONFIG = {
     "role": "Presentation Requirements Specialist",
@@ -298,3 +458,13 @@ CLARIFIER_CONFIG = {
     "memory": True,
     "verbose": True,
 }
+
+# Export for use by the flow
+__all__ = [
+    "create_clarifier_agent",
+    "create_clarification_task",
+    "create_wizard_clarification_task",
+    "CLARIFIER_SYSTEM_PROMPT",
+    "WIZARD_MODE_SYSTEM_PROMPT",
+    "CLARIFIER_CONFIG",
+]

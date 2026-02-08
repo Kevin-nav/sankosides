@@ -5,9 +5,8 @@ import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Check, GripVertical, Plus, Trash2, Edit2, Send, Wand2, Loader2 } from "lucide-react";
+import { Check, GripVertical, Plus, Trash2, Send, Wand2 } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
-import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -198,9 +197,50 @@ export function BlueprintReview({ sessionId, onApprove }: BlueprintReviewProps) 
     };
 
     if (loading) return (
-        <div className="flex flex-col items-center justify-center p-12 text-neutral-400 gap-4">
-            <Loader2 className="w-8 h-8 animate-spin text-emerald-500/50" />
-            <span className="font-mono text-xs tracking-widest uppercase">{loadingMessage}</span>
+        <div className="flex h-full flex-col bg-neutral-950 p-6 text-white max-w-5xl mx-auto w-full">
+            {/* Header skeleton */}
+            <div className="mb-6 flex items-center justify-between py-4 border-b border-white/5">
+                <div className="space-y-2">
+                    <div className="h-7 w-48 bg-neutral-800/50 rounded animate-pulse" />
+                    <div className="h-4 w-64 bg-neutral-800/30 rounded animate-pulse" />
+                </div>
+                <div className="h-10 w-36 bg-neutral-800/50 rounded animate-pulse" />
+            </div>
+
+            {/* Content skeleton */}
+            <div className="flex-1 overflow-hidden flex gap-6">
+                <div className="flex-1 space-y-4">
+                    {[1, 2, 3, 4].map((i) => (
+                        <div
+                            key={i}
+                            className="rounded-xl border border-neutral-800 bg-neutral-900/50 p-4"
+                            style={{ animationDelay: `${i * 100}ms` }}
+                        >
+                            <div className="flex items-start gap-4">
+                                <div className="h-6 w-6 bg-neutral-800/50 rounded animate-pulse" />
+                                <div className="h-6 w-6 bg-neutral-800/50 rounded animate-pulse" />
+                                <div className="flex-1 space-y-3">
+                                    <div className="h-6 w-1/2 bg-neutral-800/50 rounded animate-pulse" />
+                                    <div className="h-16 w-full bg-neutral-800/30 rounded animate-pulse" />
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+
+                {/* Sidebar skeleton */}
+                <div className="w-80 border-l border-white/5 pl-6">
+                    <div className="h-4 w-24 bg-neutral-800/50 rounded animate-pulse mb-4" />
+                    <div className="h-3 w-48 bg-neutral-800/30 rounded animate-pulse mb-6" />
+                    <div className="h-32 w-full bg-neutral-900/30 rounded-xl border border-white/5 animate-pulse" />
+                </div>
+            </div>
+
+            {/* Status message */}
+            <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-neutral-900/80 backdrop-blur-sm px-4 py-2 rounded-full border border-neutral-800">
+                <div className="w-4 h-4 border-2 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin" />
+                <span className="font-mono text-xs tracking-wider text-neutral-400 uppercase">{loadingMessage}</span>
+            </div>
         </div>
     );
     if (!skeleton) return <div className="p-8 text-red-400">Failed to load blueprint.</div>;
