@@ -27,7 +27,8 @@ export async function POST(request: NextRequest) {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                message: answer,
+                // Ensure message is never undefined - backend requires this field
+                message: answer || 'Continue',
                 file_hashes: file_hashes || undefined,
             }),
         });
