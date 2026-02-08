@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="references-wrapper col-12" style="
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+">
+    <!-- References List -->
+    <div class="references-list" style="
+        flex: 1;
+        overflow-y: auto;
+        padding-right: var(--spacing-md);
+    ">
+        {% if slide.formatted_citations %}
+        <ol style="
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            counter-reset: ref-counter;
+        ">
+            {% for citation in slide.formatted_citations %}
+            <li style="
+                margin-bottom: var(--spacing-md);
+                padding-left: 2.5em;
+                position: relative;
+                font-family: var(--font-body);
+                font-size: 20px;
+                line-height: 1.5;
+                color: var(--color-text-primary);
+                counter-increment: ref-counter;
+            ">
+                <span style="
+                    position: absolute;
+                    left: 0;
+                    color: var(--color-accent);
+                    font-weight: 600;
+                ">[{{ loop.index }}]</span>
+                {{ citation | safe }}
+            </li>
+            {% endfor %}
+        </ol>
+        {% elif slide.bullet_points %}
+        <!-- Fallback to bullet points if no formatted citations -->
+        <ol style="
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        ">
+            {% for point in slide.bullet_points %}
+            <li style="
+                margin-bottom: var(--spacing-md);
+                padding-left: 2.5em;
+                position: relative;
+                font-family: var(--font-body);
+                font-size: 20px;
+                line-height: 1.5;
+                color: var(--color-text-primary);
+            ">
+                <span style="
+                    position: absolute;
+                    left: 0;
+                    color: var(--color-accent);
+                    font-weight: 600;
+                ">[{{ loop.index }}]</span>
+                {{ point }}
+            </li>
+            {% endfor %}
+        </ol>
+        {% else %}
+        <p style="
+            color: var(--color-text-secondary);
+            font-style: italic;
+        ">No references available.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

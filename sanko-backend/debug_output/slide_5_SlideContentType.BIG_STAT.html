@@ -1,4 +1,4 @@
-<!DOCTYPE html><!-- FIXED VERSION FORCE OVERWRITE -->
+<!DOCTYPE html>
 <html>
 
 <head>
@@ -6,42 +6,419 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>By The Numbers</title>
 
-    <!-- KaTeX CSS (Injected or CDN) -->
+    <!-- KaTeX CSS (CDN) -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
 
     <style>
         /* 1. Theme Variables (Injected by Backend) */
-            {
-                {
-                theme_css_vars | safe
-            }
-        }
+        :root {
+  /* Layout */
+  --slide-width: 1280px;
+  --slide-height: 720px;
+
+  /* Typography - using flat theme attributes */
+  --font-heading: 'Inter', sans-serif;
+  --font-body: 'Roboto', sans-serif;
+  --font-size-title: 64px;
+  --font-size-heading: 44px;
+  --font-size-body: 24px;
+  --font-size-caption: 18px;
+  --font-weight-title: 700;
+  --font-weight-heading: 600;
+
+  /* Spacing */
+  --spacing-xs: 8px;
+  --spacing-sm: 16px;
+  --spacing-md: 24px;
+  --spacing-lg: 32px;
+  --spacing-xl: 48px;
+
+  /* Colors */
+  --color-primary: #3B82F6;
+  --color-secondary: #10B981;
+  --color-accent: #F59E0B;
+  --color-background: #1F2937;
+  --color-surface: #F5F5F5;
+  --color-text-primary: #F9FAFB;
+  --color-text-secondary: #9CA3AF;
+  --color-border: #E0E0E0;
+
+  /* Borders */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+}
 
         /* 2. Slide SDK (Layout & Typography) */
-            {
-                {
-                slide_layout_css | safe
-            }
-        }
+        /* 
+   SankoSlides Layout System 
+   12-Column Grid optimized for 1920x1080 slides
+*/
 
-            {
-                {
-                slide_typography_css | safe
-            }
-        }
+:root {
+    --grid-cols: 12;
+    --grid-gap: var(--spacing-md, 32px);
+    --slide-padding-x: var(--spacing-lg, 64px);
+    --slide-padding-y: var(--spacing-lg, 64px);
+}
+
+/* Base resets */
+.slide-wrapper {
+    overflow: hidden;
+    /* Ensure content never spills out of iframe */
+}
+
+.slide {
+    display: grid;
+    grid-template-columns: repeat(var(--grid-cols), 1fr);
+    grid-template-rows: auto 1fr auto;
+    /* Header, Content, Footer */
+    gap: var(--grid-gap);
+    padding: var(--slide-padding-y) var(--slide-padding-x);
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+}
+
+/* Header Region */
+.slide-header {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: flex-end;
+    height: auto;
+    min-height: 80px;
+    padding-bottom: var(--spacing-sm, 16px);
+    margin-bottom: var(--spacing-sm, 16px);
+}
+
+/* Footer Region */
+.slide-footer {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 14px;
+    color: var(--color-text-secondary);
+    height: 40px;
+    padding-top: var(--spacing-sm);
+}
+
+/* Content Region - The main area */
+.slide-content {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(var(--grid-cols), 1fr);
+    grid-template-rows: 1fr;
+    /* Fill available vertical space */
+    gap: var(--grid-gap);
+    align-content: start;
+    /* Don't stretch vertically if content is short */
+}
+
+/* Grid Span Utilities */
+.col-1 {
+    grid-column: span 1;
+}
+
+.col-2 {
+    grid-column: span 2;
+}
+
+.col-3 {
+    grid-column: span 3;
+}
+
+.col-4 {
+    grid-column: span 4;
+}
+
+.col-5 {
+    grid-column: span 5;
+}
+
+.col-6 {
+    grid-column: span 6;
+}
+
+.col-7 {
+    grid-column: span 7;
+}
+
+.col-8 {
+    grid-column: span 8;
+}
+
+.col-9 {
+    grid-column: span 9;
+}
+
+.col-10 {
+    grid-column: span 10;
+}
+
+.col-11 {
+    grid-column: span 11;
+}
+
+.col-12 {
+    grid-column: span 12;
+}
+
+/* Grid Position Utilities (Start Line) */
+.col-start-1 {
+    grid-column-start: 1;
+}
+
+.col-start-7 {
+    grid-column-start: 7;
+}
+
+/* Right half */
+
+/* Layout Patterns */
+
+/* Standard Text Column */
+.text-col {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+}
+
+/* Centered Visual Container */
+.visual-col {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+}
+
+.visual-col img,
+.visual-col svg {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    border-radius: var(--radius-md);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Two Column Split (50/50) */
+.split-layout .left-panel {
+    grid-column: 1 / 7;
+}
+
+.split-layout .right-panel {
+    grid-column: 7 / -1;
+}
+
+/* Timeline / Process Flow */
+.timeline-container {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-top: var(--spacing-lg);
+}
+
+/* Big Stat Highlight */
+.big-stat-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: var(--spacing-lg);
+    background: var(--color-surface);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--color-border);
+}
+
+/* Diagram Container */
+.diagram-container {
+    grid-column: 1 / -1;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+        /* 
+   SankoSlides Typography System 
+   Clean, readable, and balanced for presentation
+*/
+
+body {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Headings */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    font-family: var(--font-heading);
+    font-weight: var(--font-weight-heading, 700);
+    line-height: 1.2;
+    color: var(--color-primary);
+    margin: 0;
+    text-wrap: balance;
+    /* Prevent widowed words */
+}
+
+h1.slide-title {
+    font-size: var(--font-size-heading, 48px);
+    width: 100%;
+    border-bottom: 2px solid var(--color-secondary);
+    padding-bottom: 16px;
+}
+
+/* Main Cover Title */
+.title-slide h1 {
+    font-size: var(--font-size-title, 72px);
+    font-weight: 800;
+    color: var(--color-primary);
+    margin-bottom: var(--spacing-md);
+}
+
+.title-slide .subtitle {
+    font-size: 32px;
+    color: var(--color-text-secondary);
+    font-family: var(--font-body);
+    font-weight: 400;
+}
+
+/* Standard Lists with Hanging Indent */
+ul {
+    list-style: none;
+    /* We use custom markers */
+    padding: 0;
+    margin: 0;
+}
+
+li {
+    font-family: var(--font-body);
+    font-size: var(--font-size-body, 28px);
+    line-height: 1.6;
+    color: var(--color-text-primary);
+    margin-bottom: var(--spacing-sm);
+    padding-left: 1.5em;
+    /* Space for bullet */
+    position: relative;
+}
+
+/* Custom Bullet */
+li::before {
+    content: "•";
+    color: var(--color-accent);
+    font-weight: bold;
+    font-size: 1.2em;
+    position: absolute;
+    left: 0;
+    top: -0.1em;
+    /* Optical alignment */
+    width: 1em;
+    text-align: center;
+}
+
+/* Nested lists */
+li ul {
+    margin-top: 8px;
+    margin-bottom: 8px;
+}
+
+li li {
+    font-size: 0.9em;
+    color: var(--color-text-secondary);
+}
+
+li li::before {
+    content: "Process";
+    /* Dash for nested */
+    color: var(--color-text-secondary);
+    font-size: 0.8em;
+    top: 0;
+}
+
+/* Prosaic Text (Quotes, etc.) */
+p {
+    font-family: var(--font-body);
+    font-size: var(--font-size-body, 28px);
+    line-height: 1.6;
+    color: var(--color-text-primary);
+    margin-bottom: var(--spacing-md);
+}
+
+blockquote {
+    font-family: var(--font-heading);
+    font-size: 36px;
+    font-style: italic;
+    color: var(--color-primary);
+    border-left: 6px solid var(--color-accent);
+    padding-left: var(--spacing-md);
+    margin: var(--spacing-lg) 0;
+}
+
+blockquote footer {
+    font-family: var(--font-body);
+    font-size: 24px;
+    font-style: normal;
+    color: var(--color-text-secondary);
+    margin-top: var(--spacing-sm);
+}
+
+blockquote footer::before {
+    content: "— ";
+}
+
+/* Code Blocks */
+pre,
+code {
+    font-family: 'Fira Code', 'Roboto Mono', monospace;
+    background: var(--color-surface);
+    border-radius: var(--radius-sm);
+}
+
+pre {
+    padding: var(--spacing-md);
+    border: 1px solid var(--color-border);
+    overflow-x: auto;
+    font-size: 20px;
+}
+
+code {
+    color: var(--color-primary);
+    padding: 0.1em 0.3em;
+}
+
+/* Big Stat Typography */
+.big-stat-number {
+    font-family: var(--font-heading);
+    font-size: 120px;
+    font-weight: 800;
+    color: var(--color-accent);
+    line-height: 1;
+}
+
+.big-stat-label {
+    font-family: var(--font-body);
+    font-size: 32px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin-top: 16px;
+}
 
         /* 3. Custom Template CSS (Injected from DB) */
-            {
-                {
-                custom_css | safe
-            }
-        }
+        
     </style>
 </head>
 
 <body>
     <div class="slide-wrapper">
-        <div class="slide slide-SlideContentType.BIG_STAT" data-template="SlideContentType.BIG_STAT" data-slide-id="5">
+        <div class="slide slide-big_stat" data-template="big_stat" data-slide-id="5">
 
             <!-- Branding Header -->
             
@@ -104,13 +481,43 @@
         </div>
     </div>
 
-    <!-- KaTeX JS (Injected or CDN) -->
+    <!-- KaTeX JS (CDN) -->
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 
     <!-- Math Loader -->
     <script>
-        { { katex_loader_js | safe } }
+        /**
+ * SankoSlides Math Loader
+ * Auto-detects and renders LaTeX equations using KaTeX.
+ * Supports inline ($...$) and block ($$...$$) syntax.
+ */
+
+document.addEventListener("DOMContentLoaded", function () {
+    // Only run if KaTeX is loaded
+    if (typeof renderMathInElement === 'undefined') {
+        console.warn("KaTeX not loaded, skipping math rendering");
+        return;
+    }
+
+    renderMathInElement(document.body, {
+        delimiters: [
+            { left: "$$", right: "$$", display: true },
+            { left: "$", right: "$", display: false },
+            { left: "\\(", right: "\\)", display: false },
+            { left: "\\[", right: "\\]", display: true }
+        ],
+        throwOnError: false,
+        errorColor: "#cc0000",
+        strict: "ignore"
+    });
+
+    // Adjust font size for math in big headers
+    document.querySelectorAll('h1 .katex').forEach(el => {
+        el.style.fontSize = '0.9em';
+    });
+});
+
     </script>
 </body>
 

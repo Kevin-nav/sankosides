@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="quote-wrapper col-12" style="
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    text-align: center;
+    padding: var(--spacing-xl);
+">
+    <blockquote class="main-quote" style="
+        font-family: var(--font-heading);
+        font-size: 42px;
+        font-style: italic;
+        color: var(--color-primary);
+        max-width: 80%;
+        line-height: 1.4;
+        position: relative;
+        padding: 0 var(--spacing-lg);
+    ">
+        <!-- Opening Quote Mark -->
+        <span style="
+            position: absolute;
+            left: -20px;
+            top: -20px;
+            font-size: 80px;
+            color: var(--color-accent);
+            opacity: 0.3;
+            font-family: Georgia, serif;
+        ">"</span>
+
+        {{ slide.bullet_points[0] if slide.bullet_points else "Quote text goes here." }}
+
+        <!-- Closing Quote Mark -->
+        <span style="
+            font-size: 80px;
+            color: var(--color-accent);
+            opacity: 0.3;
+            font-family: Georgia, serif;
+            line-height: 0;
+            vertical-align: -0.4em;
+        ">"</span>
+    </blockquote>
+
+    {% if slide.bullet_points|length > 1 %}
+    <div class="quote-attribution" style="
+        margin-top: var(--spacing-lg);
+        font-family: var(--font-body);
+        font-size: 24px;
+        color: var(--color-text-secondary);
+    ">
+        — {{ slide.bullet_points[1] }}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

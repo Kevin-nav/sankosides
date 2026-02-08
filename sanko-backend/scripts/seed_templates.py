@@ -60,6 +60,34 @@ TEMPLATES_TO_SEED = [
         "contentType": "comparison",
         "category": "visual",
         "file": "comparison.html"
+    },
+    {
+        "templateId": "quote",
+        "name": "Quote Slide",
+        "contentType": "quote",
+        "category": "visual",
+        "file": "quote.html"
+    },
+    {
+        "templateId": "diagram",
+        "name": "Diagram Slide",
+        "contentType": "diagram",
+        "category": "visual",
+        "file": "diagram.html"
+    },
+    {
+        "templateId": "references",
+        "name": "References",
+        "contentType": "references",
+        "category": "general",
+        "file": "references.html"
+    },
+    {
+        "templateId": "thank_you",
+        "name": "Thank You",
+        "contentType": "thank_you",
+        "category": "general",
+        "file": "thank_you.html"
     }
 ]
 
@@ -78,9 +106,7 @@ def seed_templates():
             
         print(f"Uploading {tmpl['templateId']}...")
         
-        # Check if exists
-        existing = client.query("templates:getTemplateById", {"templateId": tmpl["templateId"]})
-        
+        # Use upsertTemplate (handles both create and update)
         args = {
             "templateId": tmpl["templateId"],
             "name": tmpl["name"],
@@ -92,17 +118,8 @@ def seed_templates():
             "version": "2.0",
         }
         
-        if existing:
-            # Update
-            client.mutation("templates:updateTemplate", {
-                "id": existing["_id"],
-                "updates": args
-            })
-            print(f"✅ Updated {tmpl['templateId']}")
-        else:
-            # Create
-            client.mutation("templates:createTemplate", args)
-            print(f"✅ Created {tmpl['templateId']}")
+        client.mutation("templates:upsertTemplate", args)
+        print(f"✅ Upserted {tmpl['templateId']}")
             
     print("✨ Seeding complete!")
 

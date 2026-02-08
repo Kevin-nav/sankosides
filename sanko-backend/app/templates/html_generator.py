@@ -237,7 +237,9 @@ async def generate_slide_html_with_db_template(
         )
     
     # 1. Determine Template Type
-    template_type = _determine_template_type(slide)
+    template_type_raw = _determine_template_type(slide)
+    # Ensure we use the string value, not enum repr
+    template_type = template_type_raw.value if hasattr(template_type_raw, 'value') else str(template_type_raw)
     
     # 2. Get the Content Template (HTML string)
     # Try DB first
@@ -252,13 +254,22 @@ async def generate_slide_html_with_db_template(
         filename_map = {
             "content": "content.html",
             "two_column": "two_column.html",
-            "two_col_image": "two_column.html", # Reuse split
-            "two_col_math": "two_column.html",  # Reuse split
+            "two_col_image": "two_column.html",  # Reuse split
+            "two_col_math": "two_column.html",   # Reuse split
             "title": "title.html",
             "timeline": "timeline.html",
             "big_stat": "big_stat.html",
             "grid_gallery": "grid_gallery.html",
             "comparison": "comparison.html",
+            "quote": "quote.html",
+            "diagram": "diagram.html",
+            "references": "references.html",
+            "thank_you": "thank_you.html",
+            "section": "content.html",      # Reuse content layout
+            "conclusion": "content.html",   # Reuse content layout
+            "overview": "content.html",     # Reuse content layout
+            "image": "two_column.html",     # Reuse split for image slides
+            "equation": "two_column.html",  # Reuse split for equation slides
         }
         
         fname = filename_map.get(template_type, "content.html")

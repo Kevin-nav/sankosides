@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="diagram-wrapper col-12" style="
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    gap: var(--spacing-md);
+">
+    <!-- Diagram Container -->
+    <div class="diagram-container" style="
+        flex: 1;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 100%;
+        max-height: 70%;
+    ">
+        {% if slide.diagram_svg %}
+        <!-- Pre-rendered SVG -->
+        <div class="diagram-svg">
+            {{ slide.diagram_svg | safe }}
+        </div>
+        {% elif slide.diagram_mermaid %}
+        <!-- Mermaid source (rendered client-side) -->
+        <div class="mermaid" style="
+            background: var(--color-surface);
+            padding: var(--spacing-md);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--color-border);
+        ">
+            {{ slide.diagram_mermaid }}
+        </div>
+        {% else %}
+        <div class="diagram-placeholder" style="
+            background: var(--color-surface);
+            padding: var(--spacing-xl);
+            border-radius: var(--radius-md);
+            border: 2px dashed var(--color-border);
+            color: var(--color-text-secondary);
+        ">
+            Diagram will appear here
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Optional Caption/Description -->
+    {% if slide.bullet_points %}
+    <div class="diagram-caption" style="
+        font-size: var(--font-size-caption);
+        color: var(--color-text-secondary);
+        text-align: center;
+        max-width: 80%;
+    ">
+        {% for point in slide.bullet_points %}
+        <p style="margin-bottom: var(--spacing-xs);">{{ point }}</p>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+
+<!-- Mermaid JS (only if needed) -->
+{% if slide.diagram_mermaid and not slide.diagram_svg %}
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'neutral',
+        fontSize: 16
+    });
+</script>
+{% endif %}
+{% endblock %}

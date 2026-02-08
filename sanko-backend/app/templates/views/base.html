@@ -1,4 +1,4 @@
-<!DOCTYPE html><!-- FIXED VERSION FORCE OVERWRITE -->
+<!DOCTYPE html>
 <html>
 
 <head>
@@ -6,36 +6,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ slide.title }}</title>
 
-    <!-- KaTeX CSS (Injected or CDN) -->
+    <!-- KaTeX CSS (CDN) -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
 
     <style>
         /* 1. Theme Variables (Injected by Backend) */
-            {
-                {
-                theme_css_vars | safe
-            }
-        }
+        {{ theme_css_vars | safe }}
 
         /* 2. Slide SDK (Layout & Typography) */
-            {
-                {
-                slide_layout_css | safe
-            }
-        }
+        {{ slide_layout_css | safe }}
 
-            {
-                {
-                slide_typography_css | safe
-            }
-        }
+        {{ slide_typography_css | safe }}
 
         /* 3. Custom Template CSS (Injected from DB) */
-            {
-                {
-                custom_css | safe
-            }
-        }
+        {{ custom_css | safe }}
     </style>
 </head>
 
@@ -80,13 +64,13 @@
         </div>
     </div>
 
-    <!-- KaTeX JS (Injected or CDN) -->
+    <!-- KaTeX JS (CDN) -->
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 
     <!-- Math Loader -->
     <script>
-        { { katex_loader_js | safe } }
+        {{ katex_loader_js | safe }}
     </script>
 </body>
 

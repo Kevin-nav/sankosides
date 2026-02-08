@@ -121,7 +121,12 @@ async def get_db_template_async(
         logger.debug(f"DB template cache hit: {cache_key}")
         return cached
     
-    client = get_convex_client()
+    # Try to get Convex client - may fail if CONVEX_URL not set
+    try:
+        client = get_convex_client()
+    except (ValueError, Exception) as e:
+        logger.warning(f"Convex client not available, using local file fallback: {e}")
+        return None
     
     # Build list of template IDs to try
     target_ids = []
