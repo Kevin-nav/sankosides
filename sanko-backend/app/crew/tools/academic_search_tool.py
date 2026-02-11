@@ -114,19 +114,23 @@ class AcademicSearchTool:
         
         # CrossRef - primary, always reliable
         if source in ["crossref", "all"]:
-            await CitationCacheService.should_rate_limit("crossref")  # Enforce rate limit
-            crossref_results = await self._search_crossref(query, max_results)
-            results.extend(crossref_results)
-            providers_used.append("crossref")
-            logger.debug(f"CrossRef returned {len(crossref_results)} results for '{query}'")
+            if await CitationCacheService.should_rate_limit("crossref"):
+                logger.debug("Skipping CrossRef: provider is temporarily rate-limited")
+            else:
+                crossref_results = await self._search_crossref(query, max_results)
+                results.extend(crossref_results)
+                providers_used.append("crossref")
+                logger.debug(f"CrossRef returned {len(crossref_results)} results for '{query}'")
         
         # OpenAlex - excellent coverage, no auth needed
         if source in ["openalex", "all"]:
-            await CitationCacheService.should_rate_limit("openalex")  # Enforce rate limit
-            openalex_results = await self._search_openalex(query, max_results)
-            results.extend(openalex_results)
-            providers_used.append("openalex")
-            logger.debug(f"OpenAlex returned {len(openalex_results)} results for '{query}'")
+            if await CitationCacheService.should_rate_limit("openalex"):
+                logger.debug("Skipping OpenAlex: provider is temporarily rate-limited")
+            else:
+                openalex_results = await self._search_openalex(query, max_results)
+                results.extend(openalex_results)
+                providers_used.append("openalex")
+                logger.debug(f"OpenAlex returned {len(openalex_results)} results for '{query}'")
         
         # Semantic Scholar - only if we have API key or explicitly requested
         if source in ["semantic_scholar", "all"]:
@@ -134,11 +138,13 @@ class AcademicSearchTool:
             if source == "all" and not self._ss_api_key:
                 logger.debug("Skipping Semantic Scholar (no API key configured)")
             else:
-                await CitationCacheService.should_rate_limit("semantic_scholar")  # Enforce 1s delay
-                ss_results = await self._search_semantic_scholar(query, max_results)
-                results.extend(ss_results)
-                providers_used.append("semantic_scholar")
-                logger.debug(f"Semantic Scholar returned {len(ss_results)} results for '{query}'")
+                if await CitationCacheService.should_rate_limit("semantic_scholar"):
+                    logger.debug("Skipping Semantic Scholar: provider is temporarily rate-limited")
+                else:
+                    ss_results = await self._search_semantic_scholar(query, max_results)
+                    results.extend(ss_results)
+                    providers_used.append("semantic_scholar")
+                    logger.debug(f"Semantic Scholar returned {len(ss_results)} results for '{query}'")
         
         # Sort by relevance and dedupe by DOI
         seen_dois = set()

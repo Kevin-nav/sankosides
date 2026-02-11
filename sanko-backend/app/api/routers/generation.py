@@ -235,6 +235,11 @@ def _apply_wizard_data_to_state(state: FlowState, wizard_data: Dict[str, Any]) -
         if normalized_sections:
             info.focus_areas = normalized_sections
             info.has_focus_areas = True
+            # If document content is loaded, also mark flow-level document scoping.
+            has_kb = bool(getattr(state, "knowledge_base", None) or getattr(state, "kb", None))
+            if has_kb:
+                state.selected_sections = normalized_sections
+                state.document_scoped = True
 
     style = wizard_data.get("style") or wizard_data.get("emphasis_style")
     if isinstance(style, str):

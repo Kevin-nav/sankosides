@@ -62,6 +62,15 @@ export function ProjectList({
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ duration: 0.3 }}
                     onClick={onNewProject}
+                    onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            onNewProject();
+                        }
+                    }}
+                    role="button"
+                    tabIndex={0}
+                    aria-label="Create new project"
                     className="group relative flex cursor-pointer flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-neutral-800 bg-neutral-900/50 p-6 shadow-sm transition-all hover:border-emerald-500/50 hover:bg-neutral-900 hover:shadow-[0_4px_20px_-5px_rgba(16,185,129,0.15)]"
                 >
                     <div className="rounded-full bg-neutral-900 p-4 transition-colors group-hover:bg-emerald-500/10 border border-neutral-800 group-hover:border-emerald-500/20">

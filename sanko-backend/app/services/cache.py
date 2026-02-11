@@ -197,11 +197,15 @@ class RedisCache:
 
         if client:
             try:
-                current = client.get(lock_key)
-                if current == token:
-                    client.delete(lock_key)
-                    return True
-                return False
+                release_script = """
+                if redis.call('get', KEYS[1]) == ARGV[1] then
+                    return redis.call('del', KEYS[1])
+                else
+                    return 0
+                end
+                """
+                deleted = client.eval(release_script, 1, lock_key, token)
+                return bool(deleted)
             except Exception as e:
                 logger.warning(f"Redis lock release error: {e}")
 

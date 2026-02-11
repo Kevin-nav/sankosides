@@ -11,6 +11,7 @@ Key Features:
 """
 
 import random
+import asyncio
 from typing import Optional, List, Dict, Any
 
 from app.models.schemas import RefinedSlide, SlideContentType
@@ -112,7 +113,11 @@ class LayoutSelector:
         if cached is not None:
             return cached
 
-        active_layouts = self.convex_client.query("layoutPresets:getActive", {})
+        active_layouts = await asyncio.to_thread(
+            self.convex_client.query,
+            "layoutPresets:getActive",
+            {},
+        )
         layout_cache.set("active", active_layouts)
         return active_layouts
     

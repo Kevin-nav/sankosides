@@ -42,6 +42,11 @@ export function GenerationProgress({ sessionId, onComplete, onStageChange }: Gen
     const completionRef = useRef<{ done: boolean; error: boolean }>({ done: false, error: false });
     const lastStageRef = useRef<string | null>(null);
 
+    useEffect(() => {
+        completionRef.current = { done: false, error: false };
+        lastStageRef.current = null;
+    }, [sessionId]);
+
     // Convex real-time progress - THE primary source of truth
     const convexProgress = useGenerationProgressBySession(sessionId || null);
     const { data: polledStatus } = useSessionStatus(sessionId, {
@@ -64,6 +69,7 @@ export function GenerationProgress({ sessionId, onComplete, onStageChange }: Gen
             currentSlideIndex: polledStatus.slides_completed > 0 ? polledStatus.slides_completed - 1 : 0,
             totalSlides: polledStatus.total_slides,
             message: polledStatus.error || undefined,
+            visualScore: typeof polledStatus.qa_score === "number" ? polledStatus.qa_score : undefined,
         };
     }, [convexProgress, polledStatus]);
 
@@ -76,10 +82,18 @@ export function GenerationProgress({ sessionId, onComplete, onStageChange }: Gen
     }, [effectiveProgress]);
 
     const pipelineResult = useMemo<{ success: boolean; visualScore?: number } | null>(() => {
-        if (pipelineStatus === "complete") return { success: true, visualScore: 0.95 };
+        if (pipelineStatus === "complete") {
+            const candidate = (effectiveProgress as { visualScore?: number; average_visual_score?: number; qa_score?: number } | null);
+            const visualScore =
+                typeof candidate?.visualScore === "number" ? candidate.visualScore :
+                    typeof candidate?.average_visual_score === "number" ? candidate.average_visual_score :
+                        typeof candidate?.qa_score === "number" ? candidate.qa_score :
+                            undefined;
+            return visualScore !== undefined ? { success: true, visualScore } : { success: true };
+        }
         if (pipelineStatus === "error") return { success: false };
         return null;
-    }, [pipelineStatus]);
+    }, [pipelineStatus, effectiveProgress]);
 
     const qaProgress = useMemo(() => {
         if (effectiveProgress?.currentSlideIndex === undefined || !effectiveProgress.totalSlides) {

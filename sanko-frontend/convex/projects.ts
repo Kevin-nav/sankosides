@@ -50,9 +50,24 @@ export const update = mutation({
         const { id, ...updates } = args;
 
         const patch: Record<string, unknown> = {
-            ...updates,
             updatedAt: Date.now(),
         };
+
+        if (updates.description !== undefined) {
+            patch.description = updates.description;
+        }
+
+        if (updates.thumbnailUrl !== undefined) {
+            patch.thumbnailUrl = updates.thumbnailUrl;
+        }
+
+        if (updates.slidesData !== undefined) {
+            patch.slidesData = updates.slidesData;
+        }
+
+        if (updates.sessionId !== undefined) {
+            patch.sessionId = updates.sessionId;
+        }
 
         if (updates.title !== undefined) {
             patch.title = sanitizeTitle(updates.title);
@@ -61,12 +76,18 @@ export const update = mutation({
         if (updates.status !== undefined && !ALLOWED_STATUSES.has(updates.status)) {
             throw new Error(`Invalid project status: ${updates.status}`);
         }
+        if (updates.status !== undefined) {
+            patch.status = updates.status;
+        }
 
         if (
             updates.archiveSourceStatus !== undefined &&
             !ALLOWED_RESTORE_STATUSES.has(updates.archiveSourceStatus)
         ) {
             throw new Error(`Invalid archive source status: ${updates.archiveSourceStatus}`);
+        }
+        if (updates.archiveSourceStatus !== undefined) {
+            patch.archiveSourceStatus = updates.archiveSourceStatus;
         }
 
         if (updates.clearArchiveSourceStatus) {

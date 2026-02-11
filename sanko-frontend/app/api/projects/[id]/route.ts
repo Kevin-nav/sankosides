@@ -24,7 +24,12 @@ async function getUserIdFromAuth(request: NextRequest): Promise<AuthResult> {
     }
 
     const idToken = authHeader.split("Bearer ")[1];
-    const decodedToken = await adminAuth.verifyIdToken(idToken);
+    let decodedToken: { uid: string };
+    try {
+        decodedToken = await adminAuth.verifyIdToken(idToken);
+    } catch {
+        return { userId: null, status: 401, error: "Invalid or expired token" };
+    }
 
     const users = await db
         .select()
