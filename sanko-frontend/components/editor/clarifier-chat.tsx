@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Paperclip, Bot, User, File as FileIcon, X, Loader2, Check } from "lucide-react";
+import { Send, Paperclip, Bot, User, File as FileIcon, Loader2, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { FileAttachmentBar, useFileUpload } from "@/components/ui/file-attachment";
@@ -32,7 +32,7 @@ interface ClarifierChatProps {
     onThinkingUpdate?: (thinking: string) => void;
 }
 
-export function ClarifierChat({ projectId, mode, onOrderComplete, readOnly = false, promptOverrides, topic, onAgentChange, onThinkingUpdate }: ClarifierChatProps) {
+export function ClarifierChat({ projectId, mode, onOrderComplete, promptOverrides, topic, onAgentChange, onThinkingUpdate }: ClarifierChatProps) {
     const { user } = useAuth();
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [input, setInput] = useState("");
@@ -45,11 +45,12 @@ export function ClarifierChat({ projectId, mode, onOrderComplete, readOnly = fal
     const initialized = useRef(false);
 
     // File upload hook (replaces old attachments state)
-    const { files: attachedFiles, addFiles, removeFile, getReadyHashes, allReady, clearFiles, isUploading } = useFileUpload();
+    const { files: attachedFiles, addFiles, removeFile, getReadyHashes, allReady, clearFiles } = useFileUpload();
 
     // Confirmation state
-    const [pendingConfirmation, setPendingConfirmation] = useState<any>(null);
+    const [pendingConfirmation, setPendingConfirmation] = useState<{ summary?: string; message?: string } | null>(null);
     const [isConfirming, setIsConfirming] = useState(false);
+    const initialPromptOverridesRef = useRef(promptOverrides);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -78,7 +79,7 @@ export function ClarifierChat({ projectId, mode, onOrderComplete, readOnly = fal
                         project_id: projectId,
                         mode: mode,
                         topic: topic,
-                        prompt_overrides: promptOverrides
+                        prompt_overrides: initialPromptOverridesRef.current
                     })
                 });
 
@@ -110,7 +111,7 @@ export function ClarifierChat({ projectId, mode, onOrderComplete, readOnly = fal
         }
 
         startSession();
-    }, [user, projectId, mode, topic]); // promptOverrides is intentionally excluded to avoid restarting on every keypress
+    }, [user, projectId, mode, topic]);
 
 
     const handleSend = async () => {
@@ -147,7 +148,7 @@ export function ClarifierChat({ projectId, mode, onOrderComplete, readOnly = fal
                 }]);
 
                 // Simulate streaming
-                let thinking = "Analyzing request...\nAccessing neural pathways...\nMocking response for UI testing...";
+                const thinking = "Analyzing request...\nAccessing neural pathways...\nMocking response for UI testing...";
                 let content = "";
                 const fullContent = "This is a **simulated response** to demonstrate the UI.\n\nIn a real session, I would clarify your needs regarding:  \n- **" + input + "**  \n- Target Audience  \n- Visual Style\n\nShall we proceed with the blueprint?";
 
@@ -351,7 +352,6 @@ export function ClarifierChat({ projectId, mode, onOrderComplete, readOnly = fal
             });
 
             if (res.ok) {
-                const data = await res.json();
                 setPendingConfirmation(null);
 
                 // Add success message

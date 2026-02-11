@@ -2,11 +2,12 @@
 
 import { useAuth } from "@/components/auth-provider";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardFooter, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Layers, Play, X, ChevronLeft, ChevronRight, Maximize2 } from "lucide-react";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useTemplates, useThemes, getPreviewUrl } from "@/hooks/convex";
+import { useTemplatePreview } from "@/hooks/api/use-templates";
 
 // Slide types to cycle through in the preview
 const PREVIEW_SLIDE_TYPES = ["title", "content", "two_column", "section", "conclusion"];
@@ -23,6 +24,25 @@ export default function TemplatesPage() {
     const [selectedTheme, setSelectedTheme] = useState<typeof themes[0] | null>(null);
     const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
     const previewContainerRef = useRef<HTMLDivElement>(null);
+
+    const openPreview = (theme: typeof themes[0]) => {
+        setSelectedTheme(theme);
+        setCurrentSlideIndex(0);
+        setPreviewOpen(true);
+    };
+
+    const toggleFullscreen = useCallback(async () => {
+        if (!previewContainerRef.current) return;
+        try {
+            if (!document.fullscreenElement) {
+                await previewContainerRef.current.requestFullscreen();
+            } else {
+                await document.exitFullscreen();
+            }
+        } catch (err) {
+            console.error("Fullscreen error:", err);
+        }
+    }, []);
 
     // Keyboard navigation
     useEffect(() => {
@@ -49,8 +69,6 @@ export default function TemplatesPage() {
                     toggleFullscreen();
                     break;
                 case "Escape":
-                    // If in native fullscreen, let browser handle it.
-                    // If just in our overlay, close it.
                     if (!document.fullscreenElement) {
                         setPreviewOpen(false);
                     }
@@ -60,26 +78,7 @@ export default function TemplatesPage() {
 
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [previewOpen]);
-
-    const openPreview = (theme: typeof themes[0]) => {
-        setSelectedTheme(theme);
-        setCurrentSlideIndex(0);
-        setPreviewOpen(true);
-    };
-
-    const toggleFullscreen = async () => {
-        if (!previewContainerRef.current) return;
-        try {
-            if (!document.fullscreenElement) {
-                await previewContainerRef.current.requestFullscreen();
-            } else {
-                await document.exitFullscreen();
-            }
-        } catch (err) {
-            console.error("Fullscreen error:", err);
-        }
-    };
+    }, [previewOpen, toggleFullscreen]);
 
     const nextSlide = () => {
         setCurrentSlideIndex(prev =>
@@ -94,23 +93,10 @@ export default function TemplatesPage() {
     };
 
     const currentSlideType = PREVIEW_SLIDE_TYPES[currentSlideIndex];
-
-    // Fetch preview HTML (still uses backend for Jinja2 rendering)
-    const [previewHtml, setPreviewHtml] = useState<string>("");
-    const [previewLoading, setPreviewLoading] = useState(false);
-
-    useEffect(() => {
-        if (!previewOpen || !selectedTheme) return;
-        setPreviewLoading(true);
-        const url = getPreviewUrl(selectedTheme.themeId, currentSlideType);
-        fetch(url)
-            .then(res => res.text())
-            .then(html => {
-                setPreviewHtml(html);
-                setPreviewLoading(false);
-            })
-            .catch(() => setPreviewLoading(false));
-    }, [previewOpen, selectedTheme, currentSlideType]);
+    const { data: previewHtml = "", isLoading: previewLoading } = useTemplatePreview(
+        previewOpen && selectedTheme ? selectedTheme.themeId : null,
+        currentSlideType
+    );
 
     // Prefetch cache for preview HTML
     const previewCache = useRef<Map<string, string>>(new Map());

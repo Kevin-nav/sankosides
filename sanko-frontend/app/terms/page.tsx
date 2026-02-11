@@ -23,14 +23,14 @@ export default function TermsPage() {
                     <section>
                         <h2 className="text-xl font-bold text-white mb-4">2. Use License</h2>
                         <p>
-                            Permission is granted to temporarily download one copy of the materials (information or software) on SankoSlides' website for personal, non-commercial transitory viewing only.
+                            Permission is granted to temporarily download one copy of the materials (information or software) on SankoSlides&apos; website for personal, non-commercial transitory viewing only.
                         </p>
                     </section>
 
                     <section>
                         <h2 className="text-xl font-bold text-white mb-4">3. Disclaimer</h2>
                         <p>
-                            The materials on SankoSlides' website are provided "as is". SankoSlides makes no warranties, expressed or implied, and hereby disclaims and negates all other warranties.
+                            The materials on SankoSlides&apos; website are provided &quot;as is&quot;. SankoSlides makes no warranties, expressed or implied, and hereby disclaims and negates all other warranties.
                         </p>
                     </section>
                 </div>

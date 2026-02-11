@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { motion } from "framer-motion";
-import { Mail, MessageSquare, Send } from "lucide-react";
+import { Mail, Send } from "lucide-react";
 
 export default function ContactPage() {
     return (
@@ -25,7 +25,7 @@ export default function ContactPage() {
                             Get in touch
                         </h1>
                         <p className="text-lg text-neutral-400">
-                            Have a question about the platform? We're here to help.
+                            Have a question about the platform? We&apos;re here to help.
                         </p>
                     </motion.div>
                 </section>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,7 +20,7 @@ interface SlideSkeleton {
     bullet_points: string[]; // Keep for compatibility, but UI focuses on description
     needs_citation: boolean;
     needs_diagram: boolean;
-    [key: string]: any; // Allow other props
+    [key: string]: unknown; // Allow other props
 }
 
 interface FullSkeleton {
@@ -29,7 +29,7 @@ interface FullSkeleton {
     narrative_arc: string;
     slides: SlideSkeleton[];
     source_documents: string[];
-    [key: string]: any;
+    [key: string]: unknown;
 }
 
 interface BlueprintReviewProps {
@@ -64,16 +64,7 @@ export function BlueprintReview({ sessionId, onApprove }: BlueprintReviewProps) 
 
     }, [progress]);
 
-    // Initial load fallback (for existing sessions or direct link access)
-    useEffect(() => {
-        if (!sessionId || !user) return;
-        // Only fetch if we don't have it from Convex yet
-        if (!skeleton) {
-            loadBlueprint();
-        }
-    }, [sessionId, user]);
-
-    async function loadBlueprint() {
+    const loadBlueprint = useCallback(async () => {
         if (!user) return;
         const token = await user.getIdToken();
         const res = await fetch(`/api/generate/blueprint/${sessionId}`, {
@@ -90,24 +81,35 @@ export function BlueprintReview({ sessionId, onApprove }: BlueprintReviewProps) 
             // The user might be in a deep research phase taking longer
             console.log("Blueprint not ready yet via API");
         }
-    }
+    }, [sessionId, user]);
+
+    // Initial load fallback (for existing sessions or direct link access)
+    useEffect(() => {
+        if (!sessionId || !user || skeleton) return;
+        loadBlueprint();
+    }, [sessionId, user, skeleton, loadBlueprint]);
 
     // Polling and SSE removed - replaced by Convex subscription
 
-    function processSkeleton(skeletonData: any) {
-        const slides = (skeletonData.slides || []).map((s: any) => ({
+    function processSkeleton(skeletonData: Record<string, unknown>) {
+        const rawSlides = (Array.isArray(skeletonData.slides) ? skeletonData.slides : []) as Array<Record<string, unknown>>;
+        const slides = rawSlides.map((s) => ({
             ...s,
-            content_description: s.content_description || s.key_points?.[0] || s.description || "No description provided."
-        }));
+            content_description:
+                (typeof s.content_description === "string" ? s.content_description : undefined) ||
+                (Array.isArray(s.key_points) ? String(s.key_points[0] ?? "") : undefined) ||
+                (typeof s.description === "string" ? s.description : undefined) ||
+                "No description provided.",
+        })) as SlideSkeleton[];
 
         setSkeleton({
             ...skeletonData,
-            presentation_title: skeletonData.presentation_title || "Untitled Presentation",
-            target_audience: skeletonData.target_audience || "General Audience",
-            narrative_arc: skeletonData.narrative_arc || "",
-            source_documents: skeletonData.source_documents || [],
-            slides
-        });
+            presentation_title: typeof skeletonData.presentation_title === "string" ? skeletonData.presentation_title : "Untitled Presentation",
+            target_audience: typeof skeletonData.target_audience === "string" ? skeletonData.target_audience : "General Audience",
+            narrative_arc: typeof skeletonData.narrative_arc === "string" ? skeletonData.narrative_arc : "",
+            source_documents: Array.isArray(skeletonData.source_documents) ? (skeletonData.source_documents as string[]) : [],
+            slides,
+        } as FullSkeleton);
     }
 
     // startSSE removed
@@ -127,21 +129,18 @@ export function BlueprintReview({ sessionId, onApprove }: BlueprintReviewProps) 
         setAiLoading(true);
         try {
             const token = await user.getIdToken();
-            const res = await fetch("/api/generate/clarify", {
+            const res = await fetch(`/api/generate/clarify/${sessionId}`, {
                 method: "POST",
                 headers: {
                     "Authorization": `Bearer ${token}`,
                     "Content-Type": "application/json"
                 },
-                body: JSON.stringify({ session_id: sessionId, answer: aiInput }) // User request for revision
+                body: JSON.stringify({ message: aiInput }) // User request for revision
             });
 
             if (res.ok) {
-                const data = await res.json();
-                if (data.status === "blueprint_ready") {
-                    await loadBlueprint(); // Reload updated blueprint
-                    setAiInput("");
-                }
+                await loadBlueprint(); // Reload updated blueprint
+                setAiInput("");
             }
         } catch (e) {
             console.error(e);
@@ -175,8 +174,7 @@ export function BlueprintReview({ sessionId, onApprove }: BlueprintReviewProps) 
             }
 
             // Step 2: Start generation (this kicks off the Planner agent)
-            const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
-            const generateRes = await fetch(`${backendUrl}/api/generation/generate/${sessionId}`, {
+            const generateRes = await fetch(`/api/generate/generate/${sessionId}`, {
                 method: "POST",
                 headers: {
                     Authorization: `Bearer ${token}`,

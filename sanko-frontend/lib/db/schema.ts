@@ -21,9 +21,11 @@ export const projects = pgTable("projects", {
         .notNull()
         .references(() => users.id, { onDelete: "cascade" }),
     title: text("title").notNull(),
+    mode: text("mode").notNull().default("synthesis"), // replica, synthesis, research
     description: text("description"),
     thumbnailUrl: text("thumbnail_url"),
-    status: text("status").default("draft"), // draft, negotiating, generating, completed
+    status: text("status").default("draft"), // draft, negotiating, generating, completed, archived
+    archiveSourceStatus: text("archive_source_status"), // status to restore when unarchiving
     sessionId: uuid("session_id"), // Reference to playground_sessions
     slidesData: jsonb("slides_data"), // Generated slides data
     createdAt: timestamp("created_at").defaultNow().notNull(),

@@ -74,6 +74,7 @@ from app.services.citation_utils import (
     sort_citations,
 )
 from app.core.logging import get_logger
+from app.services.cache import RedisCache
 from app.crew.flows.metrics import (
     MetricsCollector,
     TokenUsage,
@@ -472,7 +473,7 @@ class SlideGenerationFlow:
             cached_kb = None
             try:
                 async for db_session in get_async_session():
-                    cached_kb = await cache_service.get_cached(file_hash, db_session)
+                    cached_kb = await cache_service.get_cached(file_hash=file_hash, db_session=db_session)
                     break
             except Exception as e:
                 logger.warning(f"[SYNTHESIS]   Cache check failed: {e}")
@@ -484,6 +485,31 @@ class SlideGenerationFlow:
                 combined_summary_parts.append(f"Content from {filename}: {cached_kb.summary}")
                 continue
             
+            # Avoid duplicate expensive extraction across concurrent workers.
+            lock_key = f"pdfkb:lock:{file_hash}"
+            lock_token = RedisCache.acquire_lock(lock_key, ttl=900)
+            if not lock_token:
+                logger.info("[SYNTHESIS]   Lock held by another worker, waiting for cache warm-up...")
+                warmed = None
+                for _ in range(12):  # ~60 seconds total
+                    await asyncio.sleep(5)
+                    try:
+                        async for db_session in get_async_session():
+                            warmed = await cache_service.get_cached(file_hash=file_hash, db_session=db_session)
+                            break
+                    except Exception:
+                        warmed = None
+                    if warmed:
+                        logger.info("[SYNTHESIS]   Cache filled by peer worker")
+                        all_sections.extend(warmed.sections)
+                        combined_summary_parts.append(f"Content from {filename}: {warmed.summary}")
+                        break
+
+                if warmed:
+                    continue
+
+                logger.warning("[SYNTHESIS]   Lock wait timed out, proceeding in degraded mode")
+
             # Step 2: Download from R2 (no DB needed)
             logger.info(f"[SYNTHESIS]   ⏳ CACHE MISS: Gemini processing required")
             logger.info(f"[SYNTHESIS]   📥 Downloading from R2...")
@@ -496,6 +522,8 @@ class SlideGenerationFlow:
                 logger.error(f"[SYNTHESIS]   ✗ Failed to download from R2: {e}")
                 await self.emitter.error(f"Download failed: {e}", "synthesis")
                 failed_files.append({"filename": filename, "error": f"Download failed: {e}"})
+                if lock_token:
+                    RedisCache.release_lock(lock_key, lock_token)
                 continue
             
             # Step 3: Run Gemini synthesis (long operation - NO DB connection held)
@@ -530,6 +558,8 @@ class SlideGenerationFlow:
                 logger.error(f"[SYNTHESIS]   ✗ Unexpected error: {e}")
                 await self.emitter.error(str(e), "synthesis")
                 failed_files.append({"filename": filename, "error": f"Unexpected error: {e}"})
+                if lock_token:
+                    RedisCache.release_lock(lock_key, lock_token)
                 continue
             finally:
                 # Clean up temp file
@@ -538,6 +568,8 @@ class SlideGenerationFlow:
                         os.unlink(tmp_path)
                     except:
                         pass
+                if lock_token:
+                    RedisCache.release_lock(lock_key, lock_token)
             
             # Step 4: Cache the result (fresh DB connection - quick operation)
             if kb:
@@ -561,7 +593,7 @@ class SlideGenerationFlow:
                 
                 all_sections.extend(kb.sections)
                 combined_summary_parts.append(f"Content from {filename}: {kb.summary}")
-        
+
         # Store failed files info for user feedback
         if failed_files:
             self.state.failure_context = {"failed_synthesis": failed_files}

@@ -19,7 +19,8 @@ export interface Project {
     title: string;
     description?: string;
     thumbnailUrl?: string;
-    status: string; // 'draft' | 'generating' | 'completed'
+    status: string; // 'draft' | 'generating' | 'completed' | 'archived'
+    archiveSourceStatus?: string;
     sessionId?: string;
     slidesData?: unknown;
     createdAt: number;

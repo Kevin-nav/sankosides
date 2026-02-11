@@ -36,9 +36,9 @@ export interface Theme {
     name: string;
     description: string;
     palette: Palette;
-    typography: any;
-    spacing: any;
-    borders: any;
+    typography: Record<string, unknown>;
+    spacing: Record<string, unknown>;
+    borders: Record<string, unknown>;
 }
 
 /**

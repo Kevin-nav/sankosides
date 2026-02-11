@@ -33,7 +33,7 @@ const modes = [
         color: "from-purple-500 to-pink-400",
         badge: "AI Agent",
     },
-];
+] as const;
 
 export function ModeSelector({ onSelect }: ModeSelectorProps) {
     return (
@@ -45,7 +45,7 @@ export function ModeSelector({ onSelect }: ModeSelectorProps) {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.1, duration: 0.4 }}
                     whileHover={{ scale: 1.02 }}
-                    onClick={() => onSelect(mode.id as any)}
+                    onClick={() => onSelect(mode.id)}
                     className="group relative cursor-pointer overflow-hidden rounded-xl border border-neutral-800/80 bg-neutral-900 p-5 shadow-md shadow-black/40 transition-all hover:border-emerald-500/50 hover:shadow-[0_4px_30px_-10px_rgba(16,185,129,0.3)]"
                 >
                     {/* Subtle gradient background on hover */}

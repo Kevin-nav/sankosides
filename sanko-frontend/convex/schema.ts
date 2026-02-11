@@ -24,7 +24,8 @@ export default defineSchema({
         title: v.string(),
         description: v.optional(v.string()),
         thumbnailUrl: v.optional(v.string()),
-        status: v.string(), // draft, generating, completed
+        status: v.string(), // draft, generating, completed, archived
+        archiveSourceStatus: v.optional(v.string()), // status to restore when unarchiving
         sessionId: v.optional(v.string()), // Reference to playground session UUID (from backend)
 
         // Generated slides data (JSON structure)
@@ -32,7 +33,8 @@ export default defineSchema({
 
         createdAt: v.number(),
         updatedAt: v.number(),
-    }).index("by_user_id", ["userId"]),
+    }).index("by_user_id", ["userId"])
+        .index("by_user_updated_at", ["userId", "updatedAt"]),
 
     // Templates table (ported from backend SlideTemplate)
     templates: defineTable({

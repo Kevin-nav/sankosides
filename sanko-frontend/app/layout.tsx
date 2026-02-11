@@ -5,6 +5,7 @@ import { QueryProvider } from "@/components/providers/query-provider";
 import { ConvexClientProvider } from "@/components/providers/convex-provider";
 import { Navbar } from "@/components/navbar";
 import { ThemeProvider } from "@/components/theme-provider";
+import { ToastProvider } from "@/components/ui/toast";
 import "./globals.css";
 
 const notoSans = Noto_Sans({ variable: '--font-sans' });
@@ -38,8 +39,10 @@ export default function RootLayout({
           <ConvexClientProvider>
             <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
               <AuthProvider>
-                <Navbar />
-                {children}
+                <ToastProvider>
+                  <Navbar />
+                  {children}
+                </ToastProvider>
               </AuthProvider>
             </ThemeProvider>
           </ConvexClientProvider>

@@ -7,6 +7,7 @@ import { LayoutDashboard, FileText, Settings, Menu } from "lucide-react";
 import { motion } from "framer-motion";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import Link from "next/link";
 
 export const dashboardConfig = {
     sidebarNav: [
@@ -33,7 +34,7 @@ interface DashboardShellProps {
 }
 
 export function DashboardShell({ children }: DashboardShellProps) {
-    const { user } = useAuth();
+    useAuth();
 
     return (
         <div className="flex min-h-screen flex-col space-y-6 bg-background text-foreground selection:bg-primary/30">
@@ -51,12 +52,12 @@ export function DashboardShell({ children }: DashboardShellProps) {
                             </SheetTrigger>
                             <SheetContent side="left" className="pr-0 pt-10 bg-background border-r-border text-foreground w-[300px] sm:w-[400px]">
                                 <div className="px-7">
-                                    <a href="/" className="flex items-center space-x-2">
+                                    <Link href="/" className="flex items-center space-x-2">
                                         <div className="h-6 w-6 rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-700 shadow-[0_0_15px_-4px_rgba(16,185,129,0.5)]" />
                                         <span className="font-bold text-foreground tracking-tight">
                                             SankoSlides
                                         </span>
-                                    </a>
+                                    </Link>
                                 </div>
                                 <div className="mt-8 px-4">
                                     <DashboardNav items={dashboardConfig.sidebarNav} />
@@ -64,12 +65,12 @@ export function DashboardShell({ children }: DashboardShellProps) {
                             </SheetContent>
                         </Sheet>
 
-                        <a href="/" className="flex items-center space-x-2 hidden md:flex">
+                        <Link href="/" className="flex items-center space-x-2 hidden md:flex">
                             <div className="h-6 w-6 rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-700 shadow-[0_0_15px_-4px_rgba(16,185,129,0.5)]" />
                             <span className="hidden font-bold text-foreground sm:inline-block tracking-tight">
                                 SankoSlides
                             </span>
-                        </a>
+                        </Link>
                     </div>
                     <UserNav />
                 </div>

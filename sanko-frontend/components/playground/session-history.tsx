@@ -2,11 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ChevronLeft, Terminal, AlertCircle, Search } from "lucide-react";
+import { Terminal } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import ReactMarkdown from "react-markdown";
 
 interface SessionLog {
     role: string;

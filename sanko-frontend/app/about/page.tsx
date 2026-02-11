@@ -24,7 +24,7 @@ export default function AboutPage() {
                             We build for the <span className="text-emerald-500">midnight scholars.</span>
                         </h1>
                         <p className="text-xl text-neutral-400 leading-relaxed">
-                            SankoSlides was born in a dorm room at 3 AM. We realized that students spend more time formatting slides than understanding their research. We're here to flip that equation.
+                            SankoSlides was born in a dorm room at 3 AM. We realized that students spend more time formatting slides than understanding their research. We&apos;re here to flip that equation.
                         </p>
                     </motion.div>
                 </section>

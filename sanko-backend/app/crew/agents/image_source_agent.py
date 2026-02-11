@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 from app.crew.tools.image_generation_tool import NanoBananaImageTool, GeneratedAsset
 from app.models.schemas import ImageCitation
 from app.core.logging import get_logger
+from app.services.cache import RedisCache
 
 logger = get_logger(__name__)
 
@@ -61,6 +62,8 @@ class ImageSourceAgent:
     - Consistent visual style
     - Fast (cached images are instant)
     """
+
+    REDIS_TTL_SECONDS = 3 * 24 * 3600
     
     def __init__(self, output_dir: str = "./generated_assets"):
         """
@@ -118,6 +121,22 @@ class ImageSourceAgent:
                 verification_score=cached.verification_score,
                 source_method="cached",
             )
+
+        # Shared cache (cross-session/workers)
+        shared_cache_key = f"image_agent:{cache_key}"
+        cached_shared = RedisCache.get(shared_cache_key)
+        if cached_shared:
+            logger.info(f"[IMAGE AGENT] Shared cache hit for: '{query}'")
+            cached_result = ImageSourceResult(**cached_shared)
+            self._cache[cache_key] = cached_result
+            return ImageSourceResult(
+                image_url=cached_result.image_url,
+                image_alt=cached_result.image_alt,
+                image_caption=cached_result.image_caption,
+                citation=cached_result.citation,
+                verification_score=cached_result.verification_score,
+                source_method="cached",
+            )
         
         # AI Generation (primary strategy)
         result = await self._generate_image(query, slide_context, style_prompt)
@@ -131,6 +150,7 @@ class ImageSourceAgent:
         
         # Cache and return
         self._cache[cache_key] = result
+        RedisCache.set(shared_cache_key, result.model_dump(), ttl=self.REDIS_TTL_SECONDS)
         logger.info(f"[IMAGE AGENT] Cached result for: '{query}' (method: {result.source_method})")
         
         return result

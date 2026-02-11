@@ -16,6 +16,7 @@ from typing import Optional, List, Dict, Any
 from app.models.schemas import RefinedSlide, SlideContentType
 from app.core.logging import get_logger
 from app.core.convex_client import get_convex_client
+from app.services.unified_cache import layout_cache
 
 logger = get_logger(__name__)
 
@@ -102,6 +103,18 @@ class LayoutSelector:
     def __init__(self):
         self._in_memory_cache: Optional[List[Dict[str, Any]]] = None
         self.convex_client = get_convex_client()
+
+    async def _get_active_layouts_cached(self) -> List[Dict[str, Any]]:
+        """
+        Fetch active layouts with shared cache to avoid repeated Convex calls.
+        """
+        cached = layout_cache.get("active")
+        if cached is not None:
+            return cached
+
+        active_layouts = self.convex_client.query("layoutPresets:getActive", {})
+        layout_cache.set("active", active_layouts)
+        return active_layouts
     
     async def select_for_slide(
         self,
@@ -186,12 +199,27 @@ class LayoutSelector:
         preset_id: str,
     ) -> Optional[Dict[str, Any]]:
         """Get a specific layout preset by ID."""
+        cache_key = f"preset:{preset_id}"
+        cached = layout_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
         try:
-            # Fetch from Convex
+            # Check active presets first to avoid an extra remote call.
+            active_layouts = await self._get_active_layouts_cached()
+            for preset in active_layouts:
+                if preset.get("presetId") == preset_id:
+                    normalized = self._convex_to_dict(preset)
+                    layout_cache.set(cache_key, normalized)
+                    return normalized
+
+            # Fetch from Convex by ID as fallback
             dataset = self.convex_client.query("layoutPresets:getById", {"presetId": preset_id})
             
             if dataset:
-                return self._convex_to_dict(dataset)
+                normalized = self._convex_to_dict(dataset)
+                layout_cache.set(cache_key, normalized)
+                return normalized
         except Exception as e:
             logger.error(f"Failed to fetch layout preset from Convex: {e}")
             
@@ -210,8 +238,8 @@ class LayoutSelector:
         compatible = []
         
         try:
-            # Fetch all active layouts from Convex
-            active_layouts = self.convex_client.query("layoutPresets:getActive", {})
+            # Fetch all active layouts from shared cache/Convex
+            active_layouts = await self._get_active_layouts_cached()
             
             for preset in active_layouts:
                 config = preset.get("config", {})

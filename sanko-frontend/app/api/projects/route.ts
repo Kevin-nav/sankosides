@@ -3,6 +3,16 @@ import { adminAuth } from "@/lib/firebase-admin";
 import { db, schema } from "@/lib/db";
 import { eq, desc } from "drizzle-orm";
 
+const FALLBACK_TITLE = "Untitled Presentation";
+const MAX_TITLE_LENGTH = 120;
+
+function sanitizeTitle(rawTitle: unknown): string {
+    if (typeof rawTitle !== "string") return FALLBACK_TITLE;
+    const normalized = rawTitle.replace(/\s+/g, " ").trim();
+    if (!normalized) return FALLBACK_TITLE;
+    return normalized.slice(0, MAX_TITLE_LENGTH);
+}
+
 /**
  * GET /api/projects
  * Fetches all projects for the authenticated user
@@ -58,7 +68,10 @@ export async function POST(request: NextRequest) {
         const decodedToken = await adminAuth.verifyIdToken(idToken);
 
         const body = await request.json();
-        const { title } = body;
+        const { title, mode } = body;
+        const safeMode = typeof mode === "string" && ["replica", "synthesis", "research"].includes(mode)
+            ? mode
+            : undefined;
 
         // Get user ID
         const users = await db
@@ -71,7 +84,8 @@ export async function POST(request: NextRequest) {
 
         const [newProject] = await db.insert(schema.projects).values({
             userId: users[0].id,
-            title: title || "Untitled Presentation",
+            title: sanitizeTitle(title),
+            mode: safeMode || "synthesis",
             status: "draft",
         }).returning();
 

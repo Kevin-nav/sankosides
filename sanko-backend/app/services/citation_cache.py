@@ -234,7 +234,7 @@ class CitationCacheService:
             logger.warning(f"Convex store failed: {e}")
     
     @classmethod
-    def should_rate_limit(cls, provider: str) -> bool:
+    async def should_rate_limit(cls, provider: str) -> bool:
         """Check if we should delay request to this provider."""
         now = time.time()
         
@@ -251,7 +251,7 @@ class CitationCacheService:
         if now - last_time < min_interval:
             wait_time = min_interval - (now - last_time)
             logger.debug(f"Rate limiting {provider}: waiting {wait_time:.2f}s")
-            time.sleep(wait_time)
+            await asyncio.sleep(wait_time)
         
         cls._last_request_time[provider] = time.time()
         return False

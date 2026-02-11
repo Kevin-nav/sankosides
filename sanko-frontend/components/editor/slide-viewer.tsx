@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { ChevronLeft, ChevronRight, Download, Maximize2, Minimize2, Keyboard } from "lucide-react";
 import { useGeneratedSlides } from "@/hooks/api/use-generation";
 
@@ -20,19 +20,16 @@ interface SlideViewerProps {
 
 export function SlideViewer({ sessionId, onExport }: SlideViewerProps) {
     const { data, isLoading, error } = useGeneratedSlides(sessionId);
-    const [slides, setSlides] = useState<Slide[]>([]);
     const [currentSlide, setCurrentSlide] = useState(0);
-    const [averageScore, setAverageScore] = useState(0);
     const [isFullscreen, setIsFullscreen] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
-
-    // Sync data from React Query
-    useEffect(() => {
-        if (data) {
-            const slideData = data.presentation?.slides || data.slides || [];
-            setSlides(slideData);
-            setAverageScore(data.qa_report?.average_score || data.average_visual_score || 0);
-        }
+    const slides = useMemo<Slide[]>(() => {
+        if (!data) return [];
+        return (data.presentation?.slides || data.slides || []) as Slide[];
+    }, [data]);
+    const averageScore = useMemo(() => {
+        if (!data) return 0;
+        return data.qa_report?.average_score || data.average_visual_score || 0;
     }, [data]);
 
     // Handle Fullscreen Cleanup / Events
@@ -121,8 +118,6 @@ export function SlideViewer({ sessionId, onExport }: SlideViewerProps) {
             </div>
         );
     }
-
-    const currentSlideData = slides[currentSlide];
 
     return (
         <div

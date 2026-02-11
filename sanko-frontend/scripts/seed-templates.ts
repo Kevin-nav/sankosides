@@ -25,6 +25,17 @@ if (!CONVEX_URL) {
     process.exit(1);
 }
 
+type SeedTemplate = {
+    description?: string | null;
+    cssStyles?: string | null;
+} & Record<string, unknown>;
+
+type SeedTheme = {
+    description?: string | null;
+    cssOverrides?: string | null;
+    layoutStyle?: string | null;
+} & Record<string, unknown>;
+
 async function seedTemplates() {
     console.log("🔗 Connecting to Convex...");
     const client = new ConvexHttpClient(CONVEX_URL!);
@@ -47,13 +58,13 @@ async function seedTemplates() {
     console.log(`   - Themes: ${data.themes.length}`);
 
     // Convert null values to undefined for Convex compatibility
-    const cleanTemplates = data.templates.map((t: any) => ({
+    const cleanTemplates = data.templates.map((t: SeedTemplate) => ({
         ...t,
         description: t.description ?? undefined,
         cssStyles: t.cssStyles ?? undefined,
     }));
 
-    const cleanThemes = data.themes.map((t: any) => ({
+    const cleanThemes = data.themes.map((t: SeedTheme) => ({
         ...t,
         description: t.description ?? undefined,
         cssOverrides: t.cssOverrides ?? undefined,

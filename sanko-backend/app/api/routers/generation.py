@@ -26,6 +26,7 @@ from app.models.schemas import (
     OrderForm,
     Skeleton,
     GeneratedPresentation,
+    GatheredInfo,
 )
 from app.crew.flows.slide_generation import (
     SlideGenerationFlow,
@@ -40,7 +41,7 @@ from app.crew.flows.slide_generation import (
 )
 from app.crew.flows.metrics import MetricsCollector
 from app.core.logging import get_logger
-from app.core.database import get_db
+from app.core.database import get_db, get_async_session
 from app.services.storage import get_storage_service, PDFCacheService
 from app.services.convex_service import get_convex_service
 
@@ -117,6 +118,26 @@ def set_processing_status(job: ProcessingJob):
         _processing_jobs[job.file_hash] = job
 
 
+async def _get_cached_kb(cache_service: PDFCacheService, file_hash: str):
+    """
+    Shared helper for PDF cache lookups.
+
+    Uses DB sessions so L3 cache can be consulted when enabled.
+    """
+    try:
+        async for db_session in get_async_session():
+            return await cache_service.get_cached(file_hash=file_hash, db_session=db_session)
+    except Exception as e:
+        logger.warning(f"PDF cache lookup failed for {file_hash[:16]}...: {e}")
+
+    # Fallback: L2-only path via generic client argument
+    try:
+        return await cache_service.get_cached(file_hash=file_hash, client=get_db())
+    except Exception as e:
+        logger.warning(f"PDF cache fallback lookup failed for {file_hash[:16]}...: {e}")
+        return None
+
+
 # =============================================================================
 # File Upload Helpers
 # =============================================================================
@@ -159,6 +180,151 @@ class ClarifyRequest(BaseModel):
     """Request to continue clarification."""
     message: str
     file_hashes: Optional[List[str]] = None  # NEW: Hashes of attached files to process
+    wizard_data: Optional[Dict[str, Any]] = None
+    request_next_question: Optional[bool] = False
+    field_key: Optional[str] = None
+
+
+def _normalize_emphasis_style(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    normalized = value.strip().lower()
+    mapping = {
+        "visual": "visual-heavy",
+        "visual_heavy": "visual-heavy",
+        "visual-heavy": "visual-heavy",
+        "detailed": "detailed",
+        "concise": "concise",
+    }
+    return mapping.get(normalized, normalized)
+
+
+def _apply_wizard_data_to_state(state: FlowState, wizard_data: Dict[str, Any]) -> None:
+    """Hydrate gathered clarification info from wizard-collected values."""
+    if not wizard_data:
+        return
+
+    info = state.gathered_info or GatheredInfo()
+
+    topic = wizard_data.get("topic") or wizard_data.get("title")
+    if isinstance(topic, str) and topic.strip():
+        info.title = topic.strip()
+        info.has_title = True
+        if not info.key_topics:
+            info.key_topics = [info.title]
+
+    audience = wizard_data.get("audience") or wizard_data.get("target_audience")
+    if isinstance(audience, str) and audience.strip():
+        info.audience = audience.strip()
+        info.has_audience = True
+
+    slide_count = wizard_data.get("slideCount") or wizard_data.get("slide_count")
+    if isinstance(slide_count, str):
+        slide_count = slide_count.strip().lower()
+        if slide_count.isdigit():
+            slide_count = int(slide_count)
+        elif slide_count == "auto":
+            slide_count = None
+    if isinstance(slide_count, int) and slide_count > 0:
+        info.slide_count = slide_count
+        info.has_slide_count = True
+
+    sections = wizard_data.get("sections") or wizard_data.get("focus_areas")
+    if isinstance(sections, list):
+        normalized_sections = [str(s).strip() for s in sections if str(s).strip()]
+        if normalized_sections:
+            info.focus_areas = normalized_sections
+            info.has_focus_areas = True
+
+    style = wizard_data.get("style") or wizard_data.get("emphasis_style")
+    if isinstance(style, str):
+        normalized_style = _normalize_emphasis_style(style)
+        if normalized_style in {"detailed", "concise", "visual-heavy"}:
+            info.emphasis_style = normalized_style
+            info.has_emphasis_style = True
+
+    tone = wizard_data.get("tone")
+    if isinstance(tone, str):
+        normalized_tone = tone.strip().lower()
+        if normalized_tone in {"academic", "casual", "technical", "persuasive"}:
+            info.tone = normalized_tone
+            info.has_tone = True
+
+    citation_style = wizard_data.get("citationStyle") or wizard_data.get("citation_style")
+    if isinstance(citation_style, str):
+        normalized_citation = citation_style.strip().lower()
+        if normalized_citation in {"apa", "ieee", "harvard", "chicago"}:
+            info.citation_style = normalized_citation
+            info.has_citation_style = True
+
+    references_placement = wizard_data.get("referencePlacement") or wizard_data.get("references_placement")
+    if isinstance(references_placement, str):
+        normalized_placement = references_placement.strip().lower().replace(" ", "_")
+        if normalized_placement in {"distributed", "last_slide"}:
+            info.references_placement = normalized_placement
+            info.has_references_placement = True
+
+    theme = wizard_data.get("theme")
+    if isinstance(theme, str) and theme.strip():
+        info.theme = theme.strip()
+        info.has_theme = True
+
+    special_requests = wizard_data.get("special_requests")
+    if isinstance(special_requests, str) and special_requests.strip():
+        info.special_requests = special_requests.strip()
+
+    state.gathered_info = info
+
+
+def _apply_field_answer_to_state(state: FlowState, field_key: Optional[str], answer: Optional[str]) -> None:
+    """Apply single-field answers coming from wizard cards."""
+    if not field_key or not isinstance(answer, str) or not answer.strip():
+        return
+
+    info = state.gathered_info or GatheredInfo()
+    value = answer.strip()
+    key = field_key.strip().lower()
+
+    if key in {"title", "topic"}:
+        info.title = value
+        info.has_title = True
+    elif key in {"target_audience", "audience"}:
+        info.audience = value
+        info.has_audience = True
+    elif key in {"slide_count", "slidecount"}:
+        if value.isdigit():
+            info.slide_count = int(value)
+            info.has_slide_count = True
+    elif key in {"focus_areas", "sections"}:
+        info.focus_areas = [value]
+        info.has_focus_areas = True
+    elif key in {"emphasis_style", "style"}:
+        normalized_style = _normalize_emphasis_style(value)
+        if normalized_style in {"detailed", "concise", "visual-heavy"}:
+            info.emphasis_style = normalized_style
+            info.has_emphasis_style = True
+    elif key == "tone":
+        normalized_tone = value.lower()
+        if normalized_tone in {"academic", "casual", "technical", "persuasive"}:
+            info.tone = normalized_tone
+            info.has_tone = True
+    elif key in {"citation_style", "citationstyle"}:
+        normalized_citation = value.lower()
+        if normalized_citation in {"apa", "ieee", "harvard", "chicago"}:
+            info.citation_style = normalized_citation
+            info.has_citation_style = True
+    elif key in {"references_placement", "referenceplacement"}:
+        normalized_placement = value.lower().replace(" ", "_")
+        if normalized_placement in {"distributed", "last_slide"}:
+            info.references_placement = normalized_placement
+            info.has_references_placement = True
+    elif key == "theme":
+        info.theme = value
+        info.has_theme = True
+    elif key == "special_requests":
+        info.special_requests = value
+
+    state.gathered_info = info
 
 
 class ClarifyResponse(BaseModel):
@@ -262,9 +428,6 @@ async def start_session_endpoint(
         uploaded_files = []
         cache_hits = 0
         
-        # Get Convex client for cache lookups
-        client = get_db()
-        
         # We process files directly
         for file in files:
                 # Validate file
@@ -281,9 +444,7 @@ async def start_session_endpoint(
                 )
                 
                 # Check cache for existing KnowledgeBase
-                # TODO: Implement Convex cache lookup
-                # cached_kb = await cache_service.get_cached(file_hash, client)
-                cached_kb = None 
+                cached_kb = await _get_cached_kb(cache_service, file_hash)
                 if cached_kb:
                     cache_hits += 1
                 
@@ -379,8 +540,7 @@ async def upload_files(files: List[UploadFile] = File(...)):
         
         # Check cache for existing KnowledgeBase (this means Gemini has already processed it)
         logger.info(f"[UPLOAD]   Checking if Gemini has processed this PDF...")
-        # TODO: Implement Convex cache lookup
-        cached_kb = None # await cache_service.get_cached(file_hash, get_db())
+        cached_kb = await _get_cached_kb(cache_service, file_hash)
         is_cached = cached_kb is not None
         sections_count = len(cached_kb.sections) if cached_kb else None
         
@@ -508,10 +668,7 @@ async def get_file_processing_status(file_hash: str):
         # Check if it's already cached
         cache_service = PDFCacheService()
         try:
-            # TODO: Convex cache lookup
-            # async for db_session in get_async_session():
-            #    cached_kb = await cache_service.get_cached(file_hash, db_session)
-            cached_kb = None
+            cached_kb = await _get_cached_kb(cache_service, file_hash)
             if cached_kb:
                 return {
                     "file_hash": file_hash,
@@ -560,6 +717,13 @@ async def clarify_session(session_id: str, request: ClarifyRequest):
         )
     
     try:
+        # Sync wizard-provided context into gathered info before asking the agent
+        if request.wizard_data:
+            _apply_wizard_data_to_state(state, request.wizard_data)
+
+        # Sync single-card answer payloads if present
+        _apply_field_answer_to_state(state, request.field_key, request.message)
+
         # Process any new file attachments before agent response
         new_files_processed = 0
         synthesis_failures = []
@@ -582,11 +746,7 @@ async def clarify_session(session_id: str, request: ClarifyRequest):
                 logger.info(f"[CLARIFY]   Checking if Gemini has processed this PDF...")
                 cached_kb = None
                 try:
-                    # TODO: Convex cache lookup
-                    # async for db_session in get_async_session():
-                    #     cached_kb = await cache_service.get_cached(file_hash, db_session)
-                    #     break
-                    pass
+                    cached_kb = await _get_cached_kb(cache_service, file_hash)
                 except Exception as e:
                     logger.warning(f"[CLARIFY]   Cache check failed: {e}")
                 

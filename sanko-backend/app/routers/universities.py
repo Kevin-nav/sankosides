@@ -16,6 +16,7 @@ import asyncio
 from app.core.convex_client import get_convex_client
 from app.core.config import settings
 from app.core.logging import get_logger
+from app.services.cache import RedisCache
 
 
 router = APIRouter(prefix="/universities", tags=["universities"])
@@ -61,68 +62,23 @@ class UniversityCache:
     @classmethod
     def get(cls, key: str) -> Optional[Any]:
         """Get cached value from Redis or memory."""
-        client = cls._get_client()
-        
-        if client:
-            try:
-                data = client.get(key)
-                if data:
-                    return json.loads(data)
-            except Exception as e:
-                logger.warning(f"Redis get error: {e}")
-        
-        # Fallback to memory
-        return cls._memory_cache.get(key)
+        return RedisCache.get(key)
     
     @classmethod
     def set(cls, key: str, value: Any, ttl: Optional[int] = None) -> None:
         """Set value in Redis or memory cache."""
         ttl = ttl or cls.CACHE_TTL_SECONDS
-        client = cls._get_client()
-        
-        if client:
-            try:
-                client.setex(key, ttl, json.dumps(value, default=str))
-                logger.debug(f"Cached {key} in Redis (TTL: {ttl}s)")
-                return
-            except Exception as e:
-                logger.warning(f"Redis set error: {e}")
-        
-        # Fallback to memory
-        cls._memory_cache[key] = value
+        RedisCache.set(key, value, ttl=ttl)
     
     @classmethod
     def delete(cls, key: str) -> None:
         """Delete key from cache."""
-        client = cls._get_client()
-        
-        if client:
-            try:
-                client.delete(key)
-            except Exception as e:
-                logger.warning(f"Redis delete error: {e}")
-        
-        cls._memory_cache.pop(key, None)
+        RedisCache.delete(key)
     
     @classmethod
     def flush_pattern(cls, pattern: str = "*") -> int:
         """Flush keys matching pattern. Returns count deleted."""
-        client = cls._get_client()
-        count = 0
-        
-        if client:
-            try:
-                keys = client.keys(pattern)
-                if keys:
-                    count = client.delete(*keys)
-            except Exception as e:
-                logger.warning(f"Redis flush error: {e}")
-        
-        if pattern == "*":
-            count += len(cls._memory_cache)
-            cls._memory_cache.clear()
-        
-        return count
+        return RedisCache.flush_pattern(pattern)
 
 
 # =============================================================================

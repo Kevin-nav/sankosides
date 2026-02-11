@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Sparkles, Terminal, FileText, Bot, MoveRight, CheckCircle2, Layout, Zap, GraduationCap } from "lucide-react";
+import { Sparkles, MoveRight, Layout, Zap, GraduationCap } from "lucide-react";
 import { motion } from "framer-motion";
 
 export default function Home() {
@@ -103,7 +103,7 @@ export default function Home() {
                         >
                             <h2 className="text-3xl md:text-5xl font-bold text-white">Three Ways We Give You <span className="text-emerald-500">Time Back.</span></h2>
                             <p className="text-neutral-400 max-w-2xl mx-auto text-lg leading-relaxed">
-                                We don't just format slides. We understand your research and structure it for you.
+                                We don&apos;t just format slides. We understand your research and structure it for you.
                             </p>
                         </motion.div>
 
@@ -250,7 +250,7 @@ export default function Home() {
                     </div>
 
                     <div className="pt-8 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-4">
-                        <p className="text-sm text-neutral-600">© 2025 SankoSlides Inc. All rights reserved.</p>
+                        <p className="text-sm text-neutral-600">&copy; 2025 SankoSlides Inc. All rights reserved.</p>
                         <div className="flex gap-6">
                             <Link className="text-sm text-neutral-600 hover:text-emerald-500 transition-colors" href="/privacy">Privacy Policy</Link>
                             <Link className="text-sm text-neutral-600 hover:text-emerald-500 transition-colors" href="/terms">Terms of Service</Link>

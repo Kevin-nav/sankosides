@@ -1,8 +1,6 @@
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { motion } from "framer-motion";
-import { LayoutDashboard, FileText, Settings, LogOut, Plus } from "lucide-react";
 import { PrefetchLink, PREFETCH_CONFIGS } from "@/components/ui/prefetch-link";
 
 interface DashboardNavProps {

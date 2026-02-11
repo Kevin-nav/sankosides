@@ -160,6 +160,68 @@ export function useFileUpload() {
 
     // Add files and start upload
     const addFiles = useCallback(async (newFiles: File[]) => {
+        const pollProcessingStatus = async (fileId: string, fileHash: string) => {
+            const maxAttempts = 120;  // 10 minutes max (5s intervals)
+            let attempts = 0;
+
+            const poll = async () => {
+                try {
+                    const response = await fetch(`/api/generate/processing-status/${fileHash}`);
+
+                    if (!response.ok) {
+                        if (attempts > 5) {
+                            // After 5 failed attempts, assume error
+                            setFiles(prev => prev.map(f =>
+                                f.id === fileId ? { ...f, status: 'error', error: 'Status check failed' } : f
+                            ));
+                            return;
+                        }
+                        attempts++;
+                        setTimeout(poll, 5000);
+                        return;
+                    }
+
+                    const data = await response.json();
+
+                    if (data.status === 'completed') {
+                        setFiles(prev => prev.map(f =>
+                            f.id === fileId ? {
+                                ...f,
+                                status: 'cached',
+                                sectionsCount: data.sections_count,
+                            } : f
+                        ));
+                    } else if (data.status === 'failed') {
+                        setFiles(prev => prev.map(f =>
+                            f.id === fileId ? {
+                                ...f,
+                                status: 'error',
+                                error: data.error_message || 'Processing failed',
+                            } : f
+                        ));
+                    } else if (data.status === 'processing' || data.status === 'queued') {
+                        // Still processing, poll again
+                        attempts++;
+                        if (attempts < maxAttempts) {
+                            setTimeout(poll, 5000);  // Poll every 5 seconds
+                        } else {
+                            setFiles(prev => prev.map(f =>
+                                f.id === fileId ? { ...f, status: 'error', error: 'Processing timeout' } : f
+                            ));
+                        }
+                    }
+                } catch {
+                    attempts++;
+                    if (attempts < maxAttempts) {
+                        setTimeout(poll, 5000);
+                    }
+                }
+            };
+
+            // Start polling after a short delay
+            setTimeout(poll, 2000);
+        };
+
         for (const file of newFiles) {
             // Validate file type
             if (!file.type.includes('pdf') && !file.name.toLowerCase().endsWith('.pdf')) {
@@ -254,70 +316,7 @@ export function useFileUpload() {
                 setIsUploading(false);
             }
         }
-    }, [files, isDuplicate]);
-
-    // Poll for processing status
-    const pollProcessingStatus = useCallback(async (fileId: string, fileHash: string) => {
-        const maxAttempts = 120;  // 10 minutes max (5s intervals)
-        let attempts = 0;
-
-        const poll = async () => {
-            try {
-                const response = await fetch(`/api/generate/processing-status/${fileHash}`);
-
-                if (!response.ok) {
-                    if (attempts > 5) {
-                        // After 5 failed attempts, assume error
-                        setFiles(prev => prev.map(f =>
-                            f.id === fileId ? { ...f, status: 'error', error: 'Status check failed' } : f
-                        ));
-                        return;
-                    }
-                    attempts++;
-                    setTimeout(poll, 5000);
-                    return;
-                }
-
-                const data = await response.json();
-
-                if (data.status === 'completed') {
-                    setFiles(prev => prev.map(f =>
-                        f.id === fileId ? {
-                            ...f,
-                            status: 'cached',
-                            sectionsCount: data.sections_count,
-                        } : f
-                    ));
-                } else if (data.status === 'failed') {
-                    setFiles(prev => prev.map(f =>
-                        f.id === fileId ? {
-                            ...f,
-                            status: 'error',
-                            error: data.error_message || 'Processing failed',
-                        } : f
-                    ));
-                } else if (data.status === 'processing' || data.status === 'queued') {
-                    // Still processing, poll again
-                    attempts++;
-                    if (attempts < maxAttempts) {
-                        setTimeout(poll, 5000);  // Poll every 5 seconds
-                    } else {
-                        setFiles(prev => prev.map(f =>
-                            f.id === fileId ? { ...f, status: 'error', error: 'Processing timeout' } : f
-                        ));
-                    }
-                }
-            } catch (error) {
-                attempts++;
-                if (attempts < maxAttempts) {
-                    setTimeout(poll, 5000);
-                }
-            }
-        };
-
-        // Start polling after a short delay
-        setTimeout(poll, 2000);
-    }, []);
+    }, [isDuplicate]);
 
     // Remove file
     const removeFile = useCallback((id: string) => {
@@ -327,14 +326,14 @@ export function useFileUpload() {
     // Get file hashes ready for sending
     const getReadyHashes = useCallback((): string[] => {
         return files
-            .filter(f => (f.status === 'ready' || f.status === 'cached' || f.status === 'processing') && f.hash)
+            .filter(f => (f.status === 'ready' || f.status === 'cached') && f.hash)
             .map(f => f.hash!);
     }, [files]);
 
     // Check if all files are ready
     const allReady = useCallback((): boolean => {
         if (files.length === 0) return true;
-        return files.every(f => f.status === 'ready' || f.status === 'cached' || f.status === 'error' || f.status === 'processing');
+        return files.every(f => f.status === 'ready' || f.status === 'cached' || f.status === 'error');
     }, [files]);
 
     // Clear all files (after message sent)

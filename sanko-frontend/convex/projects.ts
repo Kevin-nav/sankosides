@@ -1,6 +1,17 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 
+const FALLBACK_TITLE = "Untitled Presentation";
+const MAX_TITLE_LENGTH = 120;
+const ALLOWED_STATUSES = new Set(["draft", "generating", "completed", "archived"]);
+const ALLOWED_RESTORE_STATUSES = new Set(["draft", "generating", "completed"]);
+
+function sanitizeTitle(rawTitle: string | undefined): string {
+    const normalized = (rawTitle ?? "").replace(/\s+/g, " ").trim();
+    if (!normalized) return FALLBACK_TITLE;
+    return normalized.slice(0, MAX_TITLE_LENGTH);
+}
+
 // Create a new project
 export const create = mutation({
     args: {
@@ -12,7 +23,7 @@ export const create = mutation({
         const now = Date.now();
         const projectId = await ctx.db.insert("projects", {
             userId: args.userId,
-            title: args.title,
+            title: sanitizeTitle(args.title),
             description: args.description,
             status: "draft",
             createdAt: now,
@@ -29,15 +40,41 @@ export const update = mutation({
         title: v.optional(v.string()),
         description: v.optional(v.string()),
         status: v.optional(v.string()),
+        archiveSourceStatus: v.optional(v.string()),
+        clearArchiveSourceStatus: v.optional(v.boolean()),
         thumbnailUrl: v.optional(v.string()),
         slidesData: v.optional(v.any()),
         sessionId: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
         const { id, ...updates } = args;
-        await ctx.db.patch(id, {
+
+        const patch: Record<string, unknown> = {
             ...updates,
             updatedAt: Date.now(),
+        };
+
+        if (updates.title !== undefined) {
+            patch.title = sanitizeTitle(updates.title);
+        }
+
+        if (updates.status !== undefined && !ALLOWED_STATUSES.has(updates.status)) {
+            throw new Error(`Invalid project status: ${updates.status}`);
+        }
+
+        if (
+            updates.archiveSourceStatus !== undefined &&
+            !ALLOWED_RESTORE_STATUSES.has(updates.archiveSourceStatus)
+        ) {
+            throw new Error(`Invalid archive source status: ${updates.archiveSourceStatus}`);
+        }
+
+        if (updates.clearArchiveSourceStatus) {
+            patch.archiveSourceStatus = undefined;
+        }
+
+        await ctx.db.patch(id, {
+            ...patch,
         });
     },
 });

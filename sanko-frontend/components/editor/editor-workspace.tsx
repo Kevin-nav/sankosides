@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { WizardClarifier } from "./wizard-clarifier";
 import { BlueprintReview } from "./blueprint-review";
@@ -8,7 +8,9 @@ import { GenerationProgress } from "./generation-progress";
 import { SlideViewer } from "./slide-viewer";
 import { EditorLayout } from "./editor-layout";
 import { StageTransitionLoader } from "./stage-transition-loader";
-import { useAuth } from "@/components/auth-provider";
+import { useProject, Id } from "@/hooks/convex";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
 
 type EditorStage = "clarifying" | "blueprint" | "generating" | "completed";
 
@@ -34,39 +36,12 @@ const stageVariants = {
 };
 
 export function EditorWorkspace({ projectId }: EditorWorkspaceProps) {
-    const { user } = useAuth();
+    const project = useProject(projectId as Id<"projects">);
     const [stage, setStage] = useState<EditorStage>("clarifying");
     const [sessionId, setSessionId] = useState<string | null>(null);
-    const [projectMode, setProjectMode] = useState<string | null>(null);
-    const [loading, setLoading] = useState(true);
     const [isTransitioning, setIsTransitioning] = useState(false);
     const [transitionMessage, setTransitionMessage] = useState("");
-
-    useEffect(() => {
-        async function fetchProject() {
-            if (!user || !projectId) return;
-
-            try {
-                const token = await user.getIdToken();
-                const res = await fetch(`/api/projects/${projectId}`, {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
-
-                if (res.ok) {
-                    const data = await res.json();
-                    setProjectMode(data.project.mode);
-                } else {
-                    console.error("Failed to fetch project");
-                }
-            } catch (error) {
-                console.error("Error fetching project:", error);
-            } finally {
-                setLoading(false);
-            }
-        }
-
-        fetchProject();
-    }, [user, projectId]);
+    const loading = project === undefined;
 
     if (loading) {
         return (
@@ -88,6 +63,21 @@ export function EditorWorkspace({ projectId }: EditorWorkspaceProps) {
                     </div>
                     <span className="text-neutral-400 text-sm">Loading project...</span>
                 </motion.div>
+            </div>
+        );
+    }
+
+    if (project === null) {
+        return (
+            <div className="flex h-screen w-full items-center justify-center bg-black">
+                <div className="flex flex-col items-center gap-4">
+                    <span className="text-neutral-300">Project not found or deleted.</span>
+                    <Link href="/dashboard">
+                        <Button className="bg-emerald-600 hover:bg-emerald-500 text-white">
+                            Back to dashboard
+                        </Button>
+                    </Link>
+                </div>
             </div>
         );
     }
@@ -123,10 +113,12 @@ export function EditorWorkspace({ projectId }: EditorWorkspaceProps) {
 
     return (
         <EditorLayout
+            title={project.title}
+            status={project.status}
             sidebar={
                 <WizardClarifier
                     projectId={projectId}
-                    mode={projectMode || "synthesis"}
+                    mode="synthesis"
                     onComplete={onClarificationComplete}
                 />
             }
@@ -206,7 +198,7 @@ export function EditorWorkspace({ projectId }: EditorWorkspaceProps) {
                                 animate={{ opacity: 1 }}
                                 transition={{ delay: 0.8 }}
                             >
-                                💡 Complete the wizard on the left to generate your outline
+                                Tip: Complete the wizard on the left to generate your outline.
                             </motion.p>
                         </div>
                     </motion.div>

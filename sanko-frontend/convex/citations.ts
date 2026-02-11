@@ -45,7 +45,7 @@ export const getCachedCitationsBatch = query({
     args: { queryHashes: v.array(v.string()) },
     handler: async (ctx, args) => {
         const now = Date.now();
-        const results: Record<string, any> = {};
+        const results: Record<string, unknown> = {};
 
         for (const hash of args.queryHashes) {
             const cached = await ctx.db

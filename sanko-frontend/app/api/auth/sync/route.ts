@@ -77,27 +77,32 @@ export async function POST(request: NextRequest) {
                 subscriptionTier: user.subscriptionTier,
             },
         });
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Auth sync error:", error);
+        const errorWithDetails = error as {
+            cause?: { code?: string };
+            message?: string;
+            code?: string;
+        };
 
         // Handle database connection errors (Neon serverless timeout, fetch failures)
-        if (error.cause?.code === 'UND_ERR_CONNECT_TIMEOUT' ||
-            error.message?.includes('fetch failed') ||
-            error.message?.includes('Error connecting to database')) {
+        if (errorWithDetails.cause?.code === "UND_ERR_CONNECT_TIMEOUT" ||
+            errorWithDetails.message?.includes("fetch failed") ||
+            errorWithDetails.message?.includes("Error connecting to database")) {
             return NextResponse.json(
                 { error: "Database connection failed. Please try again later." },
                 { status: 503 }
             );
         }
 
-        if (error.code === "auth/id-token-expired") {
+        if (errorWithDetails.code === "auth/id-token-expired") {
             return NextResponse.json(
                 { error: "Token expired. Please login again." },
                 { status: 401 }
             );
         }
 
-        if (error.code === "auth/argument-error") {
+        if (errorWithDetails.code === "auth/argument-error") {
             return NextResponse.json(
                 { error: "Invalid token format" },
                 { status: 401 }

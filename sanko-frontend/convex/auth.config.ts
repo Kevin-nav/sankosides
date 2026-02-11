@@ -1,4 +1,4 @@
-export default {
+const authConfig = {
     providers: [
         {
             domain: "https://sankoslides.firebaseapp.com",
@@ -6,3 +6,5 @@ export default {
         },
     ],
 };
+
+export default authConfig;

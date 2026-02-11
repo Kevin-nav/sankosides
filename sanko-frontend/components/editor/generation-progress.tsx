@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, CheckCircle2, XCircle, Brain, Cpu, Zap, Activity, Terminal } from "lucide-react";
-import { useGenerationProgress } from "@/hooks/convex";
-import { Id } from "@/convex/_generated/dataModel";
+import { useGenerationProgressBySession } from "@/hooks/convex";
+import { useSessionStatus } from "@/hooks/api/use-generation";
 
 interface AgentState {
     name: string;
@@ -24,7 +24,7 @@ interface AgentState {
 interface ToolCall {
     tool: string;
     action: string;
-    input?: Record<string, any>;
+    input?: Record<string, unknown>;
     result?: string;
     success?: boolean;
     pending: boolean;
@@ -32,104 +32,115 @@ interface ToolCall {
 
 interface GenerationProgressProps {
     sessionId: string;
-    convexProjectId?: Id<"projects">; // Convex project ID for real-time sync
-    onComplete?: (result: any) => void;
+    onComplete?: (result: { success: boolean; error?: string }) => void;
     onStageChange?: (stage: string | null) => void;
 }
 
 const AGENT_ORDER = ["planner", "refiner", "citation_auditor", "final_slides", "generator", "visual_qa"];
 
-export function GenerationProgress({ sessionId, convexProjectId, onComplete, onStageChange }: GenerationProgressProps) {
-    const [agents, setAgents] = useState<Record<string, AgentState>>(() => {
-        const initial: Record<string, AgentState> = {};
-        AGENT_ORDER.forEach(name => {
-            initial[name] = { name, status: "pending", thinking_chunks: [], toolCalls: [] };
-        });
-        return initial;
-    });
-    const [currentAgent, setCurrentAgent] = useState<string | null>(null);
-    const [pipelineStatus, setPipelineStatus] = useState<"idle" | "running" | "complete" | "error">("idle");
-    const [pipelineResult, setPipelineResult] = useState<{ success: boolean; visualScore?: number } | null>(null);
-    const [qaProgress, setQaProgress] = useState<{
-        currentSlide: number;
-        totalSlides: number;
-        currentIteration: number;
-        maxIterations: number;
-        score: number;
-        issues: string[];
-    } | null>(null);
-
-    const thinkingRef = useRef<HTMLDivElement>(null);
+export function GenerationProgress({ sessionId, onComplete, onStageChange }: GenerationProgressProps) {
+    const completionRef = useRef<{ done: boolean; error: boolean }>({ done: false, error: false });
+    const lastStageRef = useRef<string | null>(null);
 
     // Convex real-time progress - THE primary source of truth
-    const convexProgress = useGenerationProgress(convexProjectId || null);
+    const convexProgress = useGenerationProgressBySession(sessionId || null);
+    const { data: polledStatus } = useSessionStatus(sessionId, {
+        enabled: !!sessionId && !convexProgress,
+        refetchInterval: 2000,
+    });
+    const effectiveProgress = useMemo(() => {
+        if (convexProgress) return convexProgress;
+        if (!polledStatus) return null;
 
-    // Sync Convex progress with local state
-    useEffect(() => {
-        if (!convexProgress) return;
+        return {
+            currentStep: polledStatus.status === "completed"
+                ? "complete"
+                : polledStatus.status === "failed"
+                    ? "error"
+                    : (polledStatus.current_stage === "qa" ? "visual_qa" : polledStatus.current_stage || "initializing"),
+            stepProgress: polledStatus.total_slides > 0
+                ? Math.min(100, Math.round((polledStatus.slides_completed / polledStatus.total_slides) * 100))
+                : 0,
+            currentSlideIndex: polledStatus.slides_completed > 0 ? polledStatus.slides_completed - 1 : 0,
+            totalSlides: polledStatus.total_slides,
+            message: polledStatus.error || undefined,
+        };
+    }, [convexProgress, polledStatus]);
 
-        console.log("[GenerationProgress] Convex sync:", convexProgress);
+    const pipelineStatus = useMemo<"idle" | "running" | "complete" | "error">(() => {
+        const step = effectiveProgress?.currentStep;
+        if (!step) return "idle";
+        if (step === "complete") return "complete";
+        if (step === "error") return "error";
+        return "running";
+    }, [effectiveProgress]);
 
-        // Sync status from Convex - currentStep values: 'initializing', 'complete', 'error', or agent names
-        const step = convexProgress.currentStep;
-        if (step === "complete" && pipelineStatus !== "complete") {
-            setPipelineStatus("complete");
-            setPipelineResult({ success: true, visualScore: 0.95 });
-            onComplete?.({ success: true });
+    const pipelineResult = useMemo<{ success: boolean; visualScore?: number } | null>(() => {
+        if (pipelineStatus === "complete") return { success: true, visualScore: 0.95 };
+        if (pipelineStatus === "error") return { success: false };
+        return null;
+    }, [pipelineStatus]);
 
-            // Mark all agents as complete
-            setAgents(prev => {
-                const next = { ...prev };
-                AGENT_ORDER.forEach(name => {
-                    next[name] = { ...next[name], status: "complete" };
-                });
-                return next;
+    const qaProgress = useMemo(() => {
+        if (effectiveProgress?.currentSlideIndex === undefined || !effectiveProgress.totalSlides) {
+            return null;
+        }
+        return {
+            currentSlide: effectiveProgress.currentSlideIndex + 1,
+            totalSlides: effectiveProgress.totalSlides,
+            currentIteration: 1,
+            maxIterations: 3,
+            score: effectiveProgress.stepProgress / 100,
+            issues: [] as string[],
+        };
+    }, [effectiveProgress]);
+
+    const currentAgent = useMemo<string | null>(() => {
+        const step = effectiveProgress?.currentStep;
+        if (!step || step === "complete" || step === "error" || step === "initializing") return null;
+        const agentName = step === "qa" ? "visual_qa" : step;
+        return AGENT_ORDER.includes(agentName) ? agentName : null;
+    }, [effectiveProgress]);
+
+    const agents = useMemo<Record<string, AgentState>>(() => {
+        const initial: Record<string, AgentState> = {};
+        AGENT_ORDER.forEach((name) => {
+            initial[name] = { name, status: "pending", thinking_chunks: [], toolCalls: [] };
+        });
+
+        const step = effectiveProgress?.currentStep;
+        if (!step) return initial;
+        if (step === "complete") {
+            AGENT_ORDER.forEach((name) => {
+                initial[name].status = "complete";
             });
-            setCurrentAgent(null);
-        } else if (step === "error" && pipelineStatus !== "error") {
-            setPipelineStatus("error");
-            setPipelineResult({ success: false });
-            onComplete?.({ success: false, error: convexProgress.message ?? undefined });
-        } else if (pipelineStatus === "idle" && step && step !== "complete" && step !== "error") {
-            setPipelineStatus("running");
+            return initial;
         }
-
-        // Sync current stage from Convex (if currentStep is an agent name)
-        if (step && step !== "complete" && step !== "error" && step !== "initializing") {
-            const agentName = step === "qa" ? "visual_qa" : step;
-            if (AGENT_ORDER.includes(agentName) && agentName !== currentAgent) {
-                setCurrentAgent(agentName);
-                onStageChange?.(agentName);
-
-                // Mark previous agents complete
-                const agentIndex = AGENT_ORDER.indexOf(agentName);
-                setAgents(prev => {
-                    const next = { ...prev };
-                    for (let i = 0; i < agentIndex; i++) {
-                        if (next[AGENT_ORDER[i]].status !== "complete") {
-                            next[AGENT_ORDER[i]] = { ...next[AGENT_ORDER[i]], status: "complete" };
-                        }
-                    }
-                    if (next[agentName].status !== "running") {
-                        next[agentName] = { ...next[agentName], status: "running", start_time: Date.now() };
-                    }
-                    return next;
-                });
+        if (currentAgent) {
+            const agentIndex = AGENT_ORDER.indexOf(currentAgent);
+            for (let i = 0; i < agentIndex; i++) {
+                initial[AGENT_ORDER[i]].status = "complete";
             }
+            initial[currentAgent].status = step === "error" ? "error" : "running";
         }
+        return initial;
+    }, [effectiveProgress, currentAgent]);
 
-        // Sync slide progress info from Convex
-        if (convexProgress.currentSlideIndex !== undefined && convexProgress.totalSlides) {
-            setQaProgress(prev => ({
-                currentSlide: convexProgress.currentSlideIndex! + 1,
-                totalSlides: convexProgress.totalSlides!,
-                currentIteration: prev?.currentIteration ?? 1,
-                maxIterations: prev?.maxIterations ?? 3,
-                score: prev?.score ?? (convexProgress.stepProgress / 100),
-                issues: prev?.issues ?? [],
-            }));
+    useEffect(() => {
+        const step = effectiveProgress?.currentStep;
+        if (!step) return;
+        if (step === "complete" && !completionRef.current.done) {
+            completionRef.current.done = true;
+            onComplete?.({ success: true });
+        } else if (step === "error" && !completionRef.current.error) {
+            completionRef.current.error = true;
+            onComplete?.({ success: false, error: effectiveProgress.message ?? undefined });
         }
-    }, [convexProgress, pipelineStatus, currentAgent, onComplete, onStageChange]);
+        if (currentAgent !== lastStageRef.current) {
+            lastStageRef.current = currentAgent;
+            onStageChange?.(currentAgent);
+        }
+    }, [effectiveProgress, currentAgent, onComplete, onStageChange]);
 
     const currentAgentState = currentAgent ? agents[currentAgent] : null;
 

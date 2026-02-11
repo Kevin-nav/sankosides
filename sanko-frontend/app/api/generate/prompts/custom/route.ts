@@ -20,7 +20,7 @@ export async function POST(request: Request) {
             message: 'Custom prompts saved',
             prompts: body
         });
-    } catch (error) {
+    } catch {
         return NextResponse.json(
             { error: 'Failed to save prompts' },
             { status: 400 }
