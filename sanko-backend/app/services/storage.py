@@ -19,9 +19,9 @@ from datetime import datetime
 
 import aioboto3
 from botocore.config import Config
+from sqlalchemy import text
 from app.core.config import settings
 from app.core.logging import get_logger
-from app.core.database import get_db
 from app.models.schemas import KnowledgeBase
 
 logger = get_logger(__name__)
@@ -240,7 +240,8 @@ class PDFCacheService:
     @staticmethod
     async def get_cached(
         file_hash: str,
-        client: Any,
+        client: Any = None,
+        db_session: Any = None,
     ) -> Optional[KnowledgeBase]:
         """
         Get cached KnowledgeBase for a file hash.
@@ -250,7 +251,8 @@ class PDFCacheService:
         
         Args:
             file_hash: SHA-256 hash of PDF content
-            db_session: Async database session
+            client: Optional cache backend client (reserved for L3 cache)
+            db_session: Optional DB session (legacy compatibility)
             
         Returns:
             KnowledgeBase if cached, None otherwise
@@ -265,24 +267,39 @@ class PDFCacheService:
             logger.info(f"PDF KB L2 cache HIT: {file_hash[:16]}...")
             return KnowledgeBase(**cached_dict)
         
-        # L3: Check Convex
+        # L3: Check persistent cache table (feature-flagged)
         if not settings.enable_convex_cache:
             # Explicitly disabled
             logger.info(f"PDF KB L3 cache lookup DISABLED (feature flag): {file_hash[:16]}...")
             return None
 
-        # TODO: Implement Convex lookup when schema is ready
-        # result = await db_session.execute(...)
-        cache_entry = None
-        
-        if cache_entry:
-            logger.info(f"PDF KB L3 cache HIT: {file_hash[:16]}... (populating L2)")
-            kb = KnowledgeBase(**cache_entry.knowledge_base)
-            
-            # Populate L2 Redis for faster future access
-            pdf_kb_cache.set(cache_key, cache_entry.knowledge_base, skip_l1=True)
-            
-            return kb
+        if db_session is None:
+            logger.debug(f"PDF KB L3 lookup skipped (no db_session): {file_hash[:16]}...")
+            return None
+
+        try:
+            result = await db_session.execute(
+                text(
+                    """
+                    SELECT knowledge_base
+                    FROM pdf_cache
+                    WHERE file_hash = :file_hash
+                    LIMIT 1
+                    """
+                ),
+                {"file_hash": file_hash},
+            )
+            row = result.fetchone()
+            if row and row[0]:
+                kb_payload = row[0]
+                if isinstance(kb_payload, str):
+                    kb_payload = json.loads(kb_payload)
+
+                logger.info(f"PDF KB L3 cache HIT: {file_hash[:16]}... (populating L2)")
+                pdf_kb_cache.set(cache_key, kb_payload, skip_l1=True)
+                return KnowledgeBase(**kb_payload)
+        except Exception as e:
+            logger.warning(f"PDF KB L3 cache lookup failed: {e}")
         
         logger.info(f"PDF KB cache MISS: {file_hash[:16]}...")
         return None
@@ -292,7 +309,8 @@ class PDFCacheService:
         file_hash: str,
         r2_key: str,
         knowledge_base: KnowledgeBase,
-        client: Any,
+        client: Any = None,
+        db_session: Any = None,
         original_filename: Optional[str] = None,
         file_size_bytes: Optional[int] = None,
         processing_time_ms: Optional[int] = None,
@@ -304,7 +322,8 @@ class PDFCacheService:
             file_hash: SHA-256 hash of PDF content
             r2_key: R2 storage key for the file
             knowledge_base: Extracted KnowledgeBase
-            db_session: Async database session
+            client: Optional cache backend client (reserved for L3 cache)
+            db_session: Optional DB session (legacy compatibility)
             original_filename: Original filename (optional)
             file_size_bytes: File size in bytes (optional)
             processing_time_ms: Processing time (optional)
@@ -313,15 +332,67 @@ class PDFCacheService:
         
         kb_dict = knowledge_base.model_dump()
         
-        # Save to L3 (Convex)
+        # Save to L3 (persistent DB table)
         if not settings.enable_convex_cache:
             logger.info("PDF KB L3 cache save DISABLED (feature flag)")
         else:
-            # TODO: Implement Convex mutation to save cache
-            # cache_entry = PDFCache(...)
-            # db_session.add(cache_entry)
-            # await db_session.commit()
-            pass
+            if db_session is None:
+                logger.debug(f"PDF KB L3 save skipped (no db_session): {file_hash[:16]}...")
+            else:
+                try:
+                    await db_session.execute(
+                        text(
+                            """
+                            INSERT INTO pdf_cache (
+                                file_hash,
+                                created_at,
+                                original_filename,
+                                r2_key,
+                                knowledge_base,
+                                sections_count,
+                                file_size_bytes,
+                                processing_time_ms,
+                                model_version
+                            )
+                            VALUES (
+                                :file_hash,
+                                :created_at,
+                                :original_filename,
+                                :r2_key,
+                                CAST(:knowledge_base AS JSONB),
+                                :sections_count,
+                                :file_size_bytes,
+                                :processing_time_ms,
+                                :model_version
+                            )
+                            ON CONFLICT (file_hash)
+                            DO UPDATE SET
+                                created_at = EXCLUDED.created_at,
+                                original_filename = EXCLUDED.original_filename,
+                                r2_key = EXCLUDED.r2_key,
+                                knowledge_base = EXCLUDED.knowledge_base,
+                                sections_count = EXCLUDED.sections_count,
+                                file_size_bytes = EXCLUDED.file_size_bytes,
+                                processing_time_ms = EXCLUDED.processing_time_ms,
+                                model_version = EXCLUDED.model_version
+                            """
+                        ),
+                        {
+                            "file_hash": file_hash,
+                            "created_at": datetime.utcnow(),
+                            "original_filename": original_filename,
+                            "r2_key": r2_key,
+                            "knowledge_base": json.dumps(kb_dict, default=str),
+                            "sections_count": len(kb_dict.get("sections", [])),
+                            "file_size_bytes": file_size_bytes,
+                            "processing_time_ms": processing_time_ms,
+                            "model_version": settings.model_flash,
+                        },
+                    )
+                    await db_session.commit()
+                except Exception as e:
+                    await db_session.rollback()
+                    logger.warning(f"PDF KB L3 cache save failed: {e}")
         
         # Also populate L2 (Redis) for faster future access
         pdf_kb_cache.set(file_hash, kb_dict, skip_l1=True)
@@ -329,15 +400,36 @@ class PDFCacheService:
         logger.info(f"Cached KnowledgeBase (L2+L3) for hash: {file_hash[:16]}...")
     
     @staticmethod
-    async def exists(file_hash: str, client: Any) -> bool:
+    async def exists(
+        file_hash: str,
+        client: Any = None,
+        db_session: Any = None,
+    ) -> bool:
         """Check if a file hash exists in cache."""
         if not settings.enable_convex_cache:
             logger.debug(f"PDF KB L3 cache existence check DISABLED (feature flag): {file_hash[:16]}...")
             return False
 
-        # TODO: Implement Convex existence check
-        # result = await db_session.execute(...)
-        return False
+        if db_session is None:
+            logger.debug(f"PDF KB L3 existence check skipped (no db_session): {file_hash[:16]}...")
+            return False
+
+        try:
+            result = await db_session.execute(
+                text(
+                    """
+                    SELECT 1
+                    FROM pdf_cache
+                    WHERE file_hash = :file_hash
+                    LIMIT 1
+                    """
+                ),
+                {"file_hash": file_hash},
+            )
+            return result.fetchone() is not None
+        except Exception as e:
+            logger.warning(f"PDF KB L3 cache existence check failed: {e}")
+            return False
 
 
 # Global singleton instances

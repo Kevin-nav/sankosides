@@ -54,7 +54,7 @@ export const getProjects = query({
     handler: async (ctx, args) => {
         return await ctx.db
             .query("projects")
-            .withIndex("by_user_id", (q) => q.eq("userId", args.userId))
+            .withIndex("by_user_updated_at", (q) => q.eq("userId", args.userId))
             .order("desc")
             .collect();
     }

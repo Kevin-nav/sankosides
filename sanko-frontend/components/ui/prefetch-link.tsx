@@ -64,8 +64,6 @@ export function PrefetchLink({
 // Pre-defined prefetch configurations for common routes
 // NOTE: With Convex, most data is automatically cached/synced client-side.
 // Only add URLs here for non-Convex API endpoints that benefit from prefetching.
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-
 export const PREFETCH_CONFIGS: Record<string, string[]> = {
     // templates: Previously fetched from backend, now served directly from Convex.
     // Convex queries use WebSocket subscriptions and don't need prefetch.

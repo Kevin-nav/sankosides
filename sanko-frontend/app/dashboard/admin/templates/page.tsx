@@ -9,9 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Loader2, Palette, Save, Plus, Eye, Trash2 } from "lucide-react";
+import { Loader2, Palette, Save, Plus, Eye } from "lucide-react";
 import { templateApi, Template, Theme, Palette as PaletteType } from "@/lib/templates";
-import { api } from "@/lib/api-client";
 
 interface ColorEditorProps {
     colors: Record<string, string>;
@@ -64,9 +63,8 @@ export default function AdminTemplatesPage() {
     const { loading: authLoading } = useAuth();
     const [templates, setTemplates] = useState<Template[]>([]);
     const [palettes, setPalettes] = useState<PaletteType[]>([]);
-    const [themes, setThemes] = useState<Theme[]>([]);
+    const [, setThemes] = useState<Theme[]>([]);
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState("palettes");
 
     // Editor State
     const [editingPalette, setEditingPalette] = useState<PaletteType | null>(null);
@@ -152,7 +150,7 @@ export default function AdminTemplatesPage() {
             </div>
 
             {/* Tabs */}
-            <Tabs defaultValue="palettes" className="space-y-6" onValueChange={setActiveTab}>
+            <Tabs defaultValue="palettes" className="space-y-6">
                 <TabsList className="bg-neutral-900 border border-neutral-800">
                     <TabsTrigger value="palettes" className="data-[state=active]:bg-neutral-800 data-[state=active]:text-white">
                         <Palette className="mr-2 h-4 w-4" />

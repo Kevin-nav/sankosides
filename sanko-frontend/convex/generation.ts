@@ -89,7 +89,16 @@ export const updateProgress = mutation({
             throw new Error(`No generation progress found for session: ${args.sessionId}`);
         }
 
-        const patch: any = {
+        const patch: {
+            currentStep: string;
+            stepProgress: number;
+            updatedAt: number;
+            currentSlideIndex?: number;
+            totalSlides?: number;
+            message?: string;
+            blueprint?: unknown;
+            clarificationStatus?: string;
+        } = {
             currentStep: args.currentStep,
             stepProgress: args.stepProgress,
             updatedAt: Date.now(),

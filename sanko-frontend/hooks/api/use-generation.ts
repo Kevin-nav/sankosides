@@ -9,7 +9,9 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "./keys";
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+type JsonPrimitive = string | number | boolean | null;
+type JsonValue = JsonPrimitive | JsonObject | JsonValue[];
+type JsonObject = { [key: string]: JsonValue };
 
 // Types
 export interface SessionStatus {
@@ -18,9 +20,9 @@ export interface SessionStatus {
     current_stage: string;
     slides_completed: number;
     total_slides: number;
-    order_form?: Record<string, any>;
-    skeleton?: Record<string, any>;
-    generated_slides?: any[];
+    order_form?: JsonObject;
+    skeleton?: JsonObject;
+    generated_slides?: JsonObject[];
     qa_score?: number;
     error?: string;
 }
@@ -34,9 +36,9 @@ export interface ClarifyResponse {
     session_id: string;
     complete: boolean;
     question?: string;
-    order_form?: Record<string, any>;
+    order_form?: JsonObject;
     needs_confirmation: boolean;
-    summary?: Record<string, any>;
+    summary?: JsonObject;
     message?: string;
 }
 
@@ -156,7 +158,7 @@ export function useApproveOutline(sessionId: string | null) {
     const queryClient = useQueryClient();
 
     return useMutation({
-        mutationFn: async (modifications?: { modified_skeleton?: any }) => {
+        mutationFn: async (modifications?: { modified_skeleton?: JsonObject }) => {
             const response = await fetch(`/api/generate/blueprint/${sessionId}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },

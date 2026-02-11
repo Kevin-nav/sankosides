@@ -34,6 +34,14 @@ export function AuthForm({ mode }: AuthFormProps) {
 
     const router = useRouter();
     const { loginWithGoogle, loginWithEmail, registerWithEmail } = useAuth();
+    const getErrorMessage = (err: unknown, fallback: string) => {
+        if (typeof err === "object" && err !== null) {
+            const maybeErr = err as { message?: string; code?: string };
+            if (maybeErr.message) return maybeErr.message;
+            if (maybeErr.code === "auth/popup-closed-by-user") return "";
+        }
+        return fallback;
+    };
 
     const calculateStrength = (pass: string) => {
         let score = 0;
@@ -67,8 +75,8 @@ export function AuthForm({ mode }: AuthFormProps) {
                 await registerWithEmail(email, password);
             }
             router.push("/dashboard");
-        } catch (err: any) {
-            setError(err.message || "An error occurred");
+        } catch (err: unknown) {
+            setError(getErrorMessage(err, "An error occurred"));
         } finally {
             setIsLoading(false);
         }
@@ -80,11 +88,11 @@ export function AuthForm({ mode }: AuthFormProps) {
         try {
             await loginWithGoogle();
             router.push("/dashboard");
-        } catch (err: any) {
-            if (err.code === 'auth/popup-closed-by-user') {
+        } catch (err: unknown) {
+            if (typeof err === "object" && err !== null && (err as { code?: string }).code === "auth/popup-closed-by-user") {
                 setError(null);
             } else {
-                setError(err.message || "Google sign-in failed");
+                setError(getErrorMessage(err, "Google sign-in failed"));
             }
         } finally {
             setIsLoading(false);
@@ -225,9 +233,9 @@ export function AuthForm({ mode }: AuthFormProps) {
 
                 <div className="text-center text-sm text-neutral-400">
                     {mode === "login" ? "Don't have an account? " : "Already have an account? "}
-                    <a href={mode === "login" ? "/register" : "/login"} className="text-emerald-500 hover:underline hover:text-emerald-400 font-medium">
+                    <Link href={mode === "login" ? "/register" : "/login"} className="text-emerald-500 hover:underline hover:text-emerald-400 font-medium">
                         {mode === "login" ? "Sign up" : "Sign in"}
-                    </a>
+                    </Link>
                 </div>
             </div>
         </div>

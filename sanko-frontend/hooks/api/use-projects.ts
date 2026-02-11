@@ -11,11 +11,12 @@ import { queryKeys } from "./keys";
 interface Project {
     id: string;
     title: string;
+    mode: "replica" | "synthesis" | "research";
     description?: string;
     thumbnailUrl?: string;
     status: string;
     sessionId?: string;
-    slidesData?: any;
+    slidesData?: Record<string, unknown> | unknown[];
     createdAt: string;
     updatedAt: string;
 }

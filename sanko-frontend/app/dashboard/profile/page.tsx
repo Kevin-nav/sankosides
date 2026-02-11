@@ -17,75 +17,46 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, School, Check, GraduationCap, Building2, BookOpen, Info } from "lucide-react";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useUniversityHierarchy } from "@/hooks/convex";
 import { useUpdateProfile } from "@/hooks/api";
 
-// Types for university hierarchy (from single API call)
-interface DepartmentHierarchy {
-    departmentId: string;
-    name: string;
-    isStem: boolean;
-}
-
-interface FacultyHierarchy {
-    facultyId: string;
-    name: string;
-    shortName: string;
-    departments: DepartmentHierarchy[];
-}
-
-interface UniversityHierarchy {
-    universityId: string;
-    name: string;
-    shortName: string;
-    country: string;
-    defaultCitationStyle: string;
-    spellingVariant: string;
-    unitSystem: string;
-    faculties: FacultyHierarchy[];
-}
-
 export default function ProfilePage() {
     const { user, convexUser, loading } = useAuth();
+    const profile = convexUser?.universityProfile as {
+        universityId?: string;
+        facultyId?: string;
+        departmentId?: string;
+        academicLevel?: string;
+        academicYear?: number;
+    } | undefined;
 
     // Form states
-    const [displayName, setDisplayName] = useState("");
+    const [displayNameOverride, setDisplayNameOverride] = useState<string | null>(null);
 
     // Convex hook - direct query for university hierarchy
-    const hierarchy = useUniversityHierarchy() ?? [];
-    const loadingHierarchy = hierarchy === undefined;
+    const rawHierarchy = useUniversityHierarchy();
+    const hierarchy = useMemo(() => rawHierarchy ?? [], [rawHierarchy]);
+    const loadingHierarchy = rawHierarchy === undefined;
     const updateProfile = useUpdateProfile();
 
     // Selection state
-    const [selectedUniversity, setSelectedUniversity] = useState<string>("");
-    const [selectedFaculty, setSelectedFaculty] = useState<string>("");
-    const [selectedDepartment, setSelectedDepartment] = useState<string>("");
-    const [selectedAcademicLevel, setSelectedAcademicLevel] = useState<string>("");
-    const [selectedAcademicYear, setSelectedAcademicYear] = useState<string>("");
+    const [selectedUniversityOverride, setSelectedUniversityOverride] = useState<string | null>(null);
+    const [selectedFacultyOverride, setSelectedFacultyOverride] = useState<string | null>(null);
+    const [selectedDepartmentOverride, setSelectedDepartmentOverride] = useState<string | null>(null);
+    const [selectedAcademicLevelOverride, setSelectedAcademicLevelOverride] = useState<string | null>(null);
+    const [selectedAcademicYearOverride, setSelectedAcademicYearOverride] = useState<string | null>(null);
+
+    const displayName = displayNameOverride ?? convexUser?.displayName ?? "";
+    const selectedUniversity = selectedUniversityOverride ?? profile?.universityId ?? "";
+    const selectedFaculty = selectedFacultyOverride ?? profile?.facultyId ?? "";
+    const selectedDepartment = selectedDepartmentOverride ?? profile?.departmentId ?? "";
+    const selectedAcademicLevel = selectedAcademicLevelOverride ?? profile?.academicLevel ?? "";
+    const selectedAcademicYear = selectedAcademicYearOverride ?? (profile?.academicYear ? String(profile.academicYear) : "");
 
     // Success state for UI feedback
     const [profileSaved, setProfileSaved] = useState(false);
     const [academicSaved, setAcademicSaved] = useState(false);
-
-    // Initialize form values from convexUser
-    useEffect(() => {
-        if (convexUser) {
-            setDisplayName(convexUser.displayName || "");
-            const profile = convexUser.universityProfile as {
-                universityId?: string;
-                facultyId?: string;
-                departmentId?: string;
-                academicLevel?: string;
-                academicYear?: number;
-            } | undefined;
-            if (profile?.universityId) setSelectedUniversity(profile.universityId);
-            if (profile?.facultyId) setSelectedFaculty(profile.facultyId);
-            if (profile?.departmentId) setSelectedDepartment(profile.departmentId);
-            if (profile?.academicLevel) setSelectedAcademicLevel(profile.academicLevel);
-            if (profile?.academicYear) setSelectedAcademicYear(String(profile.academicYear));
-        }
-    }, [convexUser]);
 
     // Derived data from hierarchy (no additional fetches needed!)
     const selectedUniversityData = useMemo(() =>
@@ -114,14 +85,14 @@ export default function ProfilePage() {
     );
 
     const handleUniversityChange = (value: string) => {
-        setSelectedUniversity(value);
-        setSelectedFaculty("");
-        setSelectedDepartment("");
+        setSelectedUniversityOverride(value);
+        setSelectedFacultyOverride("");
+        setSelectedDepartmentOverride("");
     };
 
     const handleFacultyChange = (value: string) => {
-        setSelectedFaculty(value);
-        setSelectedDepartment("");
+        setSelectedFacultyOverride(value);
+        setSelectedDepartmentOverride("");
     };
 
     const handleSaveProfile = () => {
@@ -233,7 +204,7 @@ export default function ProfilePage() {
                                 <Label>Display Name</Label>
                                 <Input
                                     value={displayName}
-                                    onChange={(e) => setDisplayName(e.target.value)}
+                                    onChange={(e) => setDisplayNameOverride(e.target.value)}
                                     placeholder="Your display name"
                                 />
                             </div>
@@ -333,7 +304,7 @@ export default function ProfilePage() {
                                         <BookOpen className="h-4 w-4 text-muted-foreground" />
                                         Department
                                     </Label>
-                                    <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
+                                    <Select value={selectedDepartment} onValueChange={setSelectedDepartmentOverride}>
                                         <SelectTrigger className="w-full">
                                             <SelectValue placeholder="Select your department" />
                                         </SelectTrigger>
@@ -353,7 +324,7 @@ export default function ProfilePage() {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <Label>Academic Level</Label>
-                                    <Select value={selectedAcademicLevel} onValueChange={setSelectedAcademicLevel}>
+                                    <Select value={selectedAcademicLevel} onValueChange={setSelectedAcademicLevelOverride}>
                                         <SelectTrigger className="w-full">
                                             <SelectValue placeholder="Select level" />
                                         </SelectTrigger>
@@ -369,7 +340,7 @@ export default function ProfilePage() {
                                 {selectedAcademicLevel === "undergraduate" && (
                                     <div className="space-y-2">
                                         <Label>Academic Year</Label>
-                                        <Select value={selectedAcademicYear} onValueChange={setSelectedAcademicYear}>
+                                        <Select value={selectedAcademicYear} onValueChange={setSelectedAcademicYearOverride}>
                                             <SelectTrigger className="w-full">
                                                 <SelectValue placeholder="Select year" />
                                             </SelectTrigger>

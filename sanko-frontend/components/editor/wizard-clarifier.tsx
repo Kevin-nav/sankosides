@@ -162,6 +162,8 @@ export function WizardClarifier({ projectId, mode, onComplete }: WizardClarifier
                     setPhase("clarify");
                     if (data.next_question) {
                         setCurrentQuestion(data.next_question);
+                    } else {
+                        startAIClarification(data.session_id);
                     }
                 }
             } else {
@@ -196,6 +198,7 @@ export function WizardClarifier({ projectId, mode, onComplete }: WizardClarifier
 
         try {
             const token = await user?.getIdToken();
+            const fileHashes = getReadyHashes();
             const res = await fetch("/api/generate/clarify/stream", {
                 method: "POST",
                 headers: {
@@ -205,7 +208,8 @@ export function WizardClarifier({ projectId, mode, onComplete }: WizardClarifier
                 body: JSON.stringify({
                     session_id: sessionId,
                     answer: finalAnswer,
-                    field_key: currentQuestion.fieldKey
+                    field_key: currentQuestion.fieldKey,
+                    file_hashes: fileHashes.length > 0 ? fileHashes : undefined,
                 })
             });
 
@@ -253,7 +257,7 @@ export function WizardClarifier({ projectId, mode, onComplete }: WizardClarifier
                                     allowCustom: data.allow_custom ?? true,
                                     allowMultiple: data.allow_multiple ?? false
                                 });
-                            } else if (eventType === "needs_confirmation" || eventType === "done") {
+                            } else if (eventType === "needs_confirmation" || (eventType === "done" && data.complete)) {
                                 // All questions answered, show summary
                                 setCurrentQuestion(null);
                                 setPhase("summary");
@@ -755,13 +759,15 @@ export function WizardClarifier({ projectId, mode, onComplete }: WizardClarifier
     );
 
     // Helper function to start AI clarification
-    async function startAIClarification() {
-        if (!sessionId) return;
+    async function startAIClarification(overrideSessionId?: string) {
+        const activeSessionId = overrideSessionId || sessionId;
+        if (!activeSessionId) return;
 
         setIsLoading(true);
 
         try {
             const token = await user?.getIdToken();
+            const fileHashes = getReadyHashes();
             const res = await fetch("/api/generate/clarify/stream", {
                 method: "POST",
                 headers: {
@@ -769,9 +775,10 @@ export function WizardClarifier({ projectId, mode, onComplete }: WizardClarifier
                     "Content-Type": "application/json"
                 },
                 body: JSON.stringify({
-                    session_id: sessionId,
+                    session_id: activeSessionId,
                     wizard_data: collectedData,
-                    request_next_question: true
+                    request_next_question: true,
+                    file_hashes: fileHashes.length > 0 ? fileHashes : undefined,
                 })
             });
 
@@ -818,7 +825,7 @@ export function WizardClarifier({ projectId, mode, onComplete }: WizardClarifier
                                     allowCustom: data.allow_custom ?? true,
                                     allowMultiple: data.allow_multiple ?? false
                                 });
-                            } else if (eventType === "needs_confirmation" || eventType === "done") {
+                            } else if (eventType === "needs_confirmation" || (eventType === "done" && data.complete)) {
                                 // No more questions needed, go to summary
                                 setCurrentQuestion(null);
                                 setPhase("summary");

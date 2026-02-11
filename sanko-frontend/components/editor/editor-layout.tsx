@@ -5,15 +5,24 @@ import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Share2, Download } from "lucide-react";
 import Link from "next/link";
-import { cn } from "@/lib/utils";
 
 interface EditorLayoutProps {
     children: ReactNode;
     sidebar: ReactNode;
     title?: string;
+    status?: string;
 }
 
-export function EditorLayout({ children, sidebar, title = "Untitled Presentation" }: EditorLayoutProps) {
+export function EditorLayout({
+    children,
+    sidebar,
+    title = "Untitled Presentation",
+    status = "draft",
+}: EditorLayoutProps) {
+    const statusLabel = status === "completed"
+        ? "Ready"
+        : status.charAt(0).toUpperCase() + status.slice(1);
+
     return (
         <div className="flex h-screen w-full flex-col bg-black text-white overflow-hidden font-sans selection:bg-emerald-500/30">
             {/* Top Bar */}
@@ -27,7 +36,7 @@ export function EditorLayout({ children, sidebar, title = "Untitled Presentation
                     <div className="h-6 w-[1px] bg-white/10" />
                     <h1 className="text-sm font-semibold text-neutral-200 tracking-wide">{title}</h1>
                     <span className="rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-medium text-emerald-400 border border-emerald-500/20">
-                        Draft
+                        {statusLabel}
                     </span>
                 </div>
 

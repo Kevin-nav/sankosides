@@ -67,11 +67,15 @@ interface MetricsSummary {
     total_thinking_tokens: number;
     total_duration_ms: number;
     total_cost_usd: number;
-    agents: Record<string, any>;
+    agents: Record<string, {
+        status?: string;
+        model?: string;
+        total_tokens?: number;
+    }>;
 }
 
 export function PlaygroundWorkspace() {
-    const { user, convexUserId } = useAuth();
+    const { convexUserId } = useAuth();
     const createProject = useCreateProject();
 
     // Configuration State
@@ -258,7 +262,7 @@ export function PlaygroundWorkspace() {
         setIsGenerating(true);
     };
 
-    const handleGenerationComplete = (result: any) => {
+    const handleGenerationComplete = () => {
         setIsGenerating(false);
         setIsCompleted(true);
     };
@@ -463,7 +467,9 @@ export function PlaygroundWorkspace() {
                             </div>
                             <div className="flex items-center gap-1.5">
                                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                <span className="text-[10px] font-mono text-neutral-500">CONN_EST</span>
+                                <span className="text-[10px] font-mono text-neutral-500">
+                                    {activeAgent ? `AGENT: ${activeAgent}` : "CONN_EST"}
+                                </span>
                             </div>
                         </div>
 
@@ -481,7 +487,7 @@ export function PlaygroundWorkspace() {
                                     {currentThinking ? (
                                         <div className="whitespace-pre-wrap animate-pulse-glow">{currentThinking}</div>
                                     ) : (
-                                        <span className="text-indigo-500/40 italic">// Awaiting neural activation...</span>
+                                        <span className="text-indigo-500/40 italic">{"// Awaiting neural activation..."}</span>
                                     )}
                                 </div>
                             </div>

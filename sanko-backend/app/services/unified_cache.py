@@ -259,3 +259,12 @@ pdf_kb_cache = SharedCache(
     l1_ttl=120,
     l2_ttl=86400,
 )
+
+# Layout Presets: Mostly static but admin-editable
+# L1: 5 min, L2: 30 min
+layout_cache = SharedCache(
+    namespace="layout_presets",
+    l1_maxsize=100,
+    l1_ttl=300,
+    l2_ttl=1800,
+)

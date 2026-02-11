@@ -103,25 +103,34 @@ class AcademicSearchTool:
             if cached:
                 logger.info(f"Cache hit for '{query}': {len(cached)} results")
                 return cached[:max_results]
+            # L2 miss -> check durable cache tier
+            cached_convex = await CitationCacheService.get_from_convex(query)
+            if cached_convex:
+                logger.info(f"Persistent cache hit for '{query}': {len(cached_convex)} results")
+                return cached_convex[:max_results]
         
         results = []
         providers_used = []
         
         # CrossRef - primary, always reliable
         if source in ["crossref", "all"]:
-            CitationCacheService.should_rate_limit("crossref")  # Enforce rate limit
-            crossref_results = await self._search_crossref(query, max_results)
-            results.extend(crossref_results)
-            providers_used.append("crossref")
-            logger.debug(f"CrossRef returned {len(crossref_results)} results for '{query}'")
+            if await CitationCacheService.should_rate_limit("crossref"):
+                logger.debug("Skipping CrossRef: provider is temporarily rate-limited")
+            else:
+                crossref_results = await self._search_crossref(query, max_results)
+                results.extend(crossref_results)
+                providers_used.append("crossref")
+                logger.debug(f"CrossRef returned {len(crossref_results)} results for '{query}'")
         
         # OpenAlex - excellent coverage, no auth needed
         if source in ["openalex", "all"]:
-            CitationCacheService.should_rate_limit("openalex")  # Enforce rate limit
-            openalex_results = await self._search_openalex(query, max_results)
-            results.extend(openalex_results)
-            providers_used.append("openalex")
-            logger.debug(f"OpenAlex returned {len(openalex_results)} results for '{query}'")
+            if await CitationCacheService.should_rate_limit("openalex"):
+                logger.debug("Skipping OpenAlex: provider is temporarily rate-limited")
+            else:
+                openalex_results = await self._search_openalex(query, max_results)
+                results.extend(openalex_results)
+                providers_used.append("openalex")
+                logger.debug(f"OpenAlex returned {len(openalex_results)} results for '{query}'")
         
         # Semantic Scholar - only if we have API key or explicitly requested
         if source in ["semantic_scholar", "all"]:
@@ -129,11 +138,13 @@ class AcademicSearchTool:
             if source == "all" and not self._ss_api_key:
                 logger.debug("Skipping Semantic Scholar (no API key configured)")
             else:
-                CitationCacheService.should_rate_limit("semantic_scholar")  # Enforce 1s delay
-                ss_results = await self._search_semantic_scholar(query, max_results)
-                results.extend(ss_results)
-                providers_used.append("semantic_scholar")
-                logger.debug(f"Semantic Scholar returned {len(ss_results)} results for '{query}'")
+                if await CitationCacheService.should_rate_limit("semantic_scholar"):
+                    logger.debug("Skipping Semantic Scholar: provider is temporarily rate-limited")
+                else:
+                    ss_results = await self._search_semantic_scholar(query, max_results)
+                    results.extend(ss_results)
+                    providers_used.append("semantic_scholar")
+                    logger.debug(f"Semantic Scholar returned {len(ss_results)} results for '{query}'")
         
         # Sort by relevance and dedupe by DOI
         seen_dois = set()
@@ -150,6 +161,9 @@ class AcademicSearchTool:
         # Store in cache (async, non-blocking)
         if use_cache and final_results:
             await CitationCacheService.store_in_redis(query, final_results)
+            # Best effort durable cache write to reduce cold misses across restarts
+            provider_for_cache = providers_used[0] if providers_used else source
+            await CitationCacheService.store_in_convex(query, final_results, provider_for_cache)
         
         logger.info(f"Academic search for '{query}': {len(final_results)} unique results from {providers_used}")
         return final_results

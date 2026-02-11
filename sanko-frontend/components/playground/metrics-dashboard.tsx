@@ -1,8 +1,6 @@
 "use client";
 
-import { Loader2, Brain, Zap, Activity, DollarSign, Cpu } from "lucide-react";
-import { Card } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
+import { Loader2, Brain, Zap, Activity, Cpu } from "lucide-react";
 
 interface MetricsSummary {
     total_agents: number;
@@ -14,7 +12,25 @@ interface MetricsSummary {
     total_thinking_tokens: number;
     total_duration_ms: number;
     total_cost_usd: number;
-    agents: Record<string, any>;
+    agents: Record<string, {
+        status?: string;
+        model?: string;
+        total_tokens?: number;
+    }>;
+}
+
+interface MetricCardProps {
+    label: string;
+    value: string;
+    subValue: string;
+    icon: React.ReactNode;
+    trend: "up" | "neutral";
+}
+
+interface StatMiniProps {
+    label: string;
+    value: number;
+    color: string;
 }
 
 export function MetricsDashboard({ metrics }: { metrics: MetricsSummary | null }) {
@@ -86,7 +102,7 @@ export function MetricsDashboard({ metrics }: { metrics: MetricsSummary | null }
                     <Cpu className="w-3 h-3" /> Agent Swarm
                 </h3>
                 <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 scrollbar-dark">
-                    {Object.entries(metrics.agents).map(([name, data]: [string, any]) => (
+                    {Object.entries(metrics.agents).map(([name, data]) => (
                         <div key={name} className="glass p-3 rounded-lg hover:bg-white/5 transition-all group border border-transparent hover:border-white/10">
                             <div className="flex justify-between items-start mb-2">
                                 <span className="text-xs font-medium text-neutral-200 capitalize group-hover:text-emerald-400 transition-colors">
@@ -99,7 +115,7 @@ export function MetricsDashboard({ metrics }: { metrics: MetricsSummary | null }
                             <div className="flex justify-between items-end text-[10px] font-mono text-neutral-500">
                                 <span>{data.model}</span>
                                 <span className="text-neutral-400 group-hover:text-neutral-200">
-                                    {data.total_tokens.toLocaleString()}t
+                                    {(data.total_tokens ?? 0).toLocaleString()}t
                                 </span>
                             </div>
                         </div>
@@ -115,9 +131,9 @@ export function MetricsDashboard({ metrics }: { metrics: MetricsSummary | null }
     );
 }
 
-function MetricCard({ label, value, subValue, icon, trend }: any) {
+function MetricCard({ label, value, subValue, icon, trend }: MetricCardProps) {
     return (
-        <div className="glass-card p-4 relative overflow-hidden group">
+        <div className={`glass-card p-4 relative overflow-hidden group ${trend === "up" ? "border-emerald-500/20" : "border-neutral-800/40"}`}>
             <div className="absolute top-0 right-0 p-3 opacity-50 group-hover:opacity-100 transition-opacity">
                 {icon}
             </div>
@@ -131,7 +147,7 @@ function MetricCard({ label, value, subValue, icon, trend }: any) {
     );
 }
 
-function StatMini({ label, value, color }: any) {
+function StatMini({ label, value, color }: StatMiniProps) {
     return (
         <div className="text-center">
             <div className="text-[9px] text-neutral-600 uppercase mb-0.5">{label}</div>

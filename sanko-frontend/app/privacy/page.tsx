@@ -16,7 +16,7 @@ export default function PrivacyPage() {
                     <section>
                         <h2 className="text-xl font-bold text-white mb-4">1. Introduction</h2>
                         <p>
-                            SankoSlides ("we", "our", or "us") respects your privacy. This Privacy Policy explains how we collect, use, and protect your information when you use our services.
+                            SankoSlides (&quot;we&quot;, &quot;our&quot;, or &quot;us&quot;) respects your privacy. This Privacy Policy explains how we collect, use, and protect your information when you use our services.
                         </p>
                     </section>
 

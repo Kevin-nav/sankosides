@@ -10,7 +10,14 @@ export const runtime = 'nodejs';
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
-        const { session_id, answer, file_hashes } = body;
+        const {
+            session_id,
+            answer,
+            file_hashes,
+            wizard_data,
+            request_next_question,
+            field_key,
+        } = body;
 
         if (!session_id) {
             return NextResponse.json(
@@ -30,6 +37,9 @@ export async function POST(request: NextRequest) {
                 // Ensure message is never undefined - backend requires this field
                 message: answer || 'Continue',
                 file_hashes: file_hashes || undefined,
+                wizard_data: wizard_data || undefined,
+                request_next_question: request_next_question || undefined,
+                field_key: field_key || undefined,
             }),
         });
 
@@ -59,6 +69,21 @@ export async function POST(request: NextRequest) {
                         encoder.encode(`event: needs_confirmation\ndata: ${JSON.stringify({
                             summary: data.summary,
                             message: data.message
+                        })}\n\n`)
+                    );
+                }
+
+                // Wizard flow expects a structured `question` event.
+                // Backend currently returns plain question text, so we adapt it here.
+                if (!data.complete && !data.needs_confirmation && data.question) {
+                    controller.enqueue(
+                        encoder.encode(`event: question\ndata: ${JSON.stringify({
+                            id: `${session_id}-${Date.now()}`,
+                            question_text: data.question,
+                            field_key: field_key || "special_requests",
+                            suggested_options: [],
+                            allow_custom: true,
+                            allow_multiple: false,
                         })}\n\n`)
                     );
                 }
