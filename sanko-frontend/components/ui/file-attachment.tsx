@@ -375,9 +375,9 @@ export function useFileUpload() {
 
                 const data = await response.json();
                 const uploadedFile = data.files[0];
+                const parsed = parseCacheHitType(uploadedFile);
 
                 if (uploadedFile.cached) {
-                    const parsed = parseCacheHitType(uploadedFile);
                     // Already processed - immediately ready
                     setFiles(prev => prev.map(f =>
                         f.id === id ? {
@@ -389,8 +389,7 @@ export function useFileUpload() {
                             canonicalHash: parsed.canonicalHash,
                         } : f
                     ));
-                } else if (parseCacheHitType(uploadedFile).hit === "similar") {
-                    const parsed = parseCacheHitType(uploadedFile);
+                } else if (parsed.hit === "similar") {
                     // Near-duplicate match - treat as cached to avoid reprocessing.
                     setFiles(prev => prev.map(f =>
                         f.id === id ? {

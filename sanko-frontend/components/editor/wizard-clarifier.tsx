@@ -930,7 +930,10 @@ export function WizardClarifier({ projectId, mode, onComplete, initialSessionId 
                                         // Flatten selected section titles for backend (current backend expects titles).
                                         const byDoc: Record<string, string[]> = {};
                                         for (const key of selectedSectionKeys) {
-                                            const [hash, title] = key.split("::");
+                                            const sep = "::";
+                                            const idx = key.indexOf(sep);
+                                            const hash = idx >= 0 ? key.slice(0, idx) : "";
+                                            const title = idx >= 0 ? key.slice(idx + sep.length) : "";
                                             if (!hash || !title) continue;
                                             if (!byDoc[hash]) byDoc[hash] = [];
                                             byDoc[hash].push(title);
