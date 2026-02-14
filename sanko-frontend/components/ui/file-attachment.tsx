@@ -8,6 +8,37 @@ import { cn } from "@/lib/utils";
 // File status types
 type FileStatus = 'hashing' | 'uploading' | 'checking' | 'processing' | 'ready' | 'cached' | 'error';
 
+function parseCacheHitType(uploadedFile: Record<string, unknown>): { hit?: "exact" | "similar"; canonicalHash?: string } {
+    const canonicalHash =
+        typeof uploadedFile.canonical_hash === "string"
+            ? uploadedFile.canonical_hash
+            : typeof uploadedFile.canonicalHash === "string"
+                ? uploadedFile.canonicalHash
+                : undefined;
+
+    const rawType =
+        typeof uploadedFile.cache_hit_type === "string"
+            ? uploadedFile.cache_hit_type
+            : typeof uploadedFile.match_type === "string"
+                ? uploadedFile.match_type
+                : typeof uploadedFile.dedup_type === "string"
+                    ? uploadedFile.dedup_type
+                    : undefined;
+
+    const normalized = (rawType ?? "").toLowerCase();
+    if (normalized.includes("similar") || normalized.includes("near")) return { hit: "similar", canonicalHash };
+    if (normalized.includes("exact")) return { hit: "exact", canonicalHash };
+
+    if (uploadedFile.cached === true) return { hit: "exact", canonicalHash };
+    if (uploadedFile.matched === true) return { hit: "similar", canonicalHash };
+
+    // Polling responses may only include `status: completed`.
+    const status = typeof uploadedFile.status === "string" ? uploadedFile.status.toLowerCase() : "";
+    if (status === "completed") return { hit: "exact", canonicalHash };
+
+    return { canonicalHash };
+}
+
 export interface AttachedFile {
     id: string;
     file: File;
@@ -195,33 +226,6 @@ export function useFileUpload() {
 
     // Add files and start upload
     const addFiles = useCallback(async (newFiles: File[]) => {
-        const parseCacheHitType = (uploadedFile: Record<string, unknown>): { hit?: "exact" | "similar"; canonicalHash?: string } => {
-            const canonicalHash =
-                typeof uploadedFile.canonical_hash === "string"
-                    ? uploadedFile.canonical_hash
-                    : typeof uploadedFile.canonicalHash === "string"
-                        ? uploadedFile.canonicalHash
-                        : undefined;
-
-            const rawType =
-                typeof uploadedFile.cache_hit_type === "string"
-                    ? uploadedFile.cache_hit_type
-                    : typeof uploadedFile.match_type === "string"
-                        ? uploadedFile.match_type
-                        : typeof uploadedFile.dedup_type === "string"
-                            ? uploadedFile.dedup_type
-                            : undefined;
-
-            const normalized = (rawType ?? "").toLowerCase();
-            if (normalized.includes("similar") || normalized.includes("near")) return { hit: "similar", canonicalHash };
-            if (normalized.includes("exact")) return { hit: "exact", canonicalHash };
-
-            if (uploadedFile.cached === true) return { hit: "exact", canonicalHash };
-            if (uploadedFile.matched === true) return { hit: "similar", canonicalHash };
-
-            return { canonicalHash };
-        };
-
         const pollProcessingStatus = async (fileId: string, fileHash: string) => {
             const maxAttempts = 120;  // 10 minutes max (5s intervals)
             let attempts = 0;
@@ -265,13 +269,14 @@ export function useFileUpload() {
 
                     if (data.status === 'completed') {
                         stopPolling(fileId);
+                        const parsed = parseCacheHitType(data as Record<string, unknown>);
                         setFiles(prev => prev.map(f =>
                             f.id === fileId ? {
                                 ...f,
                                 status: 'cached',
                                 sectionsCount: data.sections_count,
-                                cacheHitType: data.match_type === "similar" ? "similar" : f.cacheHitType,
-                                canonicalHash: typeof data.canonical_hash === "string" ? data.canonical_hash : f.canonicalHash,
+                                cacheHitType: parsed.hit ?? f.cacheHitType,
+                                canonicalHash: parsed.canonicalHash ?? f.canonicalHash,
                             } : f
                         ));
                     } else if (data.status === 'failed') {

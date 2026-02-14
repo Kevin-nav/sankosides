@@ -161,11 +161,21 @@ export function WizardClarifier({ projectId, mode, onComplete, initialSessionId 
         }
 
         try {
+            const token = await user?.getIdToken();
             const res = await fetch("/api/generate/document-sections", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: {
+                    "Content-Type": "application/json",
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
                 body: JSON.stringify({ file_hashes: fileHashes }),
             });
+
+            if (!res.ok) {
+                const errText = await res.text().catch(() => "");
+                console.error("document-sections failed:", res.status, errText);
+                return [] as DocumentScope[];
+            }
 
             const data = await res.json().catch(() => ({}));
             const rawDocs = Array.isArray(data.documents) ? (data.documents as DocumentSectionsItem[]) : [];

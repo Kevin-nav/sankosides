@@ -2538,8 +2538,8 @@ Return a JSON object with 'slides' array containing PlannedSlide objects."""
                             doi_invalid += 1
                     except Exception as e:
                         logger.error(f"[CITATION AUDITOR] DOI validation error: {e}")
-        
-            logger.info("[CITATION AUDITOR] ====== Stage Complete ======")
+
+        logger.info("[CITATION AUDITOR] ====== Stage Complete ======")
         logger.info(
             f"[CITATION AUDITOR] Results: {verified_count} verified, "
             f"{removed_count} removed, {doi_validated} DOIs validated, {doi_invalid} invalid DOIs"

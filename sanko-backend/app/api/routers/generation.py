@@ -10,7 +10,7 @@ Supports:
 - R2 cloud storage for PDF uploads with content-hash caching
 """
 
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, UploadFile, File, Header
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any, AsyncGenerator
@@ -48,11 +48,46 @@ from app.services.storage import get_storage_service, PDFCacheService
 from app.services.convex_service import get_convex_service
 from app.clients.gemini.client import GeminiInteractionsClient
 from lxml import html as lxml_html
-from lxml import etree
 
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/generation", tags=["generation"])
+
+
+def get_current_user(authorization: Optional[str] = Header(default=None)) -> Dict[str, Any]:
+    """
+    Auth dependency for protecting endpoints that could leak cached document contents.
+
+    If Firebase is configured (settings.firebase_project_id), we verify the Bearer token.
+    Otherwise we still require a Bearer token to prevent unauthenticated enumeration.
+    """
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Missing Authorization header")
+
+    if not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="Invalid Authorization header")
+
+    token = authorization.split(" ", 1)[1].strip()
+    if not token:
+        raise HTTPException(status_code=401, detail="Invalid Authorization header")
+
+    if getattr(settings, "firebase_project_id", None):
+        try:
+            from google.auth.transport.requests import Request as GoogleRequest
+            from google.oauth2 import id_token as google_id_token
+
+            claims = google_id_token.verify_firebase_token(
+                token,
+                GoogleRequest(),
+                audience=settings.firebase_project_id,
+            )
+            return claims or {}
+        except Exception:
+            logger.warning("[AUTH] Token verification failed", exc_info=True)
+            raise HTTPException(status_code=401, detail="Invalid auth token")
+
+    # Best-effort: still gate on presence of a Bearer token.
+    return {"token": token}
 
 
 # =============================================================================
@@ -644,7 +679,10 @@ async def upload_files(files: List[UploadFile] = File(...)):
 
 
 @router.post("/document-sections", response_model=DocumentSectionsResponse)
-async def get_document_sections(request: DocumentSectionsRequest):
+async def get_document_sections(
+    request: DocumentSectionsRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
     """
     Return extracted document section structure for a list of file hashes.
 
@@ -1597,14 +1635,17 @@ async def patch_slide(session_id: str, request: PatchSlideRequest):
         )
         updated_html = _strip_markdown_code_fences(result.get("response", ""))
     except Exception as e:
-        logger.error(f"[PATCH_SLIDE] Gemini call failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to patch slide: {str(e)}")
+        logger.exception("[PATCH_SLIDE] Gemini call failed")
+        raise HTTPException(status_code=500, detail="Failed to patch slide")
 
     try:
         updated_html = sanitize_slide_html(updated_html)
     except ValueError as e:
-        logger.warning(f"[PATCH_SLIDE] Rejected patched HTML for session={session_id[:8]}... slide={request.slide_order}: {e}")
-        raise HTTPException(status_code=400, detail=f"Invalid patched HTML: {str(e)}")
+        logger.warning(
+            f"[PATCH_SLIDE] Rejected patched HTML for session={session_id[:8]}... slide={request.slide_order}: {e}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=400, detail="Invalid patched HTML")
 
     if len(updated_html.strip()) < 50:
         raise HTTPException(status_code=500, detail="Patched HTML was empty or invalid")
