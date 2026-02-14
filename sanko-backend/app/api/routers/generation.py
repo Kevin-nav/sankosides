@@ -47,6 +47,8 @@ from app.core.database import get_db, get_async_session
 from app.services.storage import get_storage_service, PDFCacheService
 from app.services.convex_service import get_convex_service
 from app.clients.gemini.client import GeminiInteractionsClient
+from lxml import html as lxml_html
+from lxml import etree
 
 logger = get_logger(__name__)
 
@@ -1427,6 +1429,113 @@ def _strip_markdown_code_fences(text: str) -> str:
     return stripped
 
 
+def sanitize_slide_html(raw_html: str) -> str:
+    """
+    Best-effort sanitizer/validator for LLM-produced slide HTML.
+
+    Policy:
+    - Strip disallowed tags: script, iframe, object, embed, noscript
+    - Strip inline event handler attributes (on*)
+    - Strip javascript: URLs
+    - Strip external resource links (http/https///) from src/href-like attrs
+    - Strip external CSS urls embedded in style attributes (url(http...))
+
+    Raises:
+        ValueError if parsing fails or the sanitized output is empty.
+    """
+    if not isinstance(raw_html, str):
+        raise ValueError("HTML must be a string")
+
+    html_in = raw_html.strip()
+    if not html_in:
+        raise ValueError("HTML is empty")
+
+    disallowed_tags = {"script", "iframe", "object", "embed", "noscript"}
+    url_attrs = {"src", "href", "xlink:href", "poster", "data"}
+
+    def _classify_url(value: str) -> str:
+        v = (value or "").strip()
+        if not v:
+            return ""
+        v_lower = v.lower()
+        if v_lower.startswith("javascript:"):
+            return "javascript"
+        if v_lower.startswith("http://") or v_lower.startswith("https://") or v_lower.startswith("//"):
+            return "external"
+        return ""
+
+    try:
+        root = lxml_html.fromstring(html_in)
+    except Exception as e:
+        raise ValueError(f"Failed to parse HTML: {e}")
+
+    # Work on a stable list because we may drop trees during iteration.
+    elements = list(root.iter())
+
+    for el in elements:
+        if not isinstance(el.tag, str):
+            continue
+
+        tag = el.tag.lower()
+        if tag in disallowed_tags:
+            el.drop_tree()
+            continue
+
+        # Remove event handler attributes and unsafe/external URLs
+        for attr in list(el.attrib.keys()):
+            attr_l = attr.lower()
+            val = el.attrib.get(attr, "")
+
+            if attr_l.startswith("on"):
+                del el.attrib[attr]
+                continue
+
+            # Remove JS or external URLs for url-like attrs
+            if attr_l in url_attrs or attr_l.endswith(":href"):
+                classification = _classify_url(val)
+                if classification in {"javascript", "external"}:
+                    del el.attrib[attr]
+                    # For elements whose whole purpose is the external resource, drop them.
+                    if tag in {"img", "source", "video", "audio", "track"} and attr_l == "src":
+                        el.drop_tree()
+                    if tag == "link" and attr_l == "href":
+                        el.drop_tree()
+                continue
+
+            # Strip external resource URLs embedded in inline styles.
+            if attr_l == "style":
+                # Basic guard: remove styles that attempt to fetch remote resources.
+                if re.search(r"url\(\s*['\"]?\s*(https?:)?//", val, flags=re.IGNORECASE):
+                    del el.attrib[attr]
+                continue
+
+    # Sanitize <style> tags for remote @import (strip those lines).
+    for style_el in root.xpath(".//style"):
+        if not isinstance(style_el.tag, str):
+            continue
+        text = style_el.text or ""
+        if not text:
+            continue
+        if re.search(r"@import\s+url\(\s*['\"]?\s*(https?:)?//", text, flags=re.IGNORECASE):
+            cleaned_lines = []
+            for line in text.splitlines():
+                if re.search(r"@import\s+url\(\s*['\"]?\s*(https?:)?//", line, flags=re.IGNORECASE):
+                    continue
+                cleaned_lines.append(line)
+            style_el.text = "\n".join(cleaned_lines)
+
+    # Final hard check: ensure disallowed tags are not present anymore.
+    for bad in disallowed_tags:
+        if root.xpath(f".//{bad}"):
+            raise ValueError(f"Disallowed tag present after sanitization: <{bad}>")
+
+    sanitized = lxml_html.tostring(root, encoding="unicode", method="html")
+    if not sanitized or not sanitized.strip():
+        raise ValueError("Sanitized HTML is empty")
+
+    return sanitized
+
+
 @router.post("/patch-slide/{session_id}", response_model=PatchSlideResponse)
 async def patch_slide(session_id: str, request: PatchSlideRequest):
     """
@@ -1489,6 +1598,12 @@ async def patch_slide(session_id: str, request: PatchSlideRequest):
     except Exception as e:
         logger.error(f"[PATCH_SLIDE] Gemini call failed: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to patch slide: {str(e)}")
+
+    try:
+        updated_html = sanitize_slide_html(updated_html)
+    except ValueError as e:
+        logger.warning(f"[PATCH_SLIDE] Rejected patched HTML for session={session_id[:8]}... slide={request.slide_order}: {e}")
+        raise HTTPException(status_code=400, detail=f"Invalid patched HTML: {str(e)}")
 
     if len(updated_html.strip()) < 50:
         raise HTTPException(status_code=500, detail="Patched HTML was empty or invalid")

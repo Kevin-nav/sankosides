@@ -125,6 +125,7 @@ export function GenerationSkeleton() {
 // Main stage transition loader
 export function StageTransitionLoader({ stage, message }: StageTransitionLoaderProps) {
     const stageInfo = stageMessages[stage];
+    const isFailed = stage === "generation_failed";
 
     return (
         <motion.div
@@ -160,31 +161,35 @@ export function StageTransitionLoader({ stage, message }: StageTransitionLoaderP
                 {/* Animated icon */}
                 <motion.div
                     className="text-5xl"
-                    animate={{
-                        y: [0, -10, 0],
-                        rotate: [0, 5, -5, 0]
-                    }}
-                    transition={{ duration: 2, repeat: Infinity }}
+                    animate={
+                        isFailed
+                            ? undefined
+                            : {
+                                y: [0, -10, 0],
+                                rotate: [0, 5, -5, 0],
+                            }
+                    }
+                    transition={isFailed ? undefined : { duration: 2, repeat: Infinity }}
                 >
                     {stageInfo.icon}
                 </motion.div>
 
                 {/* Spinner */}
-                <div className="relative w-20 h-20 mx-auto">
-                    <motion.div
-                        className="absolute inset-0 rounded-full border-2 border-neutral-800"
-                    />
-                    <motion.div
-                        className="absolute inset-0 rounded-full border-2 border-transparent border-t-emerald-500"
-                        animate={{ rotate: 360 }}
-                        transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                    />
-                    <motion.div
-                        className="absolute inset-2 rounded-full border-2 border-transparent border-t-cyan-500"
-                        animate={{ rotate: -360 }}
-                        transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
-                    />
-                </div>
+                {!isFailed && (
+                    <div className="relative w-20 h-20 mx-auto">
+                        <motion.div className="absolute inset-0 rounded-full border-2 border-neutral-800" />
+                        <motion.div
+                            className="absolute inset-0 rounded-full border-2 border-transparent border-t-emerald-500"
+                            animate={{ rotate: 360 }}
+                            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                        />
+                        <motion.div
+                            className="absolute inset-2 rounded-full border-2 border-transparent border-t-cyan-500"
+                            animate={{ rotate: -360 }}
+                            transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
+                        />
+                    </div>
+                )}
 
                 {/* Text */}
                 <div className="space-y-2">
@@ -206,16 +211,18 @@ export function StageTransitionLoader({ stage, message }: StageTransitionLoaderP
                 </div>
 
                 {/* Animated dots */}
-                <div className="flex justify-center gap-2">
-                    {[0, 1, 2].map((i) => (
-                        <motion.div
-                            key={i}
-                            className="w-2 h-2 rounded-full bg-emerald-500"
-                            animate={{ opacity: [0.3, 1, 0.3], scale: [0.8, 1, 0.8] }}
-                            transition={{ duration: 1, repeat: Infinity, delay: i * 0.2 }}
-                        />
-                    ))}
-                </div>
+                {!isFailed && (
+                    <div className="flex justify-center gap-2">
+                        {[0, 1, 2].map((i) => (
+                            <motion.div
+                                key={i}
+                                className="w-2 h-2 rounded-full bg-emerald-500"
+                                animate={{ opacity: [0.3, 1, 0.3], scale: [0.8, 1, 0.8] }}
+                                transition={{ duration: 1, repeat: Infinity, delay: i * 0.2 }}
+                            />
+                        ))}
+                    </div>
+                )}
             </div>
         </motion.div>
     );

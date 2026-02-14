@@ -10,10 +10,14 @@ export async function POST(
     try {
         const { id } = await params;
         const body = await request.json().catch(() => ({}));
+        const auth = request.headers.get("authorization");
 
         const response = await fetch(`${BACKEND_URL}/api/generation/patch-slide/${id}`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+                "Content-Type": "application/json",
+                ...(auth ? { Authorization: auth } : {}),
+            },
             body: JSON.stringify(body),
         });
 
@@ -25,4 +29,3 @@ export async function POST(
         return NextResponse.json({ detail: "Failed to connect to backend" }, { status: 503 });
     }
 }
-

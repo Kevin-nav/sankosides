@@ -6,7 +6,7 @@ and inter-agent communication.
 """
 
 from typing import Optional, List, Dict, Literal, Any
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from enum import Enum
 from datetime import datetime
 
@@ -84,6 +84,12 @@ class DocumentSection(BaseModel):
         default="",
         description="Hash of section content for traceability",
     )
+
+    @model_validator(mode="after")
+    def _validate_page_start_end(self):
+        if self.page_start is not None and self.page_end is not None and self.page_start > self.page_end:
+            raise ValueError("Invalid page range: page_start must be <= page_end")
+        return self
 
 
 class KnowledgeBase(BaseModel):

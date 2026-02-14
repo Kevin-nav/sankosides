@@ -2288,9 +2288,15 @@ Return a JSON object with 'slides' array containing PlannedSlide objects."""
         excerpt = re.sub(r"\s+", " ", excerpt)
         if len(excerpt) > 240:
             excerpt = excerpt[:240] + "..."
-        quote_hash = hashlib.sha1(excerpt.encode("utf-8", errors="ignore")).hexdigest()[:16]
-        section_id = section.section_id or ""
-        evidence_id = f"ev-{section_id or 'section'}-{quote_hash}"
+        quote_hash = hashlib.sha256(excerpt.encode("utf-8", errors="ignore")).hexdigest()[:16]
+        # Legacy KB sections may have empty section_id; generate a stable fallback.
+        raw_section_id = getattr(section, "section_id", "") or ""
+        if raw_section_id.strip():
+            section_id = raw_section_id.strip()
+        else:
+            content = (getattr(section, "content", "") or "").encode("utf-8", errors="ignore")
+            section_id = f"sec-{hashlib.sha256(content).hexdigest()[:24]}"
+        evidence_id = f"ev-{section_id}-{quote_hash}"
         return EvidenceRef(
             evidence_id=evidence_id,
             section_id=section_id,
@@ -2325,7 +2331,7 @@ Return a JSON object with 'slides' array containing PlannedSlide objects."""
                 if section:
                     evidence = self._build_evidence_ref(claim, section)
 
-            if evidence and evidence.section_id:
+            if evidence:
                 verified_refs.append(evidence)
                 kept_bullets.append(claim)
             else:

@@ -239,8 +239,8 @@ class GeminiExtractionService:
 
     def _stable_section_id(self, document_id: str, chunk_index: int, title: str, page_range: str, content: str) -> str:
         payload = f"{document_id}|{chunk_index}|{title}|{page_range}|{content[:200]}"
-        digest = hashlib.sha1(payload.encode("utf-8", errors="ignore")).hexdigest()[:16]
-        return f"sec-{digest}"
+        digest = hashlib.sha256(payload.encode("utf-8", errors="ignore")).hexdigest()
+        return f"sec-{digest[:24]}"
 
     def _normalize_section_payloads(
         self,
@@ -272,7 +272,7 @@ class GeminiExtractionService:
                 fallback_end=fallback_end,
             )
 
-            content_hash = hashlib.sha1(content.encode("utf-8", errors="ignore")).hexdigest()
+            content_hash = hashlib.sha256(content.encode("utf-8", errors="ignore")).hexdigest()
             section_id = self._stable_section_id(
                 document_id=document_id,
                 chunk_index=int(chunk["index"]),

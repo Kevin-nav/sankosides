@@ -171,6 +171,8 @@ export function EditorWorkspace({ projectId }: EditorWorkspaceProps) {
     // Bootstrap run history for legacy projects (sessionId exists but no generationRuns record).
     useEffect(() => {
         if (!project || !sessionId) return;
+        // Wait for the Convex query to resolve: `undefined` means "loading".
+        if (runBySession === undefined) return;
         if (runBootstrapRef.current.attempted) return;
 
         runBootstrapRef.current.attempted = true;
@@ -200,7 +202,7 @@ export function EditorWorkspace({ projectId }: EditorWorkspaceProps) {
         };
 
         void ensureRun();
-    }, [project, sessionId, runBySession?._id, createRun, updateProject, stage]);
+    }, [project, sessionId, runBySession, createRun, updateProject, stage]);
 
     // Persist stage changes to the active run (best effort).
     useEffect(() => {
