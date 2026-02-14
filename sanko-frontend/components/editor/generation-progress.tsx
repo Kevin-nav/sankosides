@@ -376,7 +376,7 @@ export function GenerationProgress({ sessionId, onComplete, onStageChange }: Gen
                                                     <div className="font-mono opacity-80 truncate" title={tc.result || JSON.stringify(tc.input)}>
                                                         {tc.result ? (
                                                             <span className="flex items-center gap-1">
-                                                                <span className="opacity-50">→</span> {tc.result}
+                                                                <span className="opacity-50">-&gt;</span> {tc.result}
                                                             </span>
                                                         ) : (
                                                             <span className="opacity-60">{tc.input?.query || tc.input?.url || "..."}</span>

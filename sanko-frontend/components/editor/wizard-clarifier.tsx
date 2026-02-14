@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     Upload, FileText, Check,
-    ChevronRight, Loader2, Sparkles, Lock
+    ChevronRight, Loader2, Sparkles, Lock, ArrowLeft
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/auth-provider";
 import { ChoiceQuestionCard, ChoiceOption } from "./choice-question-card";
 import { FileAttachmentBar, useFileUpload } from "@/components/ui/file-attachment";
+import { Id, useCreateRun, useUpdateProject, useRunBySession, useUpdateRun } from "@/hooks/convex";
 
 // Wizard phases
 type WizardPhase = "upload" | "scope" | "settings" | "clarify" | "summary";
@@ -20,7 +21,7 @@ interface AIQuestion {
     id: string;
     question: string;
     options: ChoiceOption[];
-    fieldKey: string;
+    fieldKey?: string | null;
     allowCustom: boolean;
     allowMultiple: boolean;
 }
@@ -36,6 +37,7 @@ interface WizardClarifierProps {
     projectId: string;
     mode: string;
     onComplete: (sessionId: string) => void;
+    initialSessionId?: string | null;
 }
 
 interface Section {
@@ -44,30 +46,77 @@ interface Section {
     preview: string;
 }
 
+interface DocumentSectionsItem {
+    file_hash: string;
+    filename?: string | null;
+    status: string;
+    sections_count?: number | null;
+    sections?: Array<{ title: string; preview: string; page_range?: string; visuals_count?: number }> | null;
+    error_message?: string | null;
+}
+
+interface DocumentScope {
+    fileHash: string;
+    filename: string;
+    status: "completed" | "queued" | "processing" | "failed" | "missing";
+    sectionsCount?: number;
+    sections: Section[];
+    error?: string;
+}
+
+function normalizeQuestion(raw: unknown, sessionId: string): AIQuestion | null {
+    if (!raw || typeof raw !== "object") return null;
+    const record = raw as Record<string, unknown>;
+    const questionText =
+        typeof record.question_text === "string"
+            ? record.question_text
+            : typeof record.question === "string"
+                ? record.question
+                : null;
+    if (!questionText) return null;
+
+    return {
+        id: typeof record.id === "string" ? record.id : `${sessionId}-q-${Date.now()}`,
+        question: questionText,
+        options: Array.isArray(record.suggested_options) ? (record.suggested_options as ChoiceOption[]) : [],
+        fieldKey: typeof record.field_key === "string" ? record.field_key : null,
+        allowCustom: typeof record.allow_custom === "boolean" ? record.allow_custom : true,
+        allowMultiple: typeof record.allow_multiple === "boolean" ? record.allow_multiple : false,
+    };
+}
+
 interface CollectedData {
     topic?: string;
     audience?: string;
     slideCount?: number | "auto";
     style?: string;
     sections?: string[];
-    [key: string]: string | number | string[] | undefined;
+    sections_by_document?: Record<string, string[]>;
+    [key: string]: unknown;
 }
 
-export function WizardClarifier({ projectId, mode, onComplete }: WizardClarifierProps) {
+type LastAction = "start" | "clarify" | "confirm" | null;
+
+export function WizardClarifier({ projectId, mode, onComplete, initialSessionId = null }: WizardClarifierProps) {
     const { user } = useAuth();
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const createRun = useCreateRun();
+    const updateProject = useUpdateProject();
+    const updateRun = useUpdateRun();
 
     // Wizard state
     const [phase, setPhase] = useState<WizardPhase>("upload");
     const [sessionId, setSessionId] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [lastAction, setLastAction] = useState<LastAction>(null);
 
     // Data collection
     const [topic, setTopic] = useState("");
     const [collectedData, setCollectedData] = useState<CollectedData>({});
-    const [sections, setSections] = useState<Section[]>([]);
-    const [selectedSections, setSelectedSections] = useState<Set<string>>(new Set());
+    const [documents, setDocuments] = useState<DocumentScope[]>([]);
+    const [openDocumentHash, setOpenDocumentHash] = useState<string | null>(null);
+    const [selectedSectionKeys, setSelectedSectionKeys] = useState<Set<string>>(new Set());
 
     // AI clarification state
     const [currentQuestion, setCurrentQuestion] = useState<AIQuestion | null>(null);
@@ -77,10 +126,86 @@ export function WizardClarifier({ projectId, mode, onComplete }: WizardClarifier
     const [universityDefaults, setUniversityDefaults] = useState<UniversityDefaults | null>(null);
 
     // File upload
-    const { files: attachedFiles, addFiles, removeFile, getReadyHashes, allReady } = useFileUpload();
+    const {
+        files: attachedFiles,
+        addFiles,
+        removeFile,
+        getReadyHashes,
+        getFileSummary
+    } = useFileUpload();
 
     // Check if we have a PDF attached
-    const hasPdf = attachedFiles.some(f => f.file.type === "application/pdf");
+    const hasPdf = attachedFiles.some((f) => f.file.type === "application/pdf");
+    const fileSummary = getFileSummary();
+
+    const run = useRunBySession(sessionId || null);
+    const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const hydratedRef = useRef(false);
+    const [linkedFileHashes, setLinkedFileHashes] = useState<string[]>([]);
+
+    const getEffectiveFileHashes = useCallback(() => {
+        const hashes = new Set<string>();
+        for (const h of linkedFileHashes) hashes.add(h);
+        for (const h of getReadyHashes()) hashes.add(h);
+        return Array.from(hashes);
+    }, [linkedFileHashes, getReadyHashes]);
+
+    const effectiveFileHashes = useMemo(() => getEffectiveFileHashes(), [getEffectiveFileHashes]);
+    const hasAnyPdf = hasPdf || effectiveFileHashes.length > 0;
+
+    const refreshDocumentSections = async (fileHashes: string[]) => {
+        if (fileHashes.length === 0) {
+            setDocuments([]);
+            setOpenDocumentHash(null);
+            return [] as DocumentScope[];
+        }
+
+        try {
+            const res = await fetch("/api/generate/document-sections", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ file_hashes: fileHashes }),
+            });
+
+            const data = await res.json().catch(() => ({}));
+            const rawDocs = Array.isArray(data.documents) ? (data.documents as DocumentSectionsItem[]) : [];
+
+            const mapped = rawDocs.map((d): DocumentScope => {
+                const statusRaw = (d.status || "missing").toLowerCase();
+                const status = (["completed", "queued", "processing", "failed", "missing"].includes(statusRaw) ? statusRaw : "missing") as DocumentScope["status"];
+                const filenameFromBackend = typeof d.filename === "string" && d.filename.trim() ? d.filename.trim() : "";
+                const localFile = attachedFiles.find((f) => f.hash === d.file_hash);
+                const filename = filenameFromBackend || localFile?.file.name || "Document";
+
+                const sections = Array.isArray(d.sections)
+                    ? d.sections.map((s, idx) => ({
+                        id: `${d.file_hash}::${idx + 1}`,
+                        title: String(s.title ?? `Section ${idx + 1}`),
+                        preview: String(s.preview ?? ""),
+                    }))
+                    : [];
+
+                return {
+                    fileHash: d.file_hash,
+                    filename,
+                    status,
+                    sectionsCount: typeof d.sections_count === "number" ? d.sections_count : undefined,
+                    sections,
+                    error: typeof d.error_message === "string" ? d.error_message : undefined,
+                };
+            });
+
+            setDocuments(mapped);
+            setOpenDocumentHash((prev) => {
+                if (prev && mapped.some((m) => m.fileHash === prev)) return prev;
+                return mapped.find((m) => m.status === "completed")?.fileHash ?? mapped[0]?.fileHash ?? null;
+            });
+            return mapped;
+        } catch (e) {
+            console.error("Failed to fetch document sections:", e);
+            return [] as DocumentScope[];
+        }
+    };
 
     // Initialize session and fetch university defaults
     useEffect(() => {
@@ -114,6 +239,92 @@ export function WizardClarifier({ projectId, mode, onComplete }: WizardClarifier
         init();
     }, [user, sessionId]);
 
+    useEffect(() => {
+        if (!initialSessionId || sessionId) return;
+        setSessionId(initialSessionId);
+        setPhase("clarify");
+        setError(null);
+        void startAIClarification(initialSessionId);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [initialSessionId, sessionId]);
+
+    // Hydrate local wizard state from persisted run (best effort).
+    useEffect(() => {
+        if (!run || hydratedRef.current) return;
+        hydratedRef.current = true;
+
+        const brief = (run.brief as Record<string, unknown> | undefined) ?? undefined;
+        if (brief) {
+            const savedTopic = typeof brief.topic === "string" ? brief.topic : "";
+            const savedPhase = typeof brief.phase === "string" ? (brief.phase as WizardPhase) : null;
+            const savedAnswered = Array.isArray(brief.answeredQuestions) ? (brief.answeredQuestions as { question: string; answer: string }[]) : null;
+            const savedCollected = typeof brief.collectedData === "object" && brief.collectedData ? (brief.collectedData as CollectedData) : null;
+
+            if (!topic && savedTopic) setTopic(savedTopic);
+            if (Object.keys(collectedData).length === 0 && savedCollected) setCollectedData(savedCollected);
+            if (answeredQuestions.length === 0 && savedAnswered) setAnsweredQuestions(savedAnswered);
+            // Only set phase if we haven't moved forward yet.
+            if (phase === "upload" && savedPhase && ["upload", "scope", "settings", "clarify", "summary"].includes(savedPhase)) {
+                setPhase(savedPhase);
+            }
+        }
+
+        const uploads = (run.uploads as Record<string, unknown> | undefined) ?? undefined;
+        if (uploads && Array.isArray(uploads.file_hashes)) {
+            const hashes = (uploads.file_hashes as unknown[]).map(String).filter(Boolean);
+            if (hashes.length > 0) setLinkedFileHashes(hashes);
+        }
+
+        const scope = (run.scope as Record<string, unknown> | undefined) ?? undefined;
+        if (scope && typeof scope.sections_by_document === "object" && scope.sections_by_document) {
+            const byDoc = scope.sections_by_document as Record<string, unknown>;
+            const next = new Set<string>();
+            for (const [hash, titlesRaw] of Object.entries(byDoc)) {
+                if (!Array.isArray(titlesRaw)) continue;
+                for (const t of titlesRaw) {
+                    const title = String(t || "").trim();
+                    if (title) next.add(`${hash}::${title}`);
+                }
+            }
+            if (next.size > 0) setSelectedSectionKeys(next);
+        }
+    }, [run, topic, collectedData, answeredQuestions.length, phase]);
+
+    // If we resume into scope without local File objects, load section previews from cached hashes.
+    useEffect(() => {
+        if (phase !== "scope") return;
+        if (documents.length > 0) return;
+        if (effectiveFileHashes.length === 0) return;
+        void refreshDocumentSections(effectiveFileHashes);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [phase, documents.length, effectiveFileHashes.join(",")]);
+
+    // Persist wizard state to run (debounced).
+    useEffect(() => {
+        if (!run?._id) return;
+        if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
+
+        persistTimerRef.current = setTimeout(() => {
+            void updateRun({
+                id: run._id,
+                brief: {
+                    topic,
+                    phase,
+                    collectedData,
+                    answeredQuestions,
+                    currentQuestion: currentQuestion?.question ?? null,
+                },
+                uploads: {
+                    file_hashes: getEffectiveFileHashes(),
+                },
+            });
+        }, 500);
+
+        return () => {
+            if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
+        };
+    }, [run?._id, topic, phase, collectedData, answeredQuestions, currentQuestion?.question, updateRun, getEffectiveFileHashes]);
+
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files.length > 0) {
             addFiles(Array.from(e.target.files));
@@ -122,14 +333,16 @@ export function WizardClarifier({ projectId, mode, onComplete }: WizardClarifier
     };
 
     const startSession = async () => {
-        if (!user || !topic.trim()) return;
+        const fileHashes = getEffectiveFileHashes();
+        // Topic is optional if we have at least one processed/cached PDF.
+        if (!user || (!topic.trim() && fileHashes.length === 0)) return;
 
         setIsLoading(true);
         setError(null);
+        setLastAction("start");
 
         try {
             const token = await user.getIdToken();
-            const fileHashes = getReadyHashes();
 
             const res = await fetch("/api/generate/start", {
                 method: "POST",
@@ -140,9 +353,9 @@ export function WizardClarifier({ projectId, mode, onComplete }: WizardClarifier
                 body: JSON.stringify({
                     project_id: projectId,
                     mode: mode,
-                    topic: topic,
+                    topic: topic.trim() ? topic : undefined,
                     file_hashes: fileHashes.length > 0 ? fileHashes : undefined,
-                    wizard_data: collectedData
+                    wizard_data: { ...collectedData, topic }
                 })
             });
 
@@ -150,21 +363,62 @@ export function WizardClarifier({ projectId, mode, onComplete }: WizardClarifier
                 const data = await res.json();
                 setSessionId(data.session_id);
 
-                // If PDF was uploaded, sections might be returned
-                if (data.sections) {
-                    setSections(data.sections);
+                // Persist run + bind it as active (best effort, should not block UX).
+                try {
+                    const runId = await createRun({
+                        projectId: projectId as Id<"projects">,
+                        sessionId: data.session_id,
+                        mode,
+                        stage: "clarifying",
+                        brief: { ...collectedData, topic: topic.trim() ? topic : undefined },
+                        uploads: {
+                            file_hashes: fileHashes,
+                            files: attachedFiles.map((f) => ({
+                                name: f.file.name,
+                                size: f.file.size,
+                                type: f.file.type,
+                                hash: f.hash,
+                                status: f.status,
+                            })),
+                        },
+                    });
+                    await updateProject({
+                        id: projectId as Id<"projects">,
+                        activeRunId: runId as Id<"generationRuns">,
+                        sessionId: data.session_id, // legacy sync
+                    });
+                } catch (e) {
+                    console.error("Failed to persist run history:", e);
+                }
+
+                const normalizedQuestion = normalizeQuestion(data.next_question, data.session_id);
+
+                // If we have any ready/cached PDFs (including from prior runs), always show section scope.
+                if (hasAnyPdf) {
+                    const allHashes = getEffectiveFileHashes();
+                    const mappedDocs = await refreshDocumentSections(allHashes);
+                    // Default: preselect all sections in completed docs (or fallback to "full document" if none).
+                    const nextSelected = new Set<string>();
+                    for (const doc of mappedDocs) {
+                        if (doc.status !== "completed") continue;
+                        for (const section of doc.sections) {
+                            nextSelected.add(`${doc.fileHash}::${section.title}`);
+                        }
+                    }
+                    setSelectedSectionKeys(nextSelected);
                     setPhase("scope");
+                } else if (normalizedQuestion) {
+                    setCurrentQuestion(normalizedQuestion);
+                    setPhase("clarify");
+                } else if (data.complete || data.needs_confirmation || data.next_step === "summary") {
+                    setCurrentQuestion(null);
+                    setPhase("summary");
                 } else if (mode !== "research") {
-                    // Skip to settings for non-research mode without PDF
                     setPhase("settings");
                 } else {
                     // For research mode, go straight to clarify
                     setPhase("clarify");
-                    if (data.next_question) {
-                        setCurrentQuestion(data.next_question);
-                    } else {
-                        startAIClarification(data.session_id);
-                    }
+                    startAIClarification(data.session_id);
                 }
             } else {
                 const err = await res.json();
@@ -189,16 +443,20 @@ export function WizardClarifier({ projectId, mode, onComplete }: WizardClarifier
             answer: finalAnswer
         }]);
 
-        setCollectedData(prev => ({
-            ...prev,
-            [currentQuestion.fieldKey]: finalAnswer
-        }));
+        if (currentQuestion.fieldKey) {
+            setCollectedData(prev => ({
+                ...prev,
+                [currentQuestion.fieldKey as string]: finalAnswer
+            }));
+        }
 
         setIsLoading(true);
+        setError(null);
+        setLastAction("clarify");
 
         try {
             const token = await user?.getIdToken();
-            const fileHashes = getReadyHashes();
+            const fileHashes = getEffectiveFileHashes();
             const res = await fetch("/api/generate/clarify/stream", {
                 method: "POST",
                 headers: {
@@ -208,7 +466,7 @@ export function WizardClarifier({ projectId, mode, onComplete }: WizardClarifier
                 body: JSON.stringify({
                     session_id: sessionId,
                     answer: finalAnswer,
-                    field_key: currentQuestion.fieldKey,
+                    field_key: currentQuestion.fieldKey || undefined,
                     file_hashes: fileHashes.length > 0 ? fileHashes : undefined,
                 })
             });
@@ -249,14 +507,8 @@ export function WizardClarifier({ projectId, mode, onComplete }: WizardClarifier
 
                             if (eventType === "question") {
                                 // New question from AI
-                                setCurrentQuestion({
-                                    id: data.id,
-                                    question: data.question_text,
-                                    options: data.suggested_options || [],
-                                    fieldKey: data.field_key,
-                                    allowCustom: data.allow_custom ?? true,
-                                    allowMultiple: data.allow_multiple ?? false
-                                });
+                                const nextQuestion = normalizeQuestion(data, sessionId);
+                                if (nextQuestion) setCurrentQuestion(nextQuestion);
                             } else if (eventType === "needs_confirmation" || (eventType === "done" && data.complete)) {
                                 // All questions answered, show summary
                                 setCurrentQuestion(null);
@@ -283,6 +535,8 @@ export function WizardClarifier({ projectId, mode, onComplete }: WizardClarifier
         if (!sessionId) return;
 
         setIsLoading(true);
+        setError(null);
+        setLastAction("confirm");
 
         try {
             const token = await user?.getIdToken();
@@ -298,7 +552,8 @@ export function WizardClarifier({ projectId, mode, onComplete }: WizardClarifier
             if (res.ok) {
                 onComplete(sessionId);
             } else {
-                setError("Failed to confirm. Please try again.");
+                const err = await res.json().catch(() => ({}));
+                setError(err.detail || "Failed to confirm. Please try again.");
             }
         } catch (e) {
             console.error("Error confirming:", e);
@@ -312,6 +567,27 @@ export function WizardClarifier({ projectId, mode, onComplete }: WizardClarifier
     const getProgress = () => {
         const phases: WizardPhase[] = ["upload", "scope", "settings", "clarify", "summary"];
         return ((phases.indexOf(phase) + 1) / phases.length) * 100;
+    };
+
+    const goBack = () => {
+        if (phase === "scope") setPhase("upload");
+        else if (phase === "settings") setPhase(hasAnyPdf ? "scope" : "upload");
+        else if (phase === "clarify") setPhase("settings");
+        else if (phase === "summary") setPhase("clarify");
+    };
+
+    const retryLastAction = async () => {
+        if (lastAction === "start") {
+            await startSession();
+            return;
+        }
+        if (lastAction === "clarify") {
+            await startAIClarification();
+            return;
+        }
+        if (lastAction === "confirm") {
+            await handleConfirm();
+        }
     };
 
     return (
@@ -339,14 +615,27 @@ export function WizardClarifier({ projectId, mode, onComplete }: WizardClarifier
                         {phase === "clarify" && "Refining Details"}
                         {phase === "summary" && "Review & Confirm"}
                     </span>
-                    <span className="text-emerald-500 font-mono">
-                        {Math.round(getProgress())}%
+                    <span className="text-emerald-500 font-mono" title="Wizard step estimate">
+                        ~{Math.round(getProgress())}%
                     </span>
                 </div>
             </div>
 
             {/* Main Content Area */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-6 scrollbar-dark">
+            <div className="flex-1 overflow-y-auto p-4 space-y-6 scrollbar-dark" aria-busy={isLoading}>
+                {phase !== "upload" && (
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={goBack}
+                        disabled={isLoading}
+                        className="h-8 text-neutral-400 hover:text-white hover:bg-neutral-900/50"
+                    >
+                        <ArrowLeft className="mr-2 h-4 w-4" />
+                        Back
+                    </Button>
+                )}
+
                 <AnimatePresence mode="wait">
                     {/* Upload Phase */}
                     {phase === "upload" && (
@@ -438,7 +727,7 @@ export function WizardClarifier({ projectId, mode, onComplete }: WizardClarifier
                             {/* Continue Button */}
                             <Button
                                 onClick={startSession}
-                                disabled={!topic.trim() || isLoading || (hasPdf && !allReady())}
+                                disabled={(!topic.trim() && effectiveFileHashes.length === 0) || isLoading}
                                 className="w-full bg-emerald-600 hover:bg-emerald-500 text-white h-12"
                             >
                                 {isLoading ? (
@@ -446,8 +735,30 @@ export function WizardClarifier({ projectId, mode, onComplete }: WizardClarifier
                                 ) : (
                                     <ChevronRight className="h-4 w-4 mr-2" />
                                 )}
-                                {hasPdf && !allReady() ? "Processing PDF..." : "Continue"}
+                                {fileSummary.processing > 0 && fileSummary.included > 0
+                                    ? `Continue (${fileSummary.included} ready, ${fileSummary.processing} processing)`
+                                    : fileSummary.processing > 0 && fileSummary.included === 0 && hasPdf
+                                        ? "Processing PDF..."
+                                        : `Continue${fileSummary.included > 0 ? ` (${fileSummary.included} file${fileSummary.included > 1 ? "s" : ""} included)` : ""}`}
                             </Button>
+                            {!hasPdf && linkedFileHashes.length > 0 && (
+                                <div className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-3 text-xs text-neutral-400">
+                                    Using {linkedFileHashes.length} cached document(s) from your last run. Click Continue to start from them.
+                                </div>
+                            )}
+                            {attachedFiles.length > 0 && (
+                                <div className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-3 text-xs text-neutral-400">
+                                    <p>
+                                        Included: {fileSummary.included} | Excluded: {fileSummary.excluded}
+                                        {fileSummary.processing > 0 ? ` | Processing: ${fileSummary.processing}` : ""}
+                                    </p>
+                                    {fileSummary.excluded > 0 && (
+                                        <p className="mt-1 text-amber-300">
+                                            Generation will continue without excluded files.
+                                        </p>
+                                    )}
+                                </div>
+                            )}
                         </motion.div>
                     )}
 
@@ -463,77 +774,189 @@ export function WizardClarifier({ projectId, mode, onComplete }: WizardClarifier
                             <div className="flex items-center gap-2 mb-4">
                                 <FileText className="h-5 w-5 text-emerald-500" />
                                 <h3 className="text-lg font-medium text-white">
-                                    We found {sections.length} sections
+                                    Choose what to include
                                 </h3>
                             </div>
                             <p className="text-sm text-neutral-400">
-                                Select which sections to include in your presentation:
+                                Select sections per PDF. Collapsed PDFs save space, and you can expand others anytime.
                             </p>
 
+                            <div className="flex items-center justify-between gap-2">
+                                <Button
+                                    variant="outline"
+                                    className="border-neutral-800 text-neutral-200"
+                                    onClick={() => {
+                                        void refreshDocumentSections(getEffectiveFileHashes());
+                                    }}
+                                >
+                                    Refresh
+                                </Button>
+                                <div className="text-xs text-neutral-500">
+                                    Selected: <span className="text-neutral-200">{selectedSectionKeys.size}</span>
+                                </div>
+                            </div>
+
                             <div className="space-y-2">
-                                {sections.map((section) => (
-                                    <button
-                                        key={section.id}
-                                        onClick={() => {
-                                            setSelectedSections(prev => {
-                                                const next = new Set(prev);
-                                                if (next.has(section.id)) {
-                                                    next.delete(section.id);
-                                                } else {
-                                                    next.add(section.id);
-                                                }
-                                                return next;
-                                            });
-                                        }}
-                                        className={cn(
-                                            "w-full text-left rounded-lg border p-4 transition-all",
-                                            selectedSections.has(section.id)
-                                                ? "border-emerald-500 bg-emerald-500/10"
-                                                : "border-neutral-800 bg-neutral-900/50 hover:border-neutral-700"
-                                        )}
-                                    >
-                                        <div className="flex items-start gap-3">
-                                            <div className={cn(
-                                                "mt-1 h-5 w-5 rounded border-2 flex items-center justify-center",
-                                                selectedSections.has(section.id)
-                                                    ? "border-emerald-500 bg-emerald-500"
-                                                    : "border-neutral-700"
-                                            )}>
-                                                {selectedSections.has(section.id) && (
-                                                    <Check className="h-3 w-3 text-white" />
-                                                )}
-                                            </div>
-                                            <div>
-                                                <p className="font-medium text-white">{section.title}</p>
-                                                <p className="text-xs text-neutral-500 mt-1 line-clamp-2">
-                                                    {section.preview}
-                                                </p>
-                                            </div>
+                                {documents.map((doc) => {
+                                    const isOpen = openDocumentHash === doc.fileHash;
+                                    const statusLabel =
+                                        doc.status === "completed" ? "Ready" :
+                                            doc.status === "processing" ? "Processing" :
+                                                doc.status === "queued" ? "Queued" :
+                                                    doc.status === "failed" ? "Failed" : "Missing";
+
+                                    return (
+                                        <div key={doc.fileHash} className="rounded-lg border border-neutral-800 bg-neutral-900/30 overflow-hidden">
+                                            <button
+                                                type="button"
+                                                className="w-full px-4 py-3 flex items-center justify-between hover:bg-neutral-900/40 transition-colors"
+                                                onClick={() => setOpenDocumentHash((prev) => (prev === doc.fileHash ? null : doc.fileHash))}
+                                            >
+                                                <div className="min-w-0 text-left">
+                                                    <div className="truncate text-sm font-medium text-white">{doc.filename}</div>
+                                                    <div className="text-[11px] text-neutral-500">
+                                                        {doc.sectionsCount !== undefined ? `${doc.sectionsCount} sections` : "Sections unknown"}
+                                                    </div>
+                                                </div>
+                                                <div className={cn(
+                                                    "shrink-0 rounded-full border px-2 py-0.5 text-[10px]",
+                                                    doc.status === "completed"
+                                                        ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
+                                                        : doc.status === "failed"
+                                                            ? "border-red-500/20 bg-red-500/10 text-red-200"
+                                                            : "border-neutral-800 bg-neutral-950/30 text-neutral-300"
+                                                )}>
+                                                    {statusLabel}
+                                                </div>
+                                            </button>
+
+                                            {isOpen && (
+                                                <div className="px-4 pb-4">
+                                                    {doc.error && (
+                                                        <div className="mb-3 rounded-md border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+                                                            {doc.error}
+                                                        </div>
+                                                    )}
+
+                                                    {doc.status !== "completed" ? (
+                                                        <div className="text-xs text-neutral-500">
+                                                            This PDF is not ready yet. Once processing finishes, hit Refresh.
+                                                        </div>
+                                                    ) : (
+                                                        <>
+                                                            <div className="mb-3 flex items-center justify-between">
+                                                                <div className="text-xs text-neutral-500">Sections</div>
+                                                                <Button
+                                                                    variant="outline"
+                                                                    size="sm"
+                                                                    className="h-7 border-neutral-800 text-neutral-200"
+                                                                    onClick={() => {
+                                                                        setSelectedSectionKeys((prev) => {
+                                                                            const next = new Set(prev);
+                                                                            for (const s of doc.sections) {
+                                                                                next.add(`${doc.fileHash}::${s.title}`);
+                                                                            }
+                                                                            return next;
+                                                                        });
+                                                                    }}
+                                                                >
+                                                                    Select all
+                                                                </Button>
+                                                            </div>
+
+                                                            <div className="space-y-2">
+                                                                {doc.sections.map((section) => {
+                                                                    const key = `${doc.fileHash}::${section.title}`;
+                                                                    const selected = selectedSectionKeys.has(key);
+                                                                    return (
+                                                                        <button
+                                                                            key={key}
+                                                                            aria-pressed={selected}
+                                                                            aria-label={`Toggle section ${section.title}`}
+                                                                            onClick={() => {
+                                                                                setSelectedSectionKeys((prev) => {
+                                                                                    const next = new Set(prev);
+                                                                                    if (next.has(key)) next.delete(key);
+                                                                                    else next.add(key);
+                                                                                    return next;
+                                                                                });
+                                                                            }}
+                                                                            className={cn(
+                                                                                "w-full text-left rounded-lg border p-3 transition-all",
+                                                                                selected
+                                                                                    ? "border-emerald-500 bg-emerald-500/10"
+                                                                                    : "border-neutral-800 bg-neutral-900/30 hover:border-neutral-700"
+                                                                            )}
+                                                                        >
+                                                                            <div className="flex items-start gap-3">
+                                                                                <div className={cn(
+                                                                                    "mt-1 h-5 w-5 rounded border-2 flex items-center justify-center",
+                                                                                    selected
+                                                                                        ? "border-emerald-500 bg-emerald-500"
+                                                                                        : "border-neutral-700"
+                                                                                )}>
+                                                                                    {selected && <Check className="h-3 w-3 text-white" />}
+                                                                                </div>
+                                                                                <div>
+                                                                                    <p className="font-medium text-white">{section.title}</p>
+                                                                                    <p className="text-xs text-neutral-500 mt-1 line-clamp-2">
+                                                                                        {section.preview}
+                                                                                    </p>
+                                                                                </div>
+                                                                            </div>
+                                                                        </button>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            )}
                                         </div>
-                                    </button>
-                                ))}
+                                    );
+                                })}
                             </div>
 
                             <div className="flex gap-3 pt-4">
                                 <Button
                                     variant="outline"
-                                    onClick={() => setSelectedSections(new Set(sections.map(s => s.id)))}
+                                    onClick={() => setSelectedSectionKeys(new Set())}
                                     className="flex-1"
                                 >
-                                    Select All
+                                    Clear
                                 </Button>
                                 <Button
                                     onClick={() => {
-                                        setCollectedData(prev => ({
-                                            ...prev,
-                                            sections: Array.from(selectedSections)
-                                        }));
+                                        // Flatten selected section titles for backend (current backend expects titles).
+                                        const byDoc: Record<string, string[]> = {};
+                                        for (const key of selectedSectionKeys) {
+                                            const [hash, title] = key.split("::");
+                                            if (!hash || !title) continue;
+                                            if (!byDoc[hash]) byDoc[hash] = [];
+                                            byDoc[hash].push(title);
+                                        }
+                                        const flatTitles = Object.values(byDoc).flat();
+
+                                        const nextCollected: CollectedData = {
+                                            ...collectedData,
+                                            sections_by_document: byDoc,
+                                            sections: flatTitles,
+                                        };
+                                        setCollectedData(nextCollected);
+
+                                        if (run?._id) {
+                                            void updateRun({
+                                                id: run._id,
+                                                scope: { sections_by_document: byDoc, sections: flatTitles },
+                                                brief: { ...nextCollected, topic: topic.trim() ? topic : undefined, sections: flatTitles },
+                                            });
+                                        }
                                         setPhase("settings");
                                     }}
-                                    disabled={selectedSections.size === 0}
+                                    disabled={selectedSectionKeys.size === 0}
                                     className="flex-1 bg-emerald-600 hover:bg-emerald-500"
                                 >
-                                    Continue with {selectedSections.size}
+                                    Continue with {selectedSectionKeys.size}
                                     <ChevronRight className="h-4 w-4 ml-2" />
                                 </Button>
                             </div>
@@ -553,10 +976,10 @@ export function WizardClarifier({ projectId, mode, onComplete }: WizardClarifier
                             <ChoiceQuestionCard
                                 question="Who is the target audience?"
                                 options={[
-                                    { id: "undergrad", label: "Undergraduates", icon: "🎓", description: "College/university students" },
-                                    { id: "graduate", label: "Graduate Level", icon: "🔬", description: "Masters/PhD researchers" },
-                                    { id: "industry", label: "Industry Experts", icon: "💼", description: "Working professionals" },
-                                    { id: "general", label: "General Audience", icon: "🌍", description: "Non-specialists" },
+                                    { id: "undergrad", label: "Undergraduates", description: "College/university students" },
+                                    { id: "graduate", label: "Graduate Level", description: "Masters/PhD researchers" },
+                                    { id: "industry", label: "Industry Experts", description: "Working professionals" },
+                                    { id: "general", label: "General Audience", description: "Non-specialists" },
                                 ]}
                                 onSelect={(id) => {
                                     setCollectedData(prev => ({ ...prev, audience: id }));
@@ -573,7 +996,7 @@ export function WizardClarifier({ projectId, mode, onComplete }: WizardClarifier
                                             { id: "5", label: "5 slides", description: "Brief overview" },
                                             { id: "10", label: "10 slides", description: "Standard length" },
                                             { id: "15", label: "15 slides", description: "Detailed coverage" },
-                                            { id: "auto", label: "Let AI decide", icon: "✨", description: "Based on content" },
+                                            { id: "auto", label: "Let AI decide", description: "Based on content" },
                                         ]}
                                         onSelect={(id) => {
                                             setCollectedData(prev => ({
@@ -593,9 +1016,9 @@ export function WizardClarifier({ projectId, mode, onComplete }: WizardClarifier
                                     <ChoiceQuestionCard
                                         question="Presentation style?"
                                         options={[
-                                            { id: "detailed", label: "Detailed", icon: "📊", description: "In-depth with examples" },
-                                            { id: "concise", label: "Concise", icon: "⚡", description: "Key points only" },
-                                            { id: "visual", label: "Visual Heavy", icon: "🎨", description: "Emphasis on graphics" },
+                                            { id: "detailed", label: "Detailed", description: "In-depth with examples" },
+                                            { id: "concise", label: "Concise", description: "Key points only" },
+                                            { id: "visual", label: "Visual Heavy", description: "Emphasis on graphics" },
                                         ]}
                                         onSelect={(id) => {
                                             setCollectedData(prev => ({ ...prev, style: id }));
@@ -749,9 +1172,35 @@ export function WizardClarifier({ projectId, mode, onComplete }: WizardClarifier
                     <motion.div
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="rounded-lg bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-400"
+                        className="rounded-lg bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-300"
+                        role="alert"
+                        aria-live="polite"
                     >
-                        {error}
+                        <p>{error}</p>
+                        <div className="mt-3 flex gap-2">
+                            {lastAction && (
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="border-red-500/40 bg-transparent text-red-100"
+                                    onClick={retryLastAction}
+                                    disabled={isLoading}
+                                >
+                                    Retry
+                                </Button>
+                            )}
+                            {phase !== "upload" && (
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="text-neutral-300 hover:text-white hover:bg-neutral-800"
+                                    onClick={goBack}
+                                    disabled={isLoading}
+                                >
+                                    Back
+                                </Button>
+                            )}
+                        </div>
                     </motion.div>
                 )}
             </div>
@@ -764,10 +1213,12 @@ export function WizardClarifier({ projectId, mode, onComplete }: WizardClarifier
         if (!activeSessionId) return;
 
         setIsLoading(true);
+        setError(null);
+        setLastAction("clarify");
 
         try {
             const token = await user?.getIdToken();
-            const fileHashes = getReadyHashes();
+            const fileHashes = getEffectiveFileHashes();
             const res = await fetch("/api/generate/clarify/stream", {
                 method: "POST",
                 headers: {
@@ -817,14 +1268,8 @@ export function WizardClarifier({ projectId, mode, onComplete }: WizardClarifier
                             const data = JSON.parse(eventData);
 
                             if (eventType === "question") {
-                                setCurrentQuestion({
-                                    id: data.id,
-                                    question: data.question_text,
-                                    options: data.suggested_options || [],
-                                    fieldKey: data.field_key,
-                                    allowCustom: data.allow_custom ?? true,
-                                    allowMultiple: data.allow_multiple ?? false
-                                });
+                                const nextQuestion = normalizeQuestion(data, activeSessionId);
+                                if (nextQuestion) setCurrentQuestion(nextQuestion);
                             } else if (eventType === "needs_confirmation" || (eventType === "done" && data.complete)) {
                                 // No more questions needed, go to summary
                                 setCurrentQuestion(null);
@@ -838,8 +1283,7 @@ export function WizardClarifier({ projectId, mode, onComplete }: WizardClarifier
             }
         } catch (e) {
             console.error("Error starting AI clarification:", e);
-            // Fallback: skip to summary if AI fails
-            setPhase("summary");
+            setError("Failed to continue clarification. You can retry or go back.");
         } finally {
             setIsLoading(false);
         }

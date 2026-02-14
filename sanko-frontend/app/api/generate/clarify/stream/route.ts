@@ -7,6 +7,28 @@ const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8000';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
+function normalizeSuggestedOptions(raw: unknown) {
+    if (!Array.isArray(raw)) return [];
+    return raw
+        .map((entry, index) => {
+            if (typeof entry === "string") {
+                return { id: `option-${index + 1}`, label: entry };
+            }
+            if (entry && typeof entry === "object") {
+                const record = entry as Record<string, unknown>;
+                const label = typeof record.label === "string" ? record.label : undefined;
+                if (!label) return null;
+                return {
+                    id: typeof record.id === "string" ? record.id : `option-${index + 1}`,
+                    label,
+                    description: typeof record.description === "string" ? record.description : undefined,
+                };
+            }
+            return null;
+        })
+        .filter((entry): entry is { id: string; label: string; description?: string } => !!entry);
+}
+
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
@@ -38,7 +60,7 @@ export async function POST(request: NextRequest) {
                 message: answer || 'Continue',
                 file_hashes: file_hashes || undefined,
                 wizard_data: wizard_data || undefined,
-                request_next_question: request_next_question || undefined,
+                request_next_question: request_next_question === true ? true : undefined,
                 field_key: field_key || undefined,
             }),
         });
@@ -74,16 +96,16 @@ export async function POST(request: NextRequest) {
                 }
 
                 // Wizard flow expects a structured `question` event.
-                // Backend currently returns plain question text, so we adapt it here.
+                // Backend currently may return plain question text, so we adapt safely.
                 if (!data.complete && !data.needs_confirmation && data.question) {
                     controller.enqueue(
                         encoder.encode(`event: question\ndata: ${JSON.stringify({
                             id: `${session_id}-${Date.now()}`,
                             question_text: data.question,
-                            field_key: field_key || "special_requests",
-                            suggested_options: [],
-                            allow_custom: true,
-                            allow_multiple: false,
+                            field_key: typeof data.field_key === "string" ? data.field_key : (typeof field_key === "string" ? field_key : null),
+                            suggested_options: normalizeSuggestedOptions(data.suggested_options),
+                            allow_custom: typeof data.allow_custom === "boolean" ? data.allow_custom : true,
+                            allow_multiple: typeof data.allow_multiple === "boolean" ? data.allow_multiple : false,
                         })}\n\n`)
                     );
                 }

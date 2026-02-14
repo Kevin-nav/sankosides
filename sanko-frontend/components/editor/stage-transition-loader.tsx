@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 
 interface StageTransitionLoaderProps {
-    stage: "clarifying" | "blueprint" | "generating" | "completed";
+    stage: "clarifying" | "blueprint" | "generating" | "completed" | "generation_failed";
     message?: string;
 }
 
@@ -12,22 +12,27 @@ const stageMessages: Record<string, { title: string; subtitle: string; icon: str
     clarifying: {
         title: "Setting up your presentation",
         subtitle: "Just a moment while we prepare...",
-        icon: "✨"
+        icon: "*"
     },
     blueprint: {
         title: "Crafting your outline",
         subtitle: "AI is analyzing your requirements...",
-        icon: "📝"
+        icon: "[]"
     },
     generating: {
         title: "Generating slides",
         subtitle: "Our AI agents are working on your presentation...",
-        icon: "⚡"
+        icon: "+"
     },
     completed: {
         title: "Almost there",
         subtitle: "Finalizing your presentation...",
-        icon: "🎉"
+        icon: "OK"
+    },
+    generation_failed: {
+        title: "Generation failed",
+        subtitle: "Preparing recovery options...",
+        icon: "!"
     }
 };
 
@@ -37,7 +42,7 @@ export function ShimmerSkeleton({ className }: { className?: string }) {
         <div className={cn("relative overflow-hidden bg-neutral-800/50 rounded", className)}>
             <motion.div
                 className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/5 to-transparent"
-                animate={{ translateX: ["−100%", "100%"] }}
+                animate={{ translateX: ["-100%", "100%"] }}
                 transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
             />
         </div>

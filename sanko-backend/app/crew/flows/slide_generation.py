@@ -28,6 +28,8 @@ from enum import Enum
 import asyncio
 import json
 import os
+import re
+import hashlib
 
 from app.models.schemas import (
     OrderForm,
@@ -48,6 +50,7 @@ from app.models.schemas import (
     KnowledgeBase,
     ResearchFact,
     ResearchNeed,
+    EvidenceRef,
 )
 from app.crew.agents.clarifier import create_clarifier_agent
 from app.crew.agents.planner import create_planner_agent
@@ -63,7 +66,12 @@ from app.crew.agents.helper import (
 )
 from app.crew.tools.render_service_tool import get_render_tool
 from app.crew.tools.synthesis_tool import SynthesisTool, SynthesisError
-from app.crew.tools.context_tool import ReadSectionTool, ListSectionsTool
+from app.crew.tools.context_tool import (
+    ReadSectionTool,
+    ListSectionsTool,
+    SearchSectionsTool,
+    ReadSectionByIdTool,
+)
 from app.crew.tools.academic_search_tool import AcademicSearchTool
 from app.crew.tools.doi_validator import DOIValidatorTool
 from app.services.citation_utils import (
@@ -74,6 +82,7 @@ from app.services.citation_utils import (
     sort_citations,
 )
 from app.core.logging import get_logger
+from app.core.config import settings
 from app.services.cache import RedisCache
 from app.crew.flows.metrics import (
     MetricsCollector,
@@ -702,7 +711,9 @@ class SlideGenerationFlow:
             # Wire up tools for querying document sections
             # These enable the clarifier to read EXACT, VERBATIM content from PDFs
             tools.append(ListSectionsTool(kb=self.state.knowledge_base))
+            tools.append(SearchSectionsTool(kb=self.state.knowledge_base))
             tools.append(ReadSectionTool(kb=self.state.knowledge_base))
+            tools.append(ReadSectionByIdTool(kb=self.state.knowledge_base))
             logger.info(f"Wired {len(tools)} document tools to clarifier agent")
         
         clarifier = create_clarifier_agent(tools=tools)
@@ -1606,7 +1617,9 @@ Be efficient and accurate - reference document content when relevant!""",
         tools = []
         if self.state.knowledge_base:
             tools.append(ListSectionsTool(kb=self.state.knowledge_base))
+            tools.append(SearchSectionsTool(kb=self.state.knowledge_base))
             tools.append(ReadSectionTool(kb=self.state.knowledge_base))
+            tools.append(ReadSectionByIdTool(kb=self.state.knowledge_base))
         
         # Create agent with optional tools and iteration limit to prevent infinite loops
         outliner = create_outliner_agent(tools=tools if tools else None, max_iter=3)
@@ -1866,6 +1879,19 @@ Be efficient and accurate - reference document content when relevant!""",
             logger.info(f"[FLOW] Starting Stage 3/6: Citation Auditor")
             await self._run_citation_auditor()
             logger.info(f"[FLOW] Completed Stage 3/6: Citation Auditor")
+
+            # Strict zero-hallucination gate: fail fast if unsupported claims remain.
+            if getattr(settings, "require_evidence_for_claims", False):
+                unsupported = []
+                for slide in (self.state.refined_content.slides if self.state.refined_content else []):
+                    for claim in slide.unsupported_claims or []:
+                        unsupported.append((slide.order, claim))
+                if unsupported:
+                    preview = "; ".join([f"slide {o}: {c[:80]}" for o, c in unsupported[:5]])
+                    raise ValueError(
+                        f"Unsupported factual claims remain after evidence audit ({len(unsupported)}). "
+                        f"Examples: {preview}"
+                    )
             
             # Stage 4: Generate References and Thank You slides
             logger.info(f"[FLOW] Starting Stage 4/6: Final Slides")
@@ -2054,6 +2080,7 @@ Focus Areas: {', '.join(order.focus_areas) if order.focus_areas else 'None'}
 4. For slides needing equations, add `equation_placeholder` (LaTeX description)
 5. For slides needing images, add `image_query` (search term for finding/generating an image)
 6. Add speaker_notes if requested: {order.include_speaker_notes}
+7. Add `claims` (atomic factual claims) and `evidence_refs` for claim grounding when available.
 
 Return a JSON object with 'slides' array containing PlannedSlide objects."""
     
@@ -2222,6 +2249,103 @@ Return a JSON object with 'slides' array containing PlannedSlide objects."""
                         return text[:i + 1]
         
         return None
+
+    def _extract_claims_from_bullets(self, bullet_points: List[str]) -> List[str]:
+        """
+        Extract atomic claims from slide bullet points.
+        Conservative strategy: each non-empty bullet is treated as a claim candidate.
+        """
+        claims = []
+        for bullet in bullet_points or []:
+            cleaned = re.sub(r"\s+", " ", (bullet or "").strip())
+            if cleaned:
+                claims.append(cleaned)
+        return claims
+
+    def _lexical_overlap(self, a: str, b: str) -> int:
+        a_tokens = set(re.findall(r"[A-Za-z0-9]{3,}", a.lower()))
+        b_tokens = set(re.findall(r"[A-Za-z0-9]{3,}", b.lower()))
+        if not a_tokens or not b_tokens:
+            return 0
+        return len(a_tokens.intersection(b_tokens))
+
+    def _find_best_section_for_claim(self, claim: str):
+        kb = self.state.knowledge_base
+        if not kb or not kb.sections:
+            return None
+
+        best = None
+        best_score = 0
+        for section in kb.sections:
+            score = self._lexical_overlap(claim, f"{section.title} {section.content[:3000]}")
+            if score > best_score:
+                best = section
+                best_score = score
+        return best if best_score >= 3 else None
+
+    def _build_evidence_ref(self, claim: str, section) -> EvidenceRef:
+        excerpt = (section.content or "").strip()
+        excerpt = re.sub(r"\s+", " ", excerpt)
+        if len(excerpt) > 240:
+            excerpt = excerpt[:240] + "..."
+        quote_hash = hashlib.sha1(excerpt.encode("utf-8", errors="ignore")).hexdigest()[:16]
+        section_id = section.section_id or ""
+        evidence_id = f"ev-{section_id or 'section'}-{quote_hash}"
+        return EvidenceRef(
+            evidence_id=evidence_id,
+            section_id=section_id,
+            page_range=section.page_range or "",
+            quote_excerpt=excerpt,
+            quote_hash=quote_hash,
+            claim=claim,
+            confidence=0.7,
+            source_type="document",
+        )
+
+    def _enforce_slide_evidence(self, slide):
+        """
+        Attach evidence refs for claims and remove unsupported claims when strict mode is enabled.
+        """
+        strict = getattr(settings, "require_evidence_for_claims", False)
+        claims = slide.claims or self._extract_claims_from_bullets(slide.bullet_points)
+        slide.claims = claims
+
+        existing_by_claim = {
+            (e.claim or "").strip().lower(): e for e in (slide.evidence_refs or [])
+        }
+        verified_refs = []
+        unsupported = []
+        kept_bullets = []
+
+        for claim in claims:
+            key = claim.strip().lower()
+            evidence = existing_by_claim.get(key)
+            if not evidence:
+                section = self._find_best_section_for_claim(claim)
+                if section:
+                    evidence = self._build_evidence_ref(claim, section)
+
+            if evidence and evidence.section_id:
+                verified_refs.append(evidence)
+                kept_bullets.append(claim)
+            else:
+                unsupported.append(claim)
+                if not strict:
+                    kept_bullets.append(claim)
+
+        slide.evidence_refs = verified_refs
+        slide.unsupported_claims = unsupported
+
+        if strict:
+            slide.bullet_points = kept_bullets
+            slide.all_claims_verified = len(unsupported) == 0
+            slide.removed_claims = unsupported
+        else:
+            slide.all_claims_verified = len(unsupported) == 0
+            if unsupported:
+                slide.removed_claims = list({*slide.removed_claims, *unsupported})
+
+        return slide
     
     async def _run_refiner(self):
         """
@@ -2312,12 +2436,19 @@ Return a JSON object with 'slides' array containing PlannedSlide objects."""
             logger.info(f"[REFINER] Post-processing: Converting markdown to HTML...")
             self.state.refined_content.slides = process_all_slides(self.state.refined_content.slides)
             
+            # Enforce claim-evidence ledger before generation.
+            unsupported_total = 0
+            for s in self.state.refined_content.slides:
+                self._enforce_slide_evidence(s)
+                unsupported_total += len(s.unsupported_claims or [])
+            
             logger.info(f"[REFINER] ====== Stage Complete ======")
             logger.info(
                 f"[REFINER] Results: {len(refined_slides)} slides, "
                 f"{self.state.refined_content.equations_rendered} equations, "
                 f"{self.state.refined_content.diagrams_rendered} diagrams, "
-                f"{self.state.refined_content.total_citations} citations"
+                f"{self.state.refined_content.total_citations} citations, "
+                f"{unsupported_total} unsupported claims"
             )
             
             await self.emitter.stage_complete("refiner", {
@@ -2325,6 +2456,7 @@ Return a JSON object with 'slides' array containing PlannedSlide objects."""
                 "equations_rendered": self.state.refined_content.equations_rendered,
                 "diagrams_rendered": self.state.refined_content.diagrams_rendered,
                 "total_citations": self.state.refined_content.total_citations,
+                "unsupported_claims": unsupported_total,
             })
             
         finally:
@@ -2406,12 +2538,19 @@ Return a JSON object with 'slides' array containing PlannedSlide objects."""
             f"[CITATION AUDITOR] Results: {verified_count} verified, "
             f"{removed_count} removed, {doi_validated} DOIs validated, {doi_invalid} invalid DOIs"
         )
+
+        # Re-apply evidence enforcement after citation cleanup.
+        unsupported_total = 0
+        for slide in refined.slides:
+            self._enforce_slide_evidence(slide)
+            unsupported_total += len(slide.unsupported_claims or [])
         
         await self.emitter.stage_complete("citation_auditor", {
             "verified_citations": verified_count,
             "removed_citations": removed_count,
             "dois_validated": doi_validated,
             "dois_invalid": doi_invalid,
+            "unsupported_claims": unsupported_total,
         })
         
         return refined
@@ -2733,6 +2872,8 @@ IMPORTANT:
             bullet_points=planned.bullet_points,
             template_type=planned.template_type or "content",
             speaker_notes=planned.speaker_notes,
+            claims=planned.claims or self._extract_claims_from_bullets(planned.bullet_points),
+            evidence_refs=planned.evidence_refs or [],
         )
         
         # Render equation if present
@@ -2909,7 +3050,7 @@ IMPORTANT:
             except Exception as e:
                 logger.warning(f"Research processing failed for slide {planned.order}: {e}")
         
-        return refined
+        return self._enforce_slide_evidence(refined)
     
     def _placeholder_to_latex_fallback(self, placeholder: str) -> str:
         """

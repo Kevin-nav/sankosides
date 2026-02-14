@@ -17,6 +17,7 @@ import json
 import time
 import re
 import tempfile
+import hashlib
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional, Tuple
@@ -224,6 +225,116 @@ class GeminiExtractionService:
             raise ValueError("GEMINI_API_KEY not configured")
         self.client = genai.Client(api_key=self.api_key)
         self.cost_tracker = CostTracker()
+
+    def _parse_page_range(self, value: str, fallback_start: int, fallback_end: int) -> Tuple[int, int, str]:
+        """Normalize page range into numeric start/end and canonical string."""
+        if value:
+            m = re.match(r"^\s*(\d+)\s*-\s*(\d+)\s*$", value)
+            if m:
+                start = int(m.group(1))
+                end = int(m.group(2))
+                if start > 0 and end >= start:
+                    return start, end, f"{start}-{end}"
+        return fallback_start, fallback_end, f"{fallback_start}-{fallback_end}"
+
+    def _stable_section_id(self, document_id: str, chunk_index: int, title: str, page_range: str, content: str) -> str:
+        payload = f"{document_id}|{chunk_index}|{title}|{page_range}|{content[:200]}"
+        digest = hashlib.sha1(payload.encode("utf-8", errors="ignore")).hexdigest()[:16]
+        return f"sec-{digest}"
+
+    def _normalize_section_payloads(
+        self,
+        raw_sections: List[Dict[str, Any]],
+        chunk: Dict[str, Any],
+        document_id: str,
+        filename: str,
+    ) -> List[Dict[str, Any]]:
+        """
+        Normalize extracted section payloads and enforce minimal validity.
+        """
+        normalized = []
+        fallback_start = int(chunk["start"]) + 1
+        fallback_end = int(chunk["end"])
+
+        for idx, sec in enumerate(raw_sections or []):
+            title = str(sec.get("title") or "").strip() or f"Untitled Section {chunk['index'] + 1}.{idx + 1}"
+            content = str(sec.get("content") or "").strip()
+            visuals = sec.get("visuals") or []
+            if not isinstance(visuals, list):
+                visuals = []
+
+            if not content:
+                continue
+
+            p_start, p_end, canonical_range = self._parse_page_range(
+                str(sec.get("page_range") or ""),
+                fallback_start=fallback_start,
+                fallback_end=fallback_end,
+            )
+
+            content_hash = hashlib.sha1(content.encode("utf-8", errors="ignore")).hexdigest()
+            section_id = self._stable_section_id(
+                document_id=document_id,
+                chunk_index=int(chunk["index"]),
+                title=title,
+                page_range=canonical_range,
+                content=content,
+            )
+
+            normalized.append({
+                "title": title,
+                "content": content,
+                "visuals": visuals,
+                "page_range": canonical_range,
+                "section_id": section_id,
+                "document_id": document_id,
+                "document_name": filename,
+                "page_start": p_start,
+                "page_end": p_end,
+                "chunk_index": int(chunk["index"]),
+                "content_hash": content_hash,
+            })
+
+        return normalized
+
+    def _validate_extraction_quality(
+        self,
+        sections: List[DocumentSection],
+        total_pages: int,
+        total_chunks: int,
+    ) -> None:
+        """
+        Hard validation gate to prevent low-quality/summarized extraction from entering pipeline.
+        """
+        min_sections = max(1, int(getattr(settings, "extraction_min_sections", 3)))
+        min_coverage = float(getattr(settings, "extraction_min_coverage_ratio", 0.6))
+
+        if len(sections) < min_sections:
+            raise RuntimeError(
+                f"Extraction quality gate failed: only {len(sections)} sections (< {min_sections})"
+            )
+
+        covered_pages = set()
+        for s in sections:
+            if s.page_start and s.page_end and s.page_start <= s.page_end:
+                for p in range(s.page_start, s.page_end + 1):
+                    covered_pages.add(p)
+
+        coverage_ratio = (len(covered_pages) / total_pages) if total_pages > 0 else 0.0
+        logger.info(
+            f"[v8-EXTRACT] Quality gate: sections={len(sections)}, "
+            f"coverage={coverage_ratio:.2f}, pages={total_pages}, chunks={total_chunks}"
+        )
+        if coverage_ratio < min_coverage:
+            raise RuntimeError(
+                f"Extraction quality gate failed: coverage {coverage_ratio:.2f} (< {min_coverage:.2f})"
+            )
+
+        nontrivial = sum(1 for s in sections if len((s.content or "").strip()) >= 120)
+        if nontrivial < max(1, len(sections) // 3):
+            raise RuntimeError(
+                "Extraction quality gate failed: too many sections have very short content"
+            )
     
     def extract_from_bytes(self, pdf_bytes: bytes, filename: str = "document.pdf") -> KnowledgeBase:
         """
@@ -264,6 +375,10 @@ class GeminiExtractionService:
         
         filename = filename or pdf_path.name
         start_time = time.perf_counter()
+        try:
+            document_id = hashlib.sha256(pdf_path.read_bytes()).hexdigest()[:16]
+        except Exception:
+            document_id = hashlib.sha256(str(pdf_path).encode("utf-8")).hexdigest()[:16]
         
         logger.info(f"[v8-EXTRACT] Starting extraction: {filename}")
         
@@ -335,18 +450,46 @@ class GeminiExtractionService:
         
         # Flatten sections in order
         all_sections = []
+        chunk_map = {int(c["index"]): c for c in chunks}
         for idx in sorted(results.keys()):
-            all_sections.extend(results[idx].get("sections", []))
+            chunk = chunk_map.get(int(idx))
+            if not chunk:
+                continue
+            normalized = self._normalize_section_payloads(
+                raw_sections=results[idx].get("sections", []),
+                chunk=chunk,
+                document_id=document_id,
+                filename=filename,
+            )
+            all_sections.extend(normalized)
         
         # Convert to DocumentSection objects
         doc_sections = []
+        seen_ids = set()
         for s in all_sections:
+            section_id = s.get("section_id") or ""
+            if section_id in seen_ids:
+                section_id = f"{section_id}-{len(seen_ids)}"
+            seen_ids.add(section_id)
             doc_sections.append(DocumentSection(
                 title=s.get("title", "Untitled"),
                 content=s.get("content", ""),
                 visuals=s.get("visuals", []),
                 page_range=s.get("page_range", ""),
+                section_id=section_id,
+                document_id=s.get("document_id", ""),
+                document_name=s.get("document_name", filename),
+                page_start=s.get("page_start"),
+                page_end=s.get("page_end"),
+                chunk_index=s.get("chunk_index"),
+                content_hash=s.get("content_hash", ""),
             ))
+
+        self._validate_extraction_quality(
+            sections=doc_sections,
+            total_pages=total_pages,
+            total_chunks=len(chunks),
+        )
         
         # Create summary
         summary = f"Extracted {len(doc_sections)} sections from {filename} ({total_pages} pages)"
@@ -504,17 +647,49 @@ Important:
             
             for attempt in range(MAX_RETRIES + 1):
                 try:
-                    response = self.client.models.generate_content(
-                        model=MODEL_ID,
-                        contents=[
-                            types.Part.from_bytes(data=chunk_bytes, mime_type="application/pdf"),
-                            simple_prompt
-                        ],
-                        config=types.GenerateContentConfig(
-                            temperature=0.1 * attempt,
-                            response_mime_type="application/json",
+                    use_explicit_cache = bool(getattr(settings, "enable_gemini_explicit_cache", False))
+                    if use_explicit_cache:
+                        cache_ttl = max(60, int(getattr(settings, "gemini_cache_ttl_seconds", 900)))
+                        cache_obj = None
+                        try:
+                            cache_cfg = types.CreateCachedContentConfig(
+                                model=MODEL_ID,
+                                contents=[
+                                    types.Content(
+                                        role="user",
+                                        parts=[types.Part.from_bytes(data=chunk_bytes, mime_type="application/pdf")],
+                                    )
+                                ],
+                                ttl=f"{cache_ttl}s",
+                            )
+                            cache_obj = self.client.caches.create(model=MODEL_ID, config=cache_cfg)
+                            response = self.client.models.generate_content(
+                                model=MODEL_ID,
+                                contents=[simple_prompt],
+                                config=types.GenerateContentConfig(
+                                    cached_content=cache_obj.name,
+                                    temperature=0.1 * attempt,
+                                    response_mime_type="application/json",
+                                ),
+                            )
+                        finally:
+                            if cache_obj:
+                                try:
+                                    self.client.caches.delete(name=cache_obj.name)
+                                except Exception:
+                                    pass
+                    else:
+                        response = self.client.models.generate_content(
+                            model=MODEL_ID,
+                            contents=[
+                                types.Part.from_bytes(data=chunk_bytes, mime_type="application/pdf"),
+                                simple_prompt
+                            ],
+                            config=types.GenerateContentConfig(
+                                temperature=0.1 * attempt,
+                                response_mime_type="application/json",
+                            )
                         )
-                    )
                     
                     if response.usage_metadata:
                         local_in += response.usage_metadata.prompt_token_count or 0

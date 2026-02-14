@@ -65,4 +65,14 @@ export {
     type GenerationProgress,
 } from "./use-generation";
 
+// Generation run history hooks
+export {
+    useProjectRuns,
+    useRun,
+    useRunBySession,
+    useCreateRun,
+    useUpdateRun,
+    type GenerationRun,
+} from "./use-runs";
+
 

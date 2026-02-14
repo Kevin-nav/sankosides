@@ -27,6 +27,7 @@ export default defineSchema({
         status: v.string(), // draft, generating, completed, archived
         archiveSourceStatus: v.optional(v.string()), // status to restore when unarchiving
         sessionId: v.optional(v.string()), // Reference to playground session UUID (from backend)
+        activeRunId: v.optional(v.id("generationRuns")), // Pointer to currently-active run (run history)
 
         // Generated slides data (JSON structure)
         slidesData: v.optional(v.any()),
@@ -151,6 +152,31 @@ export default defineSchema({
         createdAt: v.number(),
         updatedAt: v.number(),
     }).index("by_preset_id", ["presetId"]),
+
+    // =========================================================================
+    // Generation Runs (Run History / Persistence)
+    // =========================================================================
+
+    generationRuns: defineTable({
+        projectId: v.id("projects"),
+        sessionId: v.string(), // Session UUID in python backend
+
+        mode: v.optional(v.string()), // synthesis | research | replica (optional for now)
+        stage: v.string(), // UI stage marker, e.g. 'clarifying' | 'blueprint' | 'generating' | 'completed' | 'failed'
+        status: v.optional(v.string()), // active | completed | failed (optional, stage is primary)
+
+        brief: v.optional(v.any()), // Persist brief wizard data (topic, audience, slideCount, etc)
+        uploads: v.optional(v.any()), // Persist file hashes + processing/cache metadata
+        scope: v.optional(v.any()), // Persist selected sections/figures + overrides
+        outline: v.optional(v.any()), // Persist outline version/meta (and optionally JSON)
+        result: v.optional(v.any()), // Persist result pointers, exports, QA summary
+
+        error: v.optional(v.string()),
+
+        createdAt: v.number(),
+        updatedAt: v.number(),
+    }).index("by_project_id", ["projectId"])
+        .index("by_session_id", ["sessionId"]),
 
     // =========================================================================
     // Survey Responses

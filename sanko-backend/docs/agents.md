@@ -562,3 +562,67 @@ async def _run_my_agent(self):
 3. **Error Handling**: Catch and report failures
 4. **Logging**: Log all agent actions
 5. **Testing**: Write unit tests for each agent
+
+---
+
+## Implementation Lessons (PR #5)
+
+These are concrete guardrails learned while addressing reviewer feedback across backend and frontend flow integration.
+
+### 1. Flow state must reflect wizard state
+
+- If wizard provides scoped document sections (`wizard_data.sections`), do not only store them in `GatheredInfo`.
+- Also set flow-level scope when a knowledge base is present:
+  - `state.selected_sections = normalized_sections`
+  - `state.document_scoped = True`
+- This prevents the clarifier flow from re-asking scope questions for already-selected sections.
+
+### 2. Rate-limit checks must short-circuit provider calls
+
+- `CitationCacheService.should_rate_limit(provider)` returns a boolean and must be used as a gate.
+- If it returns `True`, skip provider API calls immediately.
+- Applies to CrossRef, OpenAlex, and Semantic Scholar paths.
+
+### 3. Distributed lock release must be atomic
+
+- Never do `get(lock_key)` then `delete(lock_key)` for lock release.
+- Use Redis Lua compare-and-delete (`eval`) so delete only happens when stored token matches.
+- Keep exception handling around Redis script execution and fall back safely.
+
+### 4. Avoid blocking calls inside async code
+
+- Any synchronous client call in async methods (e.g., Convex query) must run via `asyncio.to_thread(...)`.
+- Cache behavior stays the same; only execution context changes to protect event loop responsiveness.
+
+### 5. Auth helper contract should normalize token failures
+
+- Auth token verification (`adminAuth.verifyIdToken`) can throw.
+- Wrap verification in `try/except` and return a structured auth result (`401`, meaningful message) instead of surfacing a 500.
+- Only query user/project data after successful token verification.
+
+### 6. Accessibility is required for interactive cards
+
+- Clickable cards must be keyboard-accessible:
+  - `role="button"`
+  - `tabIndex={0}`
+  - `onKeyDown` handling for Enter/Space (`preventDefault` on Space)
+- Preserve visible label text and/or add `aria-label`.
+
+### 7. Polling loops must be cancellable and leak-safe
+
+- Track per-file polling state in a map (timer + `AbortController`).
+- On remove/unmount/clear:
+  - abort active fetches
+  - clear pending timers
+  - delete tracking entries
+- Guard state updates after abort (`signal.aborted`) and enforce per-request fetch timeout.
+
+### 8. Never hardcode QA success metrics in UI
+
+- Pipeline score display must come from real payload fields (`qa_score`/`visualScore`), or be omitted.
+- Avoid synthetic defaults like fixed 95% that can misrepresent quality.
+
+### 9. Session-bound refs must reset when session changes
+
+- In generation progress UI, reset one-shot refs (`completionRef`, `lastStageRef`) on `sessionId` changes.
+- Prevents stale refs from suppressing callbacks in new sessions.

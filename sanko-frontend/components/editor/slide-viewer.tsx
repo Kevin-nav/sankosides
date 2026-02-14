@@ -1,8 +1,12 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { ChevronLeft, ChevronRight, Download, Maximize2, Minimize2, Keyboard } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Maximize2, Minimize2, Keyboard, RotateCcw, Sparkles } from "lucide-react";
 import { useGeneratedSlides } from "@/hooks/api/use-generation";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 
 interface Slide {
     order: number;
@@ -19,9 +23,14 @@ interface SlideViewerProps {
 }
 
 export function SlideViewer({ sessionId, onExport }: SlideViewerProps) {
-    const { data, isLoading, error } = useGeneratedSlides(sessionId);
+    const { data, isLoading, error, refetch } = useGeneratedSlides(sessionId);
     const [currentSlide, setCurrentSlide] = useState(0);
     const [isFullscreen, setIsFullscreen] = useState(false);
+    const [patchOpen, setPatchOpen] = useState(false);
+    const [patchInstruction, setPatchInstruction] = useState("");
+    const [patchKeepLayout, setPatchKeepLayout] = useState(true);
+    const [patchBusy, setPatchBusy] = useState(false);
+    const [patchError, setPatchError] = useState<string | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const slides = useMemo<Slide[]>(() => {
         if (!data) return [];
@@ -31,6 +40,48 @@ export function SlideViewer({ sessionId, onExport }: SlideViewerProps) {
         if (!data) return 0;
         return data.qa_report?.average_score || data.average_visual_score || 0;
     }, [data]);
+
+    const activeSlide = slides[currentSlide];
+
+    const submitPatch = useCallback(async () => {
+        if (!activeSlide) return;
+        const instruction = patchInstruction.trim();
+        if (!instruction) return;
+
+        setPatchBusy(true);
+        setPatchError(null);
+        try {
+            const res = await fetch(`/api/generate/patch-slide/${sessionId}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    slide_order: activeSlide.order,
+                    instruction,
+                    keep_layout: patchKeepLayout,
+                }),
+            });
+
+            const payload = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                const detail =
+                    typeof payload?.detail === "string"
+                        ? payload.detail
+                        : typeof payload?.message === "string"
+                            ? payload.message
+                            : "Failed to patch slide.";
+                setPatchError(detail);
+                return;
+            }
+
+            setPatchOpen(false);
+            setPatchInstruction("");
+            await refetch();
+        } catch (e) {
+            setPatchError(e instanceof Error ? e.message : "Failed to patch slide.");
+        } finally {
+            setPatchBusy(false);
+        }
+    }, [activeSlide, patchInstruction, patchKeepLayout, refetch, sessionId]);
 
     // Handle Fullscreen Cleanup / Events
     useEffect(() => {
@@ -106,6 +157,15 @@ export function SlideViewer({ sessionId, onExport }: SlideViewerProps) {
             <div className="flex h-full w-full flex-col items-center justify-center text-center bg-neutral-950 p-6">
                 <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-6 max-w-md">
                     <p className="text-red-400 font-medium">Failed to load slides</p>
+                    <p className="mt-2 text-sm text-red-200/90">Check generation status and retry loading the result.</p>
+                    <Button
+                        variant="outline"
+                        className="mt-4 border-neutral-700 text-neutral-100"
+                        onClick={() => void refetch()}
+                    >
+                        <RotateCcw className="mr-2 h-4 w-4" />
+                        Retry
+                    </Button>
                 </div>
             </div>
         );
@@ -114,7 +174,16 @@ export function SlideViewer({ sessionId, onExport }: SlideViewerProps) {
     if (slides.length === 0) {
         return (
             <div className="flex h-full w-full flex-col items-center justify-center text-center bg-neutral-950">
-                <p className="text-neutral-400">No slides found.</p>
+                <p className="text-neutral-400">No slides are available for this session yet.</p>
+                <p className="mt-1 text-xs text-neutral-500">If generation recently finished, wait a moment and refresh.</p>
+                <Button
+                    variant="outline"
+                    className="mt-4 border-neutral-700 text-neutral-100"
+                    onClick={() => void refetch()}
+                >
+                    <RotateCcw className="mr-2 h-4 w-4" />
+                    Refresh slides
+                </Button>
             </div>
         );
     }
@@ -159,6 +228,21 @@ export function SlideViewer({ sessionId, onExport }: SlideViewerProps) {
                         {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
                         {!isFullscreen && <span className="hidden sm:inline">Fullscreen</span>}
                     </button>
+                    {!isFullscreen && activeSlide && (
+                        <button
+                            onClick={() => {
+                                setPatchError(null);
+                                setPatchInstruction("");
+                                setPatchKeepLayout(true);
+                                setPatchOpen(true);
+                            }}
+                            className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-neutral-300 hover:bg-neutral-800 transition-colors"
+                            title="Patch this slide"
+                        >
+                            <Sparkles className="h-4 w-4" />
+                            <span className="hidden sm:inline">Fix slide</span>
+                        </button>
+                    )}
                     {onExport && !isFullscreen && (
                         <button
                             onClick={onExport}
@@ -231,19 +315,75 @@ export function SlideViewer({ sessionId, onExport }: SlideViewerProps) {
                     <button
                         onClick={prevSlide}
                         disabled={currentSlide === 0}
-                        className="pointer-events-auto p-3 rounded-full bg-black/50 hover:bg-black/70 text-white/70 hover:text-white disabled:opacity-0 transition-opacity"
+                        aria-label="Previous slide"
+                        className="pointer-events-auto p-3 rounded-full bg-black/50 hover:bg-black/70 text-white/70 hover:text-white disabled:opacity-0 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
                     >
                         <ChevronLeft className="h-8 w-8" />
                     </button>
                     <button
                         onClick={nextSlide}
                         disabled={currentSlide === slides.length - 1}
-                        className="pointer-events-auto p-3 rounded-full bg-black/50 hover:bg-black/70 text-white/70 hover:text-white disabled:opacity-0 transition-opacity"
+                        aria-label="Next slide"
+                        className="pointer-events-auto p-3 rounded-full bg-black/50 hover:bg-black/70 text-white/70 hover:text-white disabled:opacity-0 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
                     >
                         <ChevronRight className="h-8 w-8" />
                     </button>
                 </div>
             </div>
+
+            <Dialog open={patchOpen} onOpenChange={setPatchOpen}>
+                <DialogContent className="bg-neutral-950 border border-neutral-800 text-neutral-100 sm:max-w-xl">
+                    <DialogHeader>
+                        <DialogTitle className="text-neutral-100">Fix this slide</DialogTitle>
+                        <DialogDescription className="text-neutral-400">
+                            Describe what should change. We will patch this slide in place (no full regeneration).
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-3">
+                        <Textarea
+                            value={patchInstruction}
+                            onChange={(e) => setPatchInstruction(e.target.value)}
+                            placeholder="e.g. Make the title shorter, fix the equation formatting, add 2 bullet points, replace the diagram description..."
+                            className="min-h-28 border-neutral-800 bg-neutral-900/40 text-neutral-100 placeholder:text-neutral-600"
+                            disabled={patchBusy}
+                        />
+
+                        <div className="flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-900/30 px-3 py-2">
+                            <div className="text-sm text-neutral-200">Keep layout</div>
+                            <Switch
+                                checked={patchKeepLayout}
+                                onCheckedChange={(v) => setPatchKeepLayout(!!v)}
+                                disabled={patchBusy}
+                            />
+                        </div>
+
+                        {patchError && (
+                            <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+                                {patchError}
+                            </div>
+                        )}
+                    </div>
+
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            className="border-neutral-800 text-neutral-200"
+                            onClick={() => setPatchOpen(false)}
+                            disabled={patchBusy}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            className="bg-emerald-600 hover:bg-emerald-500 text-white"
+                            onClick={() => void submitPatch()}
+                            disabled={patchBusy || !patchInstruction.trim() || !activeSlide}
+                        >
+                            {patchBusy ? "Patching..." : "Apply patch"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             {/* Bottom Bar - Hidden in FS unless hovered */}
             <div
@@ -261,6 +401,7 @@ export function SlideViewer({ sessionId, onExport }: SlideViewerProps) {
                         <button
                             key={idx}
                             onClick={() => setCurrentSlide(idx)}
+                            aria-label={`Go to slide ${idx + 1}`}
                             className={`
                                 h-1.5 rounded-full transition-all duration-300
                                 ${idx === currentSlide

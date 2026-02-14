@@ -19,6 +19,7 @@ from datetime import datetime
 import json
 import asyncio
 import os
+import re
 from pathlib import Path
 import threading
 
@@ -41,9 +42,11 @@ from app.crew.flows.slide_generation import (
 )
 from app.crew.flows.metrics import MetricsCollector
 from app.core.logging import get_logger
+from app.core.config import settings
 from app.core.database import get_db, get_async_session
 from app.services.storage import get_storage_service, PDFCacheService
 from app.services.convex_service import get_convex_service
+from app.clients.gemini.client import GeminiInteractionsClient
 
 logger = get_logger(__name__)
 
@@ -361,6 +364,31 @@ class FileUploadResponse(BaseModel):
     message: str
 
 
+class DocumentSectionPreview(BaseModel):
+    """Compact section representation for UI scoping."""
+    title: str
+    preview: str
+    page_range: str = ""
+    visuals_count: int = 0
+
+
+class DocumentSectionsRequest(BaseModel):
+    file_hashes: List[str] = Field(default_factory=list)
+
+
+class DocumentSectionsItem(BaseModel):
+    file_hash: str
+    filename: Optional[str] = None
+    status: str  # completed | queued | processing | failed | missing
+    sections_count: Optional[int] = None
+    sections: Optional[List[DocumentSectionPreview]] = None
+    error_message: Optional[str] = None
+
+
+class DocumentSectionsResponse(BaseModel):
+    documents: List[DocumentSectionsItem]
+
+
 class OutlineResponse(BaseModel):
     """Response containing the outline."""
     session_id: str
@@ -392,6 +420,20 @@ class SessionStatusResponse(BaseModel):
     order_form: Optional[Dict] = None
     skeleton: Optional[Dict] = None
     qa_score: Optional[float] = None
+
+
+class PatchSlideRequest(BaseModel):
+    """Patch a single slide in an already-generated presentation."""
+    slide_order: int = Field(..., ge=1, description="1-indexed slide order")
+    instruction: str = Field(..., min_length=1, max_length=4000, description="User instruction for the patch")
+    keep_layout: bool = Field(default=True, description="Try to preserve layout/structure and only adjust content")
+
+
+class PatchSlideResponse(BaseModel):
+    session_id: str
+    slide_order: int
+    slide: Dict[str, Any]
+    message: str
 
 
 # =============================================================================
@@ -597,6 +639,81 @@ async def upload_files(files: List[UploadFile] = File(...)):
         total_cached=total_cached,
         message=f"{len(results)} file(s) uploaded. {total_cached} cached, {len(files_to_process)} processing.",
     )
+
+
+@router.post("/document-sections", response_model=DocumentSectionsResponse)
+async def get_document_sections(request: DocumentSectionsRequest):
+    """
+    Return extracted document section structure for a list of file hashes.
+
+    This is intended for the frontend "scope" UI so users can select which
+    parts of each PDF to use. It only returns cached sections (no reprocessing).
+    """
+    cache_service = PDFCacheService()
+    documents: List[DocumentSectionsItem] = []
+
+    for file_hash in request.file_hashes:
+        file_hash = str(file_hash).strip()
+        if not file_hash:
+            continue
+
+        cached_kb = await _get_cached_kb(cache_service, file_hash)
+        if cached_kb and getattr(cached_kb, "sections", None):
+            sections = []
+            for section in cached_kb.sections:
+                content = getattr(section, "content", "") or ""
+                preview = " ".join(content.split())
+                if len(preview) > 220:
+                    preview = preview[:220].rstrip() + "..."
+                visuals = getattr(section, "visuals", None) or []
+                sections.append(
+                    DocumentSectionPreview(
+                        title=getattr(section, "title", "") or "Untitled section",
+                        preview=preview,
+                        page_range=getattr(section, "page_range", "") or "",
+                        visuals_count=len(visuals),
+                    )
+                )
+
+            filename = ""
+            try:
+                if cached_kb.sections:
+                    filename = getattr(cached_kb.sections[0], "document_name", "") or ""
+            except Exception:
+                filename = ""
+
+            documents.append(
+                DocumentSectionsItem(
+                    file_hash=file_hash,
+                    filename=filename or None,
+                    status="completed",
+                    sections_count=len(sections),
+                    sections=sections,
+                )
+            )
+            continue
+
+        job = get_processing_status(file_hash)
+        if job:
+            documents.append(
+                DocumentSectionsItem(
+                    file_hash=file_hash,
+                    filename=job.filename,
+                    status=job.status.value,
+                    sections_count=job.sections_count,
+                    error_message=job.error_message,
+                )
+            )
+            continue
+
+        documents.append(
+            DocumentSectionsItem(
+                file_hash=file_hash,
+                status="missing",
+            )
+        )
+
+    return DocumentSectionsResponse(documents=documents)
 
 
 async def _run_background_synthesis(file_info: Dict[str, str]):
@@ -1297,6 +1414,111 @@ async def get_result(session_id: str):
         "presentation": state.generated_presentation.model_dump(),
         "qa_report": state.qa_report.model_dump() if state.qa_report else None,
     }
+
+
+def _strip_markdown_code_fences(text: str) -> str:
+    """Gemini sometimes returns ```html fenced blocks; normalize to raw HTML."""
+    if not isinstance(text, str):
+        return ""
+    stripped = text.strip()
+    match = re.match(r"^```(?:html)?\s*([\s\S]*?)\s*```$", stripped, flags=re.IGNORECASE)
+    if match:
+        return match.group(1).strip()
+    return stripped
+
+
+@router.post("/patch-slide/{session_id}", response_model=PatchSlideResponse)
+async def patch_slide(session_id: str, request: PatchSlideRequest):
+    """
+    Patch a single slide's HTML in place.
+
+    This is intentionally lightweight: we do not re-run the full pipeline.
+    """
+    state = get_session(session_id)
+
+    if state.status not in [FlowStatus.COMPLETED, "completed"]:
+        raise HTTPException(status_code=400, detail=f"Cannot patch slides unless generation is complete. Status: {state.status}")
+
+    if not state.generated_presentation or not getattr(state.generated_presentation, "slides", None):
+        raise HTTPException(status_code=500, detail="No generated presentation found to patch")
+
+    slide = next((s for s in state.generated_presentation.slides if getattr(s, "order", None) == request.slide_order), None)
+    if not slide:
+        raise HTTPException(status_code=404, detail=f"Slide {request.slide_order} not found")
+
+    if not settings.gemini_api_key:
+        raise HTTPException(status_code=503, detail="Gemini API key not configured")
+
+    original_html = getattr(slide, "rendered_html", "") or ""
+    if not original_html.strip():
+        raise HTTPException(status_code=500, detail="Slide has no rendered_html to patch")
+
+    layout_rule = (
+        "Preserve the existing layout and structure as much as possible; only change what is necessary."
+        if request.keep_layout
+        else "You may change layout/structure if it helps satisfy the instruction."
+    )
+
+    system_instruction = (
+        "You are an expert HTML slide editor. You will receive a complete HTML document for a single slide.\n"
+        "Apply the user's instruction and return ONLY the updated complete HTML document.\n"
+        "Do not wrap your answer in markdown. Do not include explanations.\n"
+        "Do not add external network dependencies (no remote JS/CSS). Keep it self-contained.\n"
+        f"{layout_rule}"
+    )
+
+    prompt = (
+        "Existing slide HTML:\n"
+        "```html\n"
+        f"{original_html}\n"
+        "```\n\n"
+        "Instruction:\n"
+        f"{request.instruction}\n\n"
+        "Return only the updated complete HTML document."
+    )
+
+    try:
+        client = GeminiInteractionsClient(api_key=settings.gemini_api_key)
+        result = await client.generate_with_thinking(
+            prompt=prompt,
+            model=settings.model_flash,
+            system_instruction=system_instruction,
+            thinking_level=settings.thinking_level_low,
+        )
+        updated_html = _strip_markdown_code_fences(result.get("response", ""))
+    except Exception as e:
+        logger.error(f"[PATCH_SLIDE] Gemini call failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to patch slide: {str(e)}")
+
+    if len(updated_html.strip()) < 50:
+        raise HTTPException(status_code=500, detail="Patched HTML was empty or invalid")
+
+    slide.rendered_html = updated_html
+    save_session(state)
+
+    # Best-effort persistence to Convex project slidesData.
+    project_id = getattr(state, "project_id", None)
+    if project_id:
+        try:
+            client = get_db()
+            slides_data = state.generated_presentation.model_dump()
+            await asyncio.wait_for(
+                asyncio.to_thread(
+                    client.mutation,
+                    "projects:update",
+                    {"id": project_id, "slidesData": slides_data, "status": "completed"},
+                ),
+                timeout=10.0,
+            )
+        except Exception as e:
+            logger.warning(f"[PATCH_SLIDE] Failed to persist patched slide to Convex: {e}")
+
+    return PatchSlideResponse(
+        session_id=session_id,
+        slide_order=request.slide_order,
+        slide=slide.model_dump(),
+        message="Slide patched successfully.",
+    )
 
 
 # =============================================================================

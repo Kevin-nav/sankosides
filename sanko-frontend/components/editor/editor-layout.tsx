@@ -3,7 +3,7 @@
 import { ReactNode } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Share2, Download } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
 interface EditorLayoutProps {
@@ -11,6 +11,7 @@ interface EditorLayoutProps {
     sidebar: ReactNode;
     title?: string;
     status?: string;
+    headerRight?: ReactNode;
 }
 
 export function EditorLayout({
@@ -18,6 +19,7 @@ export function EditorLayout({
     sidebar,
     title = "Untitled Presentation",
     status = "draft",
+    headerRight,
 }: EditorLayoutProps) {
     const statusLabel = status === "completed"
         ? "Ready"
@@ -41,26 +43,19 @@ export function EditorLayout({
                 </div>
 
                 <div className="flex items-center gap-3">
-                    <Button variant="ghost" size="sm" className="hidden md:flex h-8 text-xs font-medium text-neutral-400 hover:text-white hover:bg-white/5 transition-all">
-                        <Share2 className="mr-2 h-3.5 w-3.5" />
-                        Share
-                    </Button>
-                    <Button size="sm" className="h-8 bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs rounded-lg transition-all shadow-[0_0_15px_-3px_rgba(5,150,105,0.4)]">
-                        <Download className="mr-2 h-3.5 w-3.5" />
-                        Export
-                    </Button>
+                    {headerRight ?? <div className="text-xs text-neutral-500">Editor</div>}
                 </div>
             </header>
 
             {/* Main Content Area */}
-            <div className="flex flex-1 overflow-hidden">
+            <div className="flex flex-1 flex-col md:flex-row overflow-hidden">
                 {/* Left Panel (Sidebar/Chat) */}
-                <aside className="w-[400px] lg:w-[450px] xl:w-[500px] border-r border-white/10 bg-neutral-950 relative flex flex-col z-40 shadow-xl">
+                <aside className="h-[55vh] md:h-auto w-full md:w-[380px] lg:w-[430px] xl:w-[480px] border-b md:border-b-0 md:border-r border-white/10 bg-neutral-950 relative flex flex-col z-40 shadow-xl">
                     {sidebar}
                 </aside>
 
                 {/* Right Panel (Canvas/Preview) */}
-                <main className="flex-1 bg-neutral-900/50 relative overflow-hidden flex flex-col items-center justify-center p-8">
+                <main className="flex-1 min-h-0 bg-neutral-900/50 relative overflow-hidden flex flex-col items-center justify-center p-3 md:p-8">
                     <div className="absolute inset-0 z-0 opacity-20 pointer-events-none">
                         <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]"></div>
                         <div className="absolute inset-0 bg-gradient-to-t from-neutral-950 via-transparent to-transparent"></div>
@@ -69,7 +64,7 @@ export function EditorLayout({
                     <motion.div
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
-                        className="relative z-10 w-full max-w-[90%] lg:max-w-[1280px] aspect-video rounded-xl border border-white/5 bg-neutral-950 shadow-2xl shadow-black/50 overflow-hidden ring-1 ring-white/10"
+                        className="relative z-10 w-full max-w-[98%] md:max-w-[90%] lg:max-w-[1280px] aspect-video rounded-xl border border-white/5 bg-neutral-950 shadow-2xl shadow-black/50 overflow-hidden ring-1 ring-white/10"
                     >
                         {children}
                     </motion.div>
