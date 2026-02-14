@@ -653,7 +653,6 @@ Important:
                         cache_obj = None
                         try:
                             cache_cfg = types.CreateCachedContentConfig(
-                                model=MODEL_ID,
                                 contents=[
                                     types.Content(
                                         role="user",
@@ -676,8 +675,10 @@ Important:
                             if cache_obj:
                                 try:
                                     self.client.caches.delete(name=cache_obj.name)
-                                except Exception:
-                                    pass
+                                except Exception as e:
+                                    logger.debug(
+                                        f"[v8-EXTRACT] Failed to delete cache {getattr(cache_obj, 'name', '')}: {e}"
+                                    )
                     else:
                         response = self.client.models.generate_content(
                             model=MODEL_ID,

@@ -1498,6 +1498,7 @@ def sanitize_slide_html(raw_html: str) -> str:
                     # For elements whose whole purpose is the external resource, drop them.
                     if tag in {"img", "source", "video", "audio", "track"} and attr_l == "src":
                         el.drop_tree()
+                        continue
                     if tag == "link" and attr_l == "href":
                         el.drop_tree()
                 continue
