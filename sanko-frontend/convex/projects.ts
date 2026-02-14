@@ -45,6 +45,8 @@ export const update = mutation({
         thumbnailUrl: v.optional(v.string()),
         slidesData: v.optional(v.any()),
         sessionId: v.optional(v.string()),
+        activeRunId: v.optional(v.id("generationRuns")),
+        clearActiveRunId: v.optional(v.boolean()),
     },
     handler: async (ctx, args) => {
         const { id, ...updates } = args;
@@ -67,6 +69,13 @@ export const update = mutation({
 
         if (updates.sessionId !== undefined) {
             patch.sessionId = updates.sessionId;
+        }
+
+        if (updates.activeRunId !== undefined) {
+            patch.activeRunId = updates.activeRunId;
+        }
+        if (updates.clearActiveRunId) {
+            patch.activeRunId = undefined;
         }
 
         if (updates.title !== undefined) {

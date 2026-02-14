@@ -77,6 +77,13 @@ RULE: Only add research_needs for claims that:
 3. Describe methodologies or findings that should be attributed
 4. Are NOT common knowledge (e.g., "water boils at 100°C" needs no research)
 
+### 3.5 Evidence Ledger (ZERO-HALLUCINATION)
+For each factual bullet point, also populate:
+- `claims`: list of atomic factual claims in the slide
+- `evidence_refs`: deterministic references for each claim where possible
+  - include section_id/page_range when sourced from uploaded documents
+If evidence is missing, leave evidence_refs empty for that claim; do not fabricate.
+
 When a slide needs equations:
 - Add `equation_placeholder`: Description of what equation is needed
 - Example: "Linear regression formula: y = mx + b with explanation"
@@ -127,6 +134,8 @@ Return a PlannedContent object with:
   - citation_queries (if needed)
   - image_query (if needed)
   - research_needs (for claims needing academic backing)
+  - claims (atomic claim statements)
+  - evidence_refs (claim evidence pointers when available)
   - template_type
   - speaker_notes (if requested)
 

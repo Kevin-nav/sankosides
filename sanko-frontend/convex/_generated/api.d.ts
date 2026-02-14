@@ -10,6 +10,7 @@
 
 import type * as citations from "../citations.js";
 import type * as generation from "../generation.js";
+import type * as generationRuns from "../generationRuns.js";
 import type * as layoutPresets from "../layoutPresets.js";
 import type * as projects from "../projects.js";
 import type * as templates from "../templates.js";
@@ -25,6 +26,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   citations: typeof citations;
   generation: typeof generation;
+  generationRuns: typeof generationRuns;
   layoutPresets: typeof layoutPresets;
   projects: typeof projects;
   templates: typeof templates;

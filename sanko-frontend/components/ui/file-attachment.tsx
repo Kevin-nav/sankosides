@@ -8,6 +8,37 @@ import { cn } from "@/lib/utils";
 // File status types
 type FileStatus = 'hashing' | 'uploading' | 'checking' | 'processing' | 'ready' | 'cached' | 'error';
 
+function parseCacheHitType(uploadedFile: Record<string, unknown>): { hit?: "exact" | "similar"; canonicalHash?: string } {
+    const canonicalHash =
+        typeof uploadedFile.canonical_hash === "string"
+            ? uploadedFile.canonical_hash
+            : typeof uploadedFile.canonicalHash === "string"
+                ? uploadedFile.canonicalHash
+                : undefined;
+
+    const rawType =
+        typeof uploadedFile.cache_hit_type === "string"
+            ? uploadedFile.cache_hit_type
+            : typeof uploadedFile.match_type === "string"
+                ? uploadedFile.match_type
+                : typeof uploadedFile.dedup_type === "string"
+                    ? uploadedFile.dedup_type
+                    : undefined;
+
+    const normalized = (rawType ?? "").toLowerCase();
+    if (normalized.includes("similar") || normalized.includes("near")) return { hit: "similar", canonicalHash };
+    if (normalized.includes("exact")) return { hit: "exact", canonicalHash };
+
+    if (uploadedFile.cached === true) return { hit: "exact", canonicalHash };
+    if (uploadedFile.matched === true) return { hit: "similar", canonicalHash };
+
+    // Polling responses may only include `status: completed`.
+    const status = typeof uploadedFile.status === "string" ? uploadedFile.status.toLowerCase() : "";
+    if (status === "completed") return { hit: "exact", canonicalHash };
+
+    return { canonicalHash };
+}
+
 export interface AttachedFile {
     id: string;
     file: File;
@@ -16,6 +47,8 @@ export interface AttachedFile {
     error?: string;
     r2Key?: string;
     sectionsCount?: number;
+    cacheHitType?: "exact" | "similar";
+    canonicalHash?: string;
 }
 
 interface FileAttachmentBarProps {
@@ -77,6 +110,10 @@ export function FileAttachmentBar({ files, onRemove, disabled = false, className
                 {files.map((file) => {
                     const config = statusConfig[file.status];
                     const isProcessing = ['hashing', 'uploading', 'checking', 'processing'].includes(file.status);
+                    const cacheLabel =
+                        file.status === "cached" && file.cacheHitType === "similar"
+                            ? "Matched"
+                            : config.label;
 
                     return (
                         <motion.div
@@ -107,6 +144,9 @@ export function FileAttachmentBar({ files, onRemove, disabled = false, className
                             {/* Status */}
                             <span className={cn("flex items-center gap-1 text-[10px]", config.color)}>
                                 {config.icon}
+                                <span title={file.status === "cached" && file.cacheHitType === "similar" ? "Near-duplicate match: using previously processed document." : undefined}>
+                                    {cacheLabel}
+                                </span>
                                 {file.status === 'cached' && file.sectionsCount && (
                                     <span className="opacity-70">({file.sectionsCount})</span>
                                 )}
@@ -229,11 +269,14 @@ export function useFileUpload() {
 
                     if (data.status === 'completed') {
                         stopPolling(fileId);
+                        const parsed = parseCacheHitType(data as Record<string, unknown>);
                         setFiles(prev => prev.map(f =>
                             f.id === fileId ? {
                                 ...f,
                                 status: 'cached',
                                 sectionsCount: data.sections_count,
+                                cacheHitType: parsed.hit ?? f.cacheHitType,
+                                canonicalHash: parsed.canonicalHash ?? f.canonicalHash,
                             } : f
                         ));
                     } else if (data.status === 'failed') {
@@ -276,7 +319,14 @@ export function useFileUpload() {
         for (const file of newFiles) {
             // Validate file type
             if (!file.type.includes('pdf') && !file.name.toLowerCase().endsWith('.pdf')) {
-                continue; // Skip non-PDFs silently
+                const id = crypto.randomUUID();
+                setFiles(prev => [...prev, {
+                    id,
+                    file,
+                    status: 'error',
+                    error: 'Unsupported file type. Only PDF files are accepted.',
+                }]);
+                continue;
             }
 
             // Validate size (20MB)
@@ -330,6 +380,7 @@ export function useFileUpload() {
 
                 const data = await response.json();
                 const uploadedFile = data.files[0];
+                const parsed = parseCacheHitType(uploadedFile);
 
                 if (uploadedFile.cached) {
                     // Already processed - immediately ready
@@ -339,6 +390,20 @@ export function useFileUpload() {
                             status: 'cached',
                             r2Key: uploadedFile.r2_key,
                             sectionsCount: uploadedFile.sections_count,
+                            cacheHitType: parsed.hit ?? "exact",
+                            canonicalHash: parsed.canonicalHash,
+                        } : f
+                    ));
+                } else if (parsed.hit === "similar") {
+                    // Near-duplicate match - treat as cached to avoid reprocessing.
+                    setFiles(prev => prev.map(f =>
+                        f.id === id ? {
+                            ...f,
+                            status: 'cached',
+                            r2Key: uploadedFile.r2_key,
+                            sectionsCount: uploadedFile.sections_count,
+                            cacheHitType: "similar",
+                            canonicalHash: parsed.canonicalHash,
                         } : f
                     ));
                 } else {
@@ -388,6 +453,13 @@ export function useFileUpload() {
         return files.every(f => f.status === 'ready' || f.status === 'cached' || f.status === 'error');
     }, [files]);
 
+    const getFileSummary = useCallback(() => {
+        const included = files.filter(f => (f.status === 'ready' || f.status === 'cached') && f.hash).length;
+        const excluded = files.filter(f => f.status === 'error').length;
+        const processing = files.filter(f => ['hashing', 'uploading', 'checking', 'processing'].includes(f.status)).length;
+        return { included, excluded, processing, total: files.length };
+    }, [files]);
+
     // Clear all files (after message sent)
     const clearFiles = useCallback(() => {
         for (const [fileId] of pollingMapRef.current) {
@@ -417,6 +489,7 @@ export function useFileUpload() {
         removeFile,
         getReadyHashes,
         allReady,
+        getFileSummary,
         clearFiles,
         isUploading,
     };

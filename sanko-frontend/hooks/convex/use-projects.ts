@@ -22,6 +22,7 @@ export interface Project {
     status: string; // 'draft' | 'generating' | 'completed' | 'archived'
     archiveSourceStatus?: string;
     sessionId?: string;
+    activeRunId?: Id<"generationRuns">;
     slidesData?: unknown;
     createdAt: number;
     updatedAt: number;

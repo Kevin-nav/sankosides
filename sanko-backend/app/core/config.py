@@ -48,6 +48,11 @@ class Settings(BaseSettings):
 
     # Feature Flags
     enable_convex_cache: bool = False
+    require_evidence_for_claims: bool = False
+    enable_gemini_explicit_cache: bool = False
+    gemini_cache_ttl_seconds: int = 900
+    extraction_min_sections: int = 3
+    extraction_min_coverage_ratio: float = 0.6
     
     # Academic Search APIs
     semantic_scholar_api_key: Optional[str] = None  # Get from semanticscholar.org/product/api

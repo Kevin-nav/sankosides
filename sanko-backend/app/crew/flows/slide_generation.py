@@ -28,6 +28,8 @@ from enum import Enum
 import asyncio
 import json
 import os
+import re
+import hashlib
 
 from app.models.schemas import (
     OrderForm,
@@ -48,6 +50,7 @@ from app.models.schemas import (
     KnowledgeBase,
     ResearchFact,
     ResearchNeed,
+    EvidenceRef,
 )
 from app.crew.agents.clarifier import create_clarifier_agent
 from app.crew.agents.planner import create_planner_agent
@@ -63,7 +66,12 @@ from app.crew.agents.helper import (
 )
 from app.crew.tools.render_service_tool import get_render_tool
 from app.crew.tools.synthesis_tool import SynthesisTool, SynthesisError
-from app.crew.tools.context_tool import ReadSectionTool, ListSectionsTool
+from app.crew.tools.context_tool import (
+    ReadSectionTool,
+    ListSectionsTool,
+    SearchSectionsTool,
+    ReadSectionByIdTool,
+)
 from app.crew.tools.academic_search_tool import AcademicSearchTool
 from app.crew.tools.doi_validator import DOIValidatorTool
 from app.services.citation_utils import (
@@ -74,6 +82,7 @@ from app.services.citation_utils import (
     sort_citations,
 )
 from app.core.logging import get_logger
+from app.core.config import settings
 from app.services.cache import RedisCache
 from app.crew.flows.metrics import (
     MetricsCollector,
@@ -469,7 +478,7 @@ class SlideGenerationFlow:
             logger.info(f"[SYNTHESIS]   R2 Key: {r2_key}")
             
             # Step 1: Check cache (quick DB operation - separate session)
-            logger.info(f"[SYNTHESIS]   Checking cache...")
+            logger.info("[SYNTHESIS]   Checking cache...")
             cached_kb = None
             try:
                 async for db_session in get_async_session():
@@ -479,7 +488,7 @@ class SlideGenerationFlow:
                 logger.warning(f"[SYNTHESIS]   Cache check failed: {e}")
             
             if cached_kb:
-                logger.info(f"[SYNTHESIS]   ✓ CACHE HIT: Using pre-processed KnowledgeBase")
+                logger.info("[SYNTHESIS]   ✓ CACHE HIT: Using pre-processed KnowledgeBase")
                 logger.info(f"[SYNTHESIS]   → {len(cached_kb.sections)} sections, skipping Gemini API call")
                 all_sections.extend(cached_kb.sections)
                 combined_summary_parts.append(f"Content from {filename}: {cached_kb.summary}")
@@ -511,8 +520,8 @@ class SlideGenerationFlow:
                 logger.warning("[SYNTHESIS]   Lock wait timed out, proceeding in degraded mode")
 
             # Step 2: Download from R2 (no DB needed)
-            logger.info(f"[SYNTHESIS]   ⏳ CACHE MISS: Gemini processing required")
-            logger.info(f"[SYNTHESIS]   📥 Downloading from R2...")
+            logger.info("[SYNTHESIS]   ⏳ CACHE MISS: Gemini processing required")
+            logger.info("[SYNTHESIS]   📥 Downloading from R2...")
             try:
                 download_start = time.time()
                 file_data = await storage.download_file(r2_key)
@@ -535,8 +544,8 @@ class SlideGenerationFlow:
                     tmp.write(file_data)
                     tmp_path = tmp.name
                 
-                logger.info(f"[SYNTHESIS]  Calling Gemini API for multimodal extraction...")
-                logger.info(f"[SYNTHESIS]  This may take several minutes for large documents...")
+                logger.info("[SYNTHESIS]  Calling Gemini API for multimodal extraction...")
+                logger.info("[SYNTHESIS]  This may take several minutes for large documents...")
                 start_time = time.time()
                 loop = asyncio.get_running_loop()
                 kb = await loop.run_in_executor(None, synthesis_tool._run, tmp_path)
@@ -573,7 +582,7 @@ class SlideGenerationFlow:
             
             # Step 4: Cache the result (fresh DB connection - quick operation)
             if kb:
-                logger.info(f"[SYNTHESIS]  Saving to cache for future use...")
+                logger.info("[SYNTHESIS]  Saving to cache for future use...")
                 try:
                     async for db_session in get_async_session():
                         await cache_service.save_cache(
@@ -586,7 +595,7 @@ class SlideGenerationFlow:
                             processing_time_ms=processing_time_ms,
                         )
                         break
-                    logger.info(f"[SYNTHESIS]   ✓ Cached successfully")
+                    logger.info("[SYNTHESIS]   ✓ Cached successfully")
                 except Exception as e:
                     logger.warning(f"[SYNTHESIS]   Cache save failed (non-fatal): {e}")
                     # Continue anyway - we have the KB in memory
@@ -702,7 +711,9 @@ class SlideGenerationFlow:
             # Wire up tools for querying document sections
             # These enable the clarifier to read EXACT, VERBATIM content from PDFs
             tools.append(ListSectionsTool(kb=self.state.knowledge_base))
+            tools.append(SearchSectionsTool(kb=self.state.knowledge_base))
             tools.append(ReadSectionTool(kb=self.state.knowledge_base))
+            tools.append(ReadSectionByIdTool(kb=self.state.knowledge_base))
             logger.info(f"Wired {len(tools)} document tools to clarifier agent")
         
         clarifier = create_clarifier_agent(tools=tools)
@@ -753,12 +764,12 @@ class SlideGenerationFlow:
                     # User approved - add to approved_related
                     self.state.approved_related.extend(self.state.pending_related_sections)
                     self.state.pending_related_sections = []
-                    logger.info(f"User approved related sections")
+                    logger.info("User approved related sections")
                 elif any(p in msg_lower for p in decline_patterns):
                     # User declined - add to declined_related
                     self.state.declined_related.extend(self.state.pending_related_sections)
                     self.state.pending_related_sections = []
-                    logger.info(f"User declined related sections")
+                    logger.info("User declined related sections")
                 # else: still waiting for answer
             
             # Detect source preference from user message
@@ -770,11 +781,11 @@ class SlideGenerationFlow:
                 if any(p in msg_lower for p in pdf_only_patterns):
                     info.source_type = "pdf_only"
                     info.has_source_preference = True
-                    logger.info(f"Detected source preference: pdf_only")
+                    logger.info("Detected source preference: pdf_only")
                 elif any(p in msg_lower for p in hybrid_patterns):
                     info.source_type = "pdf_plus_research"
                     info.has_source_preference = True
-                    logger.info(f"Detected source preference: pdf_plus_research")
+                    logger.info("Detected source preference: pdf_plus_research")
             
             # Build the appropriate context
             if self.state.document_scoped:
@@ -788,7 +799,7 @@ class SlideGenerationFlow:
             if not info.has_source_preference:
                 info.source_type = "research_only"
                 info.has_source_preference = True
-                logger.info(f"No document uploaded - setting source_type: research_only")
+            logger.info("No document uploaded - setting source_type: research_only")
         
         # =====================================================================
         # DETERMINE STAGE INSTRUCTION
@@ -981,7 +992,7 @@ Be efficient and accurate - reference document content when relevant!""",
             response_lower = response_text.lower()
             if any(re.search(p, response_lower) for p in confirmation_request_patterns):
                 self.state.gathered_info.confirmation_sent = True
-                logger.info(f"Detected confirmation request in agent response. Set confirmation_sent=True")
+                logger.info("Detected confirmation request in agent response. Set confirmation_sent=True")
             
             # Check if we got an OrderForm or a question
             if self._looks_like_order_form(response_text):
@@ -1303,7 +1314,7 @@ Be efficient and accurate - reference document content when relevant!""",
         
         if info.confirmation_sent and any(re.search(p, msg_lower) for p in confirmation_patterns):
             info.user_confirmed = True
-            logger.info(f"User confirmed! Set user_confirmed=True")
+            logger.info("User confirmed! Set user_confirmed=True")
         
         # ---- Detect "decide yourself" patterns ----
         decide_patterns = [
@@ -1579,7 +1590,7 @@ Be efficient and accurate - reference document content when relevant!""",
             skeleton = self._generate_skeleton_fallback()
             logger.info(f"[OUTLINER] Fallback generated skeleton with {len(skeleton.slides)} slides")
         
-        logger.info(f"[OUTLINER] Updating state.skeleton and status...")
+            logger.info("[OUTLINER] Updating state.skeleton and status...")
         self.state.skeleton = skeleton
         self.state.status = FlowStatus.AWAITING_OUTLINE_APPROVAL
         self.state.total_slides = len(skeleton.slides)
@@ -1606,7 +1617,9 @@ Be efficient and accurate - reference document content when relevant!""",
         tools = []
         if self.state.knowledge_base:
             tools.append(ListSectionsTool(kb=self.state.knowledge_base))
+            tools.append(SearchSectionsTool(kb=self.state.knowledge_base))
             tools.append(ReadSectionTool(kb=self.state.knowledge_base))
+            tools.append(ReadSectionByIdTool(kb=self.state.knowledge_base))
         
         # Create agent with optional tools and iteration limit to prevent infinite loops
         outliner = create_outliner_agent(tools=tools if tools else None, max_iter=3)
@@ -1840,10 +1853,10 @@ Be efficient and accurate - reference document content when relevant!""",
         self.state.status = FlowStatus.GENERATING
         
         # Log pipeline start
-        logger.info(f"[FLOW] ====== PIPELINE START ======")
+        logger.info("[FLOW] ====== PIPELINE START ======")
         logger.info(f"[FLOW] Session: {self.state.session_id}")
         logger.info(f"[FLOW] Skeleton: {len(self.state.skeleton.slides)} slides")
-        logger.info(f"[FLOW] Stages: Planner → Refiner → Citation Auditor → Final Slides → Generator → QA")
+        logger.info("[FLOW] Stages: Planner → Refiner → Citation Auditor → Final Slides → Generator → QA")
         
         # Emit pipeline_start for frontend
         await self.emitter.emit("pipeline_start", {
@@ -1853,38 +1866,51 @@ Be efficient and accurate - reference document content when relevant!""",
         
         try:
             # Stage 1: Planner
-            logger.info(f"[FLOW] Starting Stage 1/6: Planner")
+            logger.info("[FLOW] Starting Stage 1/6: Planner")
             await self._run_planner()
-            logger.info(f"[FLOW] Completed Stage 1/6: Planner")
+            logger.info("[FLOW] Completed Stage 1/6: Planner")
             
             # Stage 2: Refiner (with async asset rendering)
-            logger.info(f"[FLOW] Starting Stage 2/6: Refiner")
+            logger.info("[FLOW] Starting Stage 2/6: Refiner")
             await self._run_refiner()
-            logger.info(f"[FLOW] Completed Stage 2/6: Refiner")
+            logger.info("[FLOW] Completed Stage 2/6: Refiner")
             
             # Stage 3: Citation Auditor (verify all citations)
-            logger.info(f"[FLOW] Starting Stage 3/6: Citation Auditor")
+            logger.info("[FLOW] Starting Stage 3/6: Citation Auditor")
             await self._run_citation_auditor()
-            logger.info(f"[FLOW] Completed Stage 3/6: Citation Auditor")
+            logger.info("[FLOW] Completed Stage 3/6: Citation Auditor")
+
+            # Strict zero-hallucination gate: fail fast if unsupported claims remain.
+            if getattr(settings, "require_evidence_for_claims", False):
+                unsupported = []
+                for slide in (self.state.refined_content.slides if self.state.refined_content else []):
+                    for claim in slide.unsupported_claims or []:
+                        unsupported.append((slide.order, claim))
+                if unsupported:
+                    preview = "; ".join([f"slide {o}: {c[:80]}" for o, c in unsupported[:5]])
+                    raise ValueError(
+                        f"Unsupported factual claims remain after evidence audit ({len(unsupported)}). "
+                        f"Examples: {preview}"
+                    )
             
             # Stage 4: Generate References and Thank You slides
-            logger.info(f"[FLOW] Starting Stage 4/6: Final Slides")
+            logger.info("[FLOW] Starting Stage 4/6: Final Slides")
             await self._generate_final_slides()
-            logger.info(f"[FLOW] Completed Stage 4/6: Final Slides")
+            logger.info("[FLOW] Completed Stage 4/6: Final Slides")
             
             # Stage 5: Generator (parallel slide generation)
-            logger.info(f"[FLOW] Starting Stage 5/6: Generator")
+            logger.info("[FLOW] Starting Stage 5/6: Generator")
             await self._run_generator()
-            logger.info(f"[FLOW] Completed Stage 5/6: Generator")
+            logger.info("[FLOW] Completed Stage 5/6: Generator")
             
             # Stage 6: Visual QA
-            logger.info(f"[FLOW] Starting Stage 6/6: Visual QA")
+            logger.info("[FLOW] Starting Stage 6/6: Visual QA")
             await self._run_qa()
-            logger.info(f"[FLOW] Completed Stage 6/6: Visual QA")
+            logger.info("[FLOW] Completed Stage 6/6: Visual QA")
             
             self.state.status = FlowStatus.COMPLETED
             
-            logger.info(f"[FLOW] ====== PIPELINE COMPLETE ======")
+            logger.info("[FLOW] ====== PIPELINE COMPLETE ======")
             logger.info(f"[FLOW] Total slides: {self.state.generated_presentation.total_slides}")
             
             # Emit pipeline_complete for frontend
@@ -1924,7 +1950,7 @@ Be efficient and accurate - reference document content when relevant!""",
             return self.state.generated_presentation
             
         except Exception as e:
-            logger.error(f"[FLOW] ====== PIPELINE FAILED ======")
+            logger.error("[FLOW] ====== PIPELINE FAILED ======")
             logger.error(f"[FLOW] Error in stage '{self.state.current_stage}': {e}")
             import traceback
             logger.error(f"[FLOW] Traceback: {traceback.format_exc()}")
@@ -2054,6 +2080,7 @@ Focus Areas: {', '.join(order.focus_areas) if order.focus_areas else 'None'}
 4. For slides needing equations, add `equation_placeholder` (LaTeX description)
 5. For slides needing images, add `image_query` (search term for finding/generating an image)
 6. Add speaker_notes if requested: {order.include_speaker_notes}
+7. Add `claims` (atomic factual claims) and `evidence_refs` for claim grounding when available.
 
 Return a JSON object with 'slides' array containing PlannedSlide objects."""
     
@@ -2142,7 +2169,7 @@ Return a JSON object with 'slides' array containing PlannedSlide objects."""
                         logger.warning(f"[PLANNER_PARSE] JSON decode failed: {e}")
                         continue
                 else:
-                    logger.warning(f"[PLANNER_PARSE] _extract_balanced_json returned None")
+                    logger.warning("[PLANNER_PARSE] _extract_balanced_json returned None")
         
         # Approach 2: Try to find any valid JSON object with actual slide data
         if not json_data:
@@ -2222,6 +2249,109 @@ Return a JSON object with 'slides' array containing PlannedSlide objects."""
                         return text[:i + 1]
         
         return None
+
+    def _extract_claims_from_bullets(self, bullet_points: List[str]) -> List[str]:
+        """
+        Extract atomic claims from slide bullet points.
+        Conservative strategy: each non-empty bullet is treated as a claim candidate.
+        """
+        claims = []
+        for bullet in bullet_points or []:
+            cleaned = re.sub(r"\s+", " ", (bullet or "").strip())
+            if cleaned:
+                claims.append(cleaned)
+        return claims
+
+    def _lexical_overlap(self, a: str, b: str) -> int:
+        a_tokens = set(re.findall(r"[A-Za-z0-9]{3,}", a.lower()))
+        b_tokens = set(re.findall(r"[A-Za-z0-9]{3,}", b.lower()))
+        if not a_tokens or not b_tokens:
+            return 0
+        return len(a_tokens.intersection(b_tokens))
+
+    def _find_best_section_for_claim(self, claim: str):
+        kb = self.state.knowledge_base
+        if not kb or not kb.sections:
+            return None
+
+        best = None
+        best_score = 0
+        for section in kb.sections:
+            score = self._lexical_overlap(claim, f"{section.title} {section.content[:3000]}")
+            if score > best_score:
+                best = section
+                best_score = score
+        return best if best_score >= 3 else None
+
+    def _build_evidence_ref(self, claim: str, section) -> EvidenceRef:
+        excerpt = (section.content or "").strip()
+        excerpt = re.sub(r"\s+", " ", excerpt)
+        if len(excerpt) > 240:
+            excerpt = excerpt[:240] + "..."
+        quote_hash = hashlib.sha256(excerpt.encode("utf-8", errors="ignore")).hexdigest()[:16]
+        # Legacy KB sections may have empty section_id; generate a stable fallback.
+        raw_section_id = getattr(section, "section_id", "") or ""
+        if raw_section_id.strip():
+            section_id = raw_section_id.strip()
+        else:
+            content = (getattr(section, "content", "") or "").encode("utf-8", errors="ignore")
+            section_id = f"sec-{hashlib.sha256(content).hexdigest()[:24]}"
+        evidence_id = f"ev-{section_id}-{quote_hash}"
+        return EvidenceRef(
+            evidence_id=evidence_id,
+            section_id=section_id,
+            page_range=section.page_range or "",
+            quote_excerpt=excerpt,
+            quote_hash=quote_hash,
+            claim=claim,
+            confidence=0.7,
+            source_type="document",
+        )
+
+    def _enforce_slide_evidence(self, slide):
+        """
+        Attach evidence refs for claims and remove unsupported claims when strict mode is enabled.
+        """
+        strict = getattr(settings, "require_evidence_for_claims", False)
+        claims = slide.claims or self._extract_claims_from_bullets(slide.bullet_points)
+        slide.claims = claims
+
+        existing_by_claim = {
+            (e.claim or "").strip().lower(): e for e in (slide.evidence_refs or [])
+        }
+        verified_refs = []
+        unsupported = []
+        kept_bullets = []
+
+        for claim in claims:
+            key = claim.strip().lower()
+            evidence = existing_by_claim.get(key)
+            if not evidence:
+                section = self._find_best_section_for_claim(claim)
+                if section:
+                    evidence = self._build_evidence_ref(claim, section)
+
+            if evidence:
+                verified_refs.append(evidence)
+                kept_bullets.append(claim)
+            else:
+                unsupported.append(claim)
+                if not strict:
+                    kept_bullets.append(claim)
+
+        slide.evidence_refs = verified_refs
+        slide.unsupported_claims = unsupported
+
+        if strict:
+            slide.bullet_points = kept_bullets
+            slide.all_claims_verified = len(unsupported) == 0
+            slide.removed_claims = unsupported
+        else:
+            slide.all_claims_verified = len(unsupported) == 0
+            if unsupported:
+                slide.removed_claims = list({*slide.removed_claims, *unsupported})
+
+        return slide
     
     async def _run_refiner(self):
         """
@@ -2233,7 +2363,7 @@ Return a JSON object with 'slides' array containing PlannedSlide objects."""
         await self.emitter.stage_start("refiner")
         self.state.current_stage = "refiner"
         
-        logger.info(f"[REFINER] ====== Stage Start ======")
+        logger.info("[REFINER] ====== Stage Start ======")
         logger.info(f"[REFINER] Planned slides: {len(self.state.planned_content.slides)}")
         
         render_tool = get_render_tool()
@@ -2246,13 +2376,13 @@ Return a JSON object with 'slides' array containing PlannedSlide objects."""
         
         try:
             # Step 1: Convert placeholders to code using agent
-            logger.info(f"[REFINER] Step 1: Converting placeholders to code...")
+            logger.info("[REFINER] Step 1: Converting placeholders to code...")
             await self.emitter.progress("Converting placeholders to code...", stage="refiner")
             enhanced_content = await self._convert_placeholders_with_agent()
             logger.info(f"[REFINER] Step 1 complete: {len(enhanced_content.slides)} slides with converted placeholders")
             
             # Step 2: Process each slide - render assets and search citations
-            logger.info(f"[REFINER] Step 2: Processing slides (render + citations)...")
+            logger.info("[REFINER] Step 2: Processing slides (render + citations)...")
             refined_slides = []
             total_slides = len(enhanced_content.slides)
             
@@ -2309,15 +2439,22 @@ Return a JSON object with 'slides' array containing PlannedSlide objects."""
             
             # Post-process: Convert markdown in bullet points to HTML
             from app.services.markdown_processor import process_all_slides
-            logger.info(f"[REFINER] Post-processing: Converting markdown to HTML...")
+            logger.info("[REFINER] Post-processing: Converting markdown to HTML...")
             self.state.refined_content.slides = process_all_slides(self.state.refined_content.slides)
             
-            logger.info(f"[REFINER] ====== Stage Complete ======")
+            # Enforce claim-evidence ledger before generation.
+            unsupported_total = 0
+            for s in self.state.refined_content.slides:
+                self._enforce_slide_evidence(s)
+                unsupported_total += len(s.unsupported_claims or [])
+            
+            logger.info("[REFINER] ====== Stage Complete ======")
             logger.info(
                 f"[REFINER] Results: {len(refined_slides)} slides, "
                 f"{self.state.refined_content.equations_rendered} equations, "
                 f"{self.state.refined_content.diagrams_rendered} diagrams, "
-                f"{self.state.refined_content.total_citations} citations"
+                f"{self.state.refined_content.total_citations} citations, "
+                f"{unsupported_total} unsupported claims"
             )
             
             await self.emitter.stage_complete("refiner", {
@@ -2325,6 +2462,7 @@ Return a JSON object with 'slides' array containing PlannedSlide objects."""
                 "equations_rendered": self.state.refined_content.equations_rendered,
                 "diagrams_rendered": self.state.refined_content.diagrams_rendered,
                 "total_citations": self.state.refined_content.total_citations,
+                "unsupported_claims": unsupported_total,
             })
             
         finally:
@@ -2400,18 +2538,25 @@ Return a JSON object with 'slides' array containing PlannedSlide objects."""
                             doi_invalid += 1
                     except Exception as e:
                         logger.error(f"[CITATION AUDITOR] DOI validation error: {e}")
-        
-        logger.info(f"[CITATION AUDITOR] ====== Stage Complete ======")
+
+        logger.info("[CITATION AUDITOR] ====== Stage Complete ======")
         logger.info(
             f"[CITATION AUDITOR] Results: {verified_count} verified, "
             f"{removed_count} removed, {doi_validated} DOIs validated, {doi_invalid} invalid DOIs"
         )
+
+        # Re-apply evidence enforcement after citation cleanup.
+        unsupported_total = 0
+        for slide in refined.slides:
+            self._enforce_slide_evidence(slide)
+            unsupported_total += len(slide.unsupported_claims or [])
         
         await self.emitter.stage_complete("citation_auditor", {
             "verified_citations": verified_count,
             "removed_citations": removed_count,
             "dois_validated": doi_validated,
             "dois_invalid": doi_invalid,
+            "unsupported_claims": unsupported_total,
         })
         
         return refined
@@ -2733,6 +2878,8 @@ IMPORTANT:
             bullet_points=planned.bullet_points,
             template_type=planned.template_type or "content",
             speaker_notes=planned.speaker_notes,
+            claims=planned.claims or self._extract_claims_from_bullets(planned.bullet_points),
+            evidence_refs=planned.evidence_refs or [],
         )
         
         # Render equation if present
@@ -2909,7 +3056,7 @@ IMPORTANT:
             except Exception as e:
                 logger.warning(f"Research processing failed for slide {planned.order}: {e}")
         
-        return refined
+        return self._enforce_slide_evidence(refined)
     
     def _placeholder_to_latex_fallback(self, placeholder: str) -> str:
         """
@@ -3760,7 +3907,7 @@ RESPOND WITH JSON ONLY:
         Logs the failure but returns the slides as-is, allowing
         the user to still get some output rather than nothing.
         """
-        logger.warning(f"Graceful degradation: returning slides despite QA failures")
+        logger.warning("Graceful degradation: returning slides despite QA failures")
         
         # Log detailed failure info for debugging
         for slide_info in failed_slides:

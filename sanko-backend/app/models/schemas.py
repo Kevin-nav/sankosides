@@ -6,7 +6,7 @@ and inter-agent communication.
 """
 
 from typing import Optional, List, Dict, Literal, Any
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from enum import Enum
 from datetime import datetime
 
@@ -65,6 +65,31 @@ class DocumentSection(BaseModel):
     content: str = Field(..., description="Full text and latex content")
     visuals: List[str] = Field(default_factory=list, description="Visual descriptions in this section")
     page_range: str = Field(default="", description="e.g., '1-3'")
+    section_id: str = Field(
+        default="",
+        description="Stable section identifier for deterministic retrieval and citations",
+    )
+    document_id: str = Field(
+        default="",
+        description="Stable document identifier (typically file hash)",
+    )
+    document_name: str = Field(
+        default="",
+        description="Original source filename",
+    )
+    page_start: Optional[int] = Field(default=None, ge=1, description="First page in section")
+    page_end: Optional[int] = Field(default=None, ge=1, description="Last page in section")
+    chunk_index: Optional[int] = Field(default=None, ge=0, description="Extraction chunk index")
+    content_hash: str = Field(
+        default="",
+        description="Hash of section content for traceability",
+    )
+
+    @model_validator(mode="after")
+    def _validate_page_start_end(self):
+        if self.page_start is not None and self.page_end is not None and self.page_start > self.page_end:
+            raise ValueError("Invalid page range: page_start must be <= page_end")
+        return self
 
 
 class KnowledgeBase(BaseModel):
@@ -435,6 +460,46 @@ class ResearchFact(BaseModel):
         default=None,
         description="Index of the bullet point where this fact was integrated"
     )
+    evidence_ref: Optional[str] = Field(
+        default=None,
+        description="Evidence reference id tied to the supporting source section",
+    )
+
+
+class EvidenceRef(BaseModel):
+    """Deterministic evidence pointer for zero-hallucination claim grounding."""
+    evidence_id: str = Field(
+        default="",
+        description="Unique id for this evidence record",
+    )
+    section_id: str = Field(
+        default="",
+        description="KnowledgeBase section_id that supports the claim",
+    )
+    page_range: str = Field(
+        default="",
+        description="Page range used as evidence (e.g., '12-13')",
+    )
+    quote_excerpt: str = Field(
+        default="",
+        description="Short supporting excerpt from source content",
+    )
+    quote_hash: str = Field(
+        default="",
+        description="Hash of quote excerpt to make evidence deterministic",
+    )
+    claim: str = Field(
+        default="",
+        description="Claim supported by this evidence",
+    )
+    confidence: float = Field(
+        default=0.0, ge=0.0, le=1.0,
+        description="Confidence score for claim-evidence match",
+    )
+    source_type: Literal["document", "external"] = Field(
+        default="document",
+        description="Whether evidence came from uploaded documents or external research",
+    )
 
 
 class PlannedSlide(BaseModel):
@@ -469,6 +534,14 @@ class PlannedSlide(BaseModel):
     research_needs: List["ResearchNeed"] = Field(
         default_factory=list,
         description="Claims that need academic backing with search queries"
+    )
+    claims: List[str] = Field(
+        default_factory=list,
+        description="Atomic factual claims extracted from bullet points",
+    )
+    evidence_refs: List[EvidenceRef] = Field(
+        default_factory=list,
+        description="Evidence pointers that must back each factual claim",
     )
 
 
@@ -551,6 +624,18 @@ class RefinedSlide(BaseModel):
     research_facts: List["ResearchFact"] = Field(
         default_factory=list,
         description="Facts extracted from papers and used in this slide's content"
+    )
+    claims: List[str] = Field(
+        default_factory=list,
+        description="Atomic factual claims present in final bullet points",
+    )
+    evidence_refs: List[EvidenceRef] = Field(
+        default_factory=list,
+        description="Verified evidence pointers for all factual claims",
+    )
+    unsupported_claims: List[str] = Field(
+        default_factory=list,
+        description="Claims rejected due to missing supporting evidence",
     )
 
 
