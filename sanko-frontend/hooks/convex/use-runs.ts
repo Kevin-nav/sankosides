@@ -18,6 +18,7 @@ export interface GenerationRun {
     scope?: unknown;
     outline?: unknown;
     result?: unknown;
+    runtime?: unknown;
     error?: string;
     createdAt: number;
     updatedAt: number;
@@ -51,4 +52,3 @@ export function useCreateRun() {
 export function useUpdateRun() {
     return useMutation(api.generationRuns.update);
 }
-

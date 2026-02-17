@@ -16,9 +16,11 @@ if sys.platform == 'win32':
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
+import os
 
 from app.core.config import settings
 from app.core.logging import get_logger
+from app.core.otel import setup_otel, instrument_fastapi
 from app.api.routers.generation import router as generation_router
 from app.export.router import router as export_router
 # from app.routers.universities import router as universities_router
@@ -27,6 +29,9 @@ from app.api.routers.templates import router as templates_router
 # Initialize logging
 logger = get_logger(__name__)
 
+# OpenTelemetry (traces) - enabled via env vars.
+# This must run before instrumenting FastAPI.
+_otel_enabled = setup_otel(service_name=os.getenv("OTEL_SERVICE_NAME", "sanko-backend"))
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -59,6 +64,10 @@ app = FastAPI(
     version="0.2.0",  # Bumped for CrewAI migration
     lifespan=lifespan,
 )
+
+# Instrument request spans if tracing is enabled.
+if _otel_enabled:
+    instrument_fastapi(app)
 
 # Configure CORS
 app.add_middleware(

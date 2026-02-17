@@ -29,6 +29,15 @@ python-pptx = ">=1.0.0"
 latex2mathml = ">=3.77.0"
 lxml = ">=5.0.0"
 redis = "*"
+posthog = ">=5.4.0,<6.0.0"
+opentelemetry-api = ">=1.34.0,<2.0.0"
+opentelemetry-sdk = ">=1.34.0,<2.0.0"
+opentelemetry-exporter-otlp-proto-grpc = ">=1.34.0,<2.0.0"
+opentelemetry-instrumentation-fastapi = ">=0.55b0,<1.0.0"
+opentelemetry-instrumentation-httpx = ">=0.55b0,<1.0.0"
+opentelemetry-instrumentation-requests = ">=0.55b0,<1.0.0"
+opentelemetry-instrumentation-aiohttp-client = ">=0.55b0,<1.0.0"
+opentelemetry-instrumentation-logging = ">=0.55b0,<1.0.0"
 
 [build-system]
 requires = ["poetry-core"]

@@ -1,5 +1,6 @@
 // app/api/generate/start/route.ts
 import { NextRequest, NextResponse } from 'next/server';
+import { resolveSuggestedOptions } from "@/lib/clarifier-options";
 
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8000';
 
@@ -33,7 +34,7 @@ function normalizeQuestion(raw: unknown, sessionId?: string) {
         id: typeof record.id === "string" ? record.id : `${sessionId || "session"}-initial`,
         question_text: questionText,
         field_key: typeof record.field_key === "string" ? record.field_key : null,
-        suggested_options: Array.isArray(record.suggested_options) ? record.suggested_options : [],
+        suggested_options: resolveSuggestedOptions(questionText, record.suggested_options),
         allow_custom: typeof record.allow_custom === "boolean" ? record.allow_custom : true,
         allow_multiple: typeof record.allow_multiple === "boolean" ? record.allow_multiple : false,
     };
@@ -42,6 +43,7 @@ function normalizeQuestion(raw: unknown, sessionId?: string) {
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json().catch(() => ({}));
+        const authHeader = request.headers.get("authorization");
         const fileHashes = Array.isArray(body.file_hashes) ? body.file_hashes : [];
         const wizardData = body.wizard_data && typeof body.wizard_data === "object" ? body.wizard_data : undefined;
 
@@ -63,6 +65,7 @@ export async function POST(request: NextRequest) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                ...(authHeader ? { Authorization: authHeader } : {}),
             },
             // Backend endpoint accepts query params, not body for these fields
         });
@@ -76,7 +79,7 @@ export async function POST(request: NextRequest) {
         // Optional contract bridge for wizard:
         // if frontend already has file hashes or collected wizard data, seed clarification immediately.
         const shouldSeedClarification =
-            !!data?.session_id && (fileHashes.length > 0 || !!wizardData || body.request_next_question === true);
+            !!data?.session_id && body.request_next_question === true;
 
         if (shouldSeedClarification) {
             try {
@@ -84,6 +87,7 @@ export async function POST(request: NextRequest) {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
+                        ...(authHeader ? { Authorization: authHeader } : {}),
                     },
                     body: JSON.stringify({
                         message: body.topic || "Continue",
@@ -110,9 +114,10 @@ export async function POST(request: NextRequest) {
                                     typeof clarifyData.field_key === "string"
                                         ? clarifyData.field_key
                                         : null,
-                                suggested_options: Array.isArray(clarifyData.suggested_options)
-                                    ? clarifyData.suggested_options
-                                    : [],
+                                suggested_options: resolveSuggestedOptions(
+                                    clarifyData.question,
+                                    clarifyData.suggested_options
+                                ),
                                 allow_custom:
                                     typeof clarifyData.allow_custom === "boolean"
                                         ? clarifyData.allow_custom

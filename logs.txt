@@ -1,0 +1,1285 @@
+williamsjohnson25200109@zenotradingtechnologies:~/ztt/ztt-infra$ ls
+README.md  docs  k8s  scripts
+williamsjohnson25200109@zenotradingtechnologies:~/ztt/ztt-infra$ kubectl -n ztt get pods -o wide
+NAME                           READY   STATUS    RESTARTS      AGE     IP            NODE                      NOMINATED NODE   READINESS GATES
+cloudflared-54f6bc7d64-4gqg8   1/1     Running   2 (9h ago)    13h     10.42.0.99    zenotradingtechnologies   <none>           <none>
+cloudflared-54f6bc7d64-q4zcn   1/1     Running   2 (9h ago)    13h     10.42.0.93    zenotradingtechnologies   <none>           <none>
+grafana-7c698dfdd8-tqdz7       1/1     Running   6 (13h ago)   2d21h   10.42.0.95    zenotradingtechnologies   <none>           <none>
+loki-7fb8d696fd-lrrjg          1/1     Running   3 (13h ago)   2d21h   10.42.0.90    zenotradingtechnologies   <none>           <none>
+prometheus-6b4b9bb59f-wvkdz    1/1     Running   1 (13h ago)   2d21h   10.42.0.96    zenotradingtechnologies   <none>           <none>
+promtail-7vspz                 1/1     Running   1 (13h ago)   2d21h   10.42.0.89    zenotradingtechnologies   <none>           <none>
+ztt-api-c87b59465-bxqj9        1/1     Running   0             56m     10.42.0.115   zenotradingtechnologies   <none>           <none>
+ztt-api-c87b59465-c94m4        1/1     Running   0             56m     10.42.0.116   zenotradingtechnologies   <none>           <none>
+ztt-web-94cc877bf-fv4kk        1/1     Running   0             20m     10.42.0.122   zenotradingtechnologies   <none>           <none>
+ztt-web-94cc877bf-rw5td        1/1     Running   0             20m     10.42.0.121   zenotradingtechnologies   <none>           <none>
+williamsjohnson25200109@zenotradingtechnologies:~/ztt/ztt-infra$ kubectl -n ztt rollout status deploy/ztt-api --timeout=180s
+deployment "ztt-api" successfully rolled out
+williamsjohnson25200109@zenotradingtechnologies:~/ztt/ztt-infra$ kubectl -n ztt rollout status deploy/ztt-web --timeout=180s
+deployment "ztt-web" successfully rolled out
+williamsjohnson25200109@zenotradingtechnologies:~/ztt/ztt-infra$ kubectl -n ztt describe deploy/ztt-api | sed -n '1,120p'
+Name:                   ztt-api
+Namespace:              ztt
+CreationTimestamp:      Mon, 09 Feb 2026 21:31:03 +0000
+Labels:                 app=ztt-api
+                        app.kubernetes.io/component=backend
+                        app.kubernetes.io/name=ztt-api
+Annotations:            deployment.kubernetes.io/revision: 8
+Selector:               app=ztt-api
+Replicas:               2 desired | 2 updated | 2 total | 2 available | 0 unavailable
+StrategyType:           RollingUpdate
+MinReadySeconds:        0
+RollingUpdateStrategy:  25% max unavailable, 25% max surge
+Pod Template:
+  Labels:  app=ztt-api
+  Containers:
+   ztt-api:
+    Image:      ghcr.io/zenotradingtechnologies/ztt-api:a0ae656affcafbe7304044bb10b2bac16158b919
+    Port:       8000/TCP
+    Host Port:  0/TCP
+    Limits:
+      cpu:     1
+      memory:  1Gi
+    Requests:
+      cpu:      200m
+      memory:   256Mi
+    Liveness:   http-get http://:8000/health delay=15s timeout=1s period=10s #success=1 #failure=3
+    Readiness:  http-get http://:8000/health delay=10s timeout=1s period=5s #success=1 #failure=3
+    Environment Variables from:
+      ztt-api-secrets  Secret  Optional: false
+    Environment:
+      ENVIRONMENT:  production
+    Mounts:
+      /var/secrets/ztt from secrets-volume (ro)
+  Volumes:
+   secrets-volume:
+    Type:          Secret (a volume populated by a Secret)
+    SecretName:    ztt-credential-store
+    Optional:      true
+  Node-Selectors:  <none>
+  Tolerations:     <none>
+Conditions:
+  Type           Status  Reason
+  ----           ------  ------
+  Available      True    MinimumReplicasAvailable
+  Progressing    True    NewReplicaSetAvailable
+OldReplicaSets:  ztt-api-5f59b46994 (0/0 replicas created), ztt-api-68f76877cb (0/0 replicas created), ztt-api-8b947c8b9 (0/0 replicas created), ztt-api-5c88969d94 (0/0 replicas created), ztt-api-db855d4d9 (0/0 replicas created)
+NewReplicaSet:   ztt-api-c87b59465 (2/2 replicas created)
+Events:
+  Type    Reason             Age                  From                   Message
+  ----    ------             ----                 ----                   -------
+  Normal  ScalingReplicaSet  57m (x2 over 4h39m)  deployment-controller  Scaled up replica set ztt-api-8b947c8b9 from 0 to 1
+  Normal  ScalingReplicaSet  57m (x3 over 11h)    deployment-controller  Scaled down replica set ztt-api-8b947c8b9 from 1 to 0
+  Normal  ScalingReplicaSet  57m                  deployment-controller  Scaled up replica set ztt-api-c87b59465 from 0 to 1
+  Normal  ScalingReplicaSet  56m                  deployment-controller  Scaled down replica set ztt-api-db855d4d9 from 2 to 1
+  Normal  ScalingReplicaSet  56m                  deployment-controller  Scaled up replica set ztt-api-c87b59465 from 1 to 2
+  Normal  ScalingReplicaSet  56m                  deployment-controller  Scaled down replica set ztt-api-db855d4d9 from 1 to 0
+williamsjohnson25200109@zenotradingtechnologies:~/ztt/ztt-infra$ kubectl -n ztt describe deploy/ztt-web | sed -n '1,120p'
+Name:                   ztt-web
+Namespace:              ztt
+CreationTimestamp:      Mon, 09 Feb 2026 21:31:04 +0000
+Labels:                 app=ztt-web
+                        app.kubernetes.io/component=frontend
+                        app.kubernetes.io/name=ztt-web
+Annotations:            deployment.kubernetes.io/revision: 9
+Selector:               app=ztt-web
+Replicas:               2 desired | 2 updated | 2 total | 2 available | 0 unavailable
+StrategyType:           RollingUpdate
+MinReadySeconds:        0
+RollingUpdateStrategy:  25% max unavailable, 25% max surge
+Pod Template:
+  Labels:  app=ztt-web
+  Containers:
+   ztt-web:
+    Image:      ghcr.io/zenotradingtechnologies/ztt-web:71d7574b6e22f486b508da130b92f4fa53aab92f
+    Port:       3000/TCP
+    Host Port:  0/TCP
+    Limits:
+      cpu:     500m
+      memory:  512Mi
+    Requests:
+      cpu:      100m
+      memory:   128Mi
+    Liveness:   http-get http://:3000/ delay=10s timeout=1s period=10s #success=1 #failure=3
+    Readiness:  http-get http://:3000/ delay=5s timeout=1s period=5s #success=1 #failure=3
+    Environment:
+      NEXT_PUBLIC_API_URL:      https://api.askthe.online
+      NEXT_PUBLIC_GRAPHQL_URL:  https://api.askthe.online/graphql
+    Mounts:                     <none>
+  Volumes:                      <none>
+  Node-Selectors:               <none>
+  Tolerations:                  <none>
+Conditions:
+  Type           Status  Reason
+  ----           ------  ------
+  Available      True    MinimumReplicasAvailable
+  Progressing    True    NewReplicaSetAvailable
+OldReplicaSets:  ztt-web-6d4d8978c5 (0/0 replicas created), ztt-web-85bf8f6d45 (0/0 replicas created), ztt-web-78f6ccc675 (0/0 replicas created), ztt-web-6db8998c74 (0/0 replicas created), ztt-web-bf87b9f5 (0/0 replicas created)
+NewReplicaSet:   ztt-web-94cc877bf (2/2 replicas created)
+Events:
+  Type    Reason             Age                  From                   Message
+  ----    ------             ----                 ----                   -------
+  Normal  ScalingReplicaSet  33m                  deployment-controller  Scaled up replica set ztt-web-bf87b9f5 from 0 to 1
+  Normal  ScalingReplicaSet  33m                  deployment-controller  Scaled down replica set ztt-web-6db8998c74 from 2 to 1
+  Normal  ScalingReplicaSet  33m                  deployment-controller  Scaled up replica set ztt-web-bf87b9f5 from 1 to 2
+  Normal  ScalingReplicaSet  32m                  deployment-controller  Scaled down replica set ztt-web-6db8998c74 from 1 to 0
+  Normal  ScalingReplicaSet  21m (x3 over 4h39m)  deployment-controller  Scaled up replica set ztt-web-6d4d8978c5 from 0 to 1
+  Normal  ScalingReplicaSet  21m (x4 over 11h)    deployment-controller  Scaled down replica set ztt-web-6d4d8978c5 from 1 to 0
+  Normal  ScalingReplicaSet  21m                  deployment-controller  Scaled up replica set ztt-web-94cc877bf from 0 to 1
+  Normal  ScalingReplicaSet  21m                  deployment-controller  Scaled down replica set ztt-web-bf87b9f5 from 2 to 1
+  Normal  ScalingReplicaSet  21m                  deployment-controller  Scaled up replica set ztt-web-94cc877bf from 1 to 2
+  Normal  ScalingReplicaSet  21m                  deployment-controller  Scaled down replica set ztt-web-bf87b9f5 from 1 to 0
+williamsjohnson25200109@zenotradingtechnologies:~/ztt/ztt-infra$ kubectl -n ztt logs deploy/ztt-api -f --tail=200
+Found 2 pods, using pod/ztt-api-c87b59465-bxqj9
+INFO:     10.42.0.1:60730 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:49682 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:42148 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:42164 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:42166 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:51754 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:51770 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:48078 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:51786 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:53840 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:53852 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:53856 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:40984 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:50452 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:50464 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:50474 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:37364 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:37378 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:49602 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:37386 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:40012 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:40014 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:40030 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:59528 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:48068 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:48080 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:48082 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:48370 - "GET /health HTTP/1.1" 200 OK
+INFO:app.services.deriv.connection_monitor:Connection stats: {'active_connections': 0, 'total_connections': 0, 'failed_connections': 0, 'max_connections': 1000}
+INFO:     10.42.0.1:48380 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:47790 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:48394 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:38692 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:38694 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:38696 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:49186 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:38504 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:38516 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:38532 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:40486 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:40498 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:34468 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:40500 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:58446 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:58460 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:58476 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:47186 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:51090 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:51096 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:51104 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:47600 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:47614 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:41150 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:47624 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:44050 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:44062 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:44070 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:55866 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:59608 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:59624 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:59630 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:55892 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:55902 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:53872 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:55904 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:40770 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:40784 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:40790 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:55596 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:60928 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:60942 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:60956 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:33262 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:33278 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:38486 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:33280 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:42560 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:42568 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:42572 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:57658 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:51408 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:51422 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:51424 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:51328 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:51330 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:35052 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:51340 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:45360 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:45376 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:45378 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:55456 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:59428 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:59444 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:59452 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:35860 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:35868 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:50842 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:35874 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:50530 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:50538 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:50550 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:51584 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:33956 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:33960 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:33970 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:35808 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:35814 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:42860 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:35818 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:57922 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:57936 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:57938 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:53590 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:41232 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:41248 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:41258 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:34168 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:34176 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:56834 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:34182 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:58958 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:58974 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:58978 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:56318 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:55868 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:55880 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:55892 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:58652 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:58658 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:49524 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:58674 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:59222 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:59236 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:59246 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:35166 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:37436 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:37450 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:37460 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:59026 - "GET /health HTTP/1.1" 200 OK
+INFO:app.services.deriv.connection_monitor:Connection stats: {'active_connections': 0, 'total_connections': 0, 'failed_connections': 0, 'max_connections': 1000}
+INFO:     10.42.0.1:59040 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:49392 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:59046 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:44354 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:44360 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:44370 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:58152 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:52764 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:52780 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:52782 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:49360 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:49372 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:43106 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:49384 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:36402 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:36410 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:36422 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:52818 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:45202 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:45216 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:45220 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:39234 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:39244 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:54782 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:39248 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:51528 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:51530 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:51536 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:42292 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:58724 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:58726 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:58738 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:38762 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:38776 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:45930 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:38784 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:33164 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:33176 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:33178 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:55530 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:49172 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:49182 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:49186 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:33274 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:33278 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:38900 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:33284 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:33978 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:33980 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:33992 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:60434 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:60384 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:60386 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:60394 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:46348 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:46352 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:40732 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:46366 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:60412 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:60414 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:60416 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:36644 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:45610 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:45618 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:45624 - "GET /health HTTP/1.1" 200 OK
+williamsjohnson25200109@zenotradingtechnologies:~/ztt/ztt-infra$ kubectl -n ztt logs deploy/ztt-api --since=30m --tail=50000
+Found 2 pods, using pod/ztt-api-c87b59465-bxqj9
+INFO:     10.42.0.1:35564 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:34816 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:35576 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:42352 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:42366 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:42368 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:35708 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:60542 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:60546 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:60556 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:41578 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:41590 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:39702 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:41598 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:47032 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:47042 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:47050 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:60862 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:46622 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:46634 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:46636 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:60462 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:60472 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:39452 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:60478 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:38684 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:38692 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:38706 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:46950 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:55412 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:55426 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:55442 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:41214 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:41216 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:41614 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:41232 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:43926 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:43936 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:43950 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:34848 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:36666 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:36670 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:36676 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:44340 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:44350 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:50806 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:44360 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:60250 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:60256 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:60272 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:56416 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:59054 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:59058 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:59066 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.99:44822 - "OPTIONS /api/v1/auth/deriv/connect-start HTTP/1.1" 200 OK
+INFO:     10.42.0.99:44822 - "POST /api/v1/auth/deriv/connect-start HTTP/1.1" 200 OK
+INFO:     10.42.0.1:59176 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:59190 - "GET /health HTTP/1.1" 200 OK
+ERROR:app.api.v1.endpoints.deriv_oauth:Failed to link Deriv account CR9641848: [Errno 30] Read-only file system: '/var/secrets/ztt/credentials'
+ERROR:app.api.v1.endpoints.deriv_oauth:Failed to link Deriv account CRW573736: [Errno 30] Read-only file system: '/var/secrets/ztt/credentials'
+ERROR:app.api.v1.endpoints.deriv_oauth:Failed to link Deriv account VRTC14382656: [Errno 30] Read-only file system: '/var/secrets/ztt/credentials'
+ERROR:app.api.v1.endpoints.deriv_oauth:Failed to link Deriv account VRW703501: [Errno 30] Read-only file system: '/var/secrets/ztt/credentials'
+INFO:httpx:HTTP Request: POST https://clean-buffalo-457.convex.site/api/createAuditLog "HTTP/1.1 401 Unauthorized"
+ERROR:app.services.convex_client:Convex HTTP error: 401 - {"error":"Unauthorized"}
+ERROR:app.services.audit_service:Failed to write audit log: Client error '401 Unauthorized' for url 'https://clean-buffalo-457.convex.site/api/createAuditLog'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401
+WARNING:app.services.audit_service:AUDIT_FALLBACK | action=oauth_connected user_id=Xch5cFpgEnQxTk14Vl19u4hPQ8Y2 details={'accounts_linked': []} ip=10.42.0.99
+INFO:     10.42.0.99:44822 - "GET /api/v1/auth/deriv/callback?acct1=CR9641848&token1=a1-XInnmjcHlNsHITjDmgPOvOzyc2val&cur1=USD&acct2=CRW573736&token2=a1-QiIUtVbVeJumX4De7e1VJE0c2yTHh&cur2=USD&acct3=VRTC14382656&token3=a1-tDf8PtGO7LvoPxcltmJjGNz6kSBZt&cur3=USD&acct4=VRW703501&token4=a1-UPxGSKU7HpWCplAFHLhT2JXNnpuCy&cur4=USD&state=eyJleHAiOjE3NzExNjE1NzIsImlhdCI6MTc3MTE2MDk3Miwibm9uY2UiOiJiUE5hUlJXV21UQ1NXei11TzZianZBIiwicnAiOiIvb25ib2FyZGluZz9zdGVwPTIiLCJ1aWQiOiJYY2g1Y0ZwZ0VuUXhUazE0VmwxOXU0aFBROFkyIn0.qnMCJE_WP1FPtpe32ZQSB0ZUv2jIzEaBalIsUvQHrB0 HTTP/1.1" 307 Temporary Redirect
+INFO:     10.42.0.96:34430 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:59194 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:51510 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:51512 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:51528 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:40474 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:40526 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:40532 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:40538 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:59188 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:59200 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:43126 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:59204 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:50126 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:50140 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:50154 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:34610 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:37312 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:37326 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:37338 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:60366 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:60368 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:46798 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:60372 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:39346 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:39362 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:39376 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:49636 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:33510 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:33512 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:33520 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:42350 - "GET /health HTTP/1.1" 200 OK
+INFO:app.services.deriv.connection_monitor:Connection stats: {'active_connections': 0, 'total_connections': 0, 'failed_connections': 0, 'max_connections': 1000}
+INFO:     10.42.0.1:42366 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:44236 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:42376 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:56764 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:56766 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:56780 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:58652 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:50848 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:50852 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:50858 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:36266 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:36274 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:49178 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:36284 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:37498 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:37508 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:37510 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:50156 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:43656 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:43668 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:43670 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:59194 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:59204 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:38900 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:59216 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:34936 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:34952 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:34966 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:44044 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:57216 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:57220 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:57222 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:36004 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:36014 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:36926 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:36028 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:39800 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:39806 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:39820 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:33564 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:47358 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:47368 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:47380 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:44690 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:44706 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:36464 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:44722 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:37712 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:37726 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:37728 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:60312 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:46074 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:46078 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:46086 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:54840 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:54842 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:47836 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:54856 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:51800 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:51814 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:51816 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:49592 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:39894 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:39908 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:39912 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:49544 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:49556 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:58660 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:49568 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:33456 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:33470 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:33486 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:33136 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:59484 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:59490 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:59494 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:44148 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:44154 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:36040 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:44156 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:41812 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:41814 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:41826 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:40908 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:45650 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:45662 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:45672 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:60666 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:60674 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:50052 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:60680 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:48742 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:48750 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:48762 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:60458 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:47116 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:47118 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:47126 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:34270 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:34278 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:46438 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:34292 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:46958 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:46974 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:46980 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:43510 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:43402 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:43418 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:43420 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:45028 - "GET /health HTTP/1.1" 200 OK
+INFO:app.services.deriv.connection_monitor:Connection stats: {'active_connections': 0, 'total_connections': 0, 'failed_connections': 0, 'max_connections': 1000}
+INFO:     10.42.0.1:45040 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:42468 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:45048 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:49794 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:49796 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:49798 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:53976 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:52606 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:52620 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:52636 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:46400 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:46406 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:47056 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:46416 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:46862 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:46870 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:46878 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:53480 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:37380 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:37388 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:37396 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:53880 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:53894 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:37112 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:53896 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:40056 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:40058 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:40064 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:55844 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:53028 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:53034 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:53050 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:50768 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:50770 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:50224 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:50784 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:38402 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:38410 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:38412 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:40188 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:40166 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:40178 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:40184 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:41538 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:41552 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:50596 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:41562 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:47474 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:47476 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:47488 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:49122 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:53120 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:53124 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:53132 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:43316 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:43330 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:42856 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:43336 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:39194 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:39210 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:39216 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:45062 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:50254 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:50266 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:50270 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:55822 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:55832 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:41974 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:55842 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:50038 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:50046 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:50050 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:53008 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:38676 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:38684 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:38700 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:45784 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:45800 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:36730 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:45802 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:60710 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:60714 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:60730 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:49682 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:42148 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:42164 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:42166 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:51754 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:51770 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:48078 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:51786 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:53840 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:53852 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:53856 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:40984 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:50452 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:50464 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:50474 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:37364 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:37378 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:49602 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:37386 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:40012 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:40014 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:40030 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:59528 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:48068 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:48080 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:48082 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:48370 - "GET /health HTTP/1.1" 200 OK
+INFO:app.services.deriv.connection_monitor:Connection stats: {'active_connections': 0, 'total_connections': 0, 'failed_connections': 0, 'max_connections': 1000}
+INFO:     10.42.0.1:48380 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:47790 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:48394 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:38692 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:38694 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:38696 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:49186 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:38504 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:38516 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:38532 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:40486 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:40498 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:34468 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:40500 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:58446 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:58460 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:58476 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:47186 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:51090 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:51096 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:51104 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:47600 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:47614 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:41150 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:47624 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:44050 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:44062 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:44070 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:55866 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:59608 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:59624 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:59630 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:55892 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:55902 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:53872 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:55904 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:40770 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:40784 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:40790 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:55596 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:60928 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:60942 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:60956 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:33262 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:33278 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:38486 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:33280 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:42560 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:42568 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:42572 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:57658 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:51408 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:51422 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:51424 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:51328 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:51330 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:35052 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:51340 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:45360 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:45376 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:45378 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:55456 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:59428 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:59444 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:59452 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:35860 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:35868 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:50842 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:35874 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:50530 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:50538 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:50550 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:51584 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:33956 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:33960 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:33970 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:35808 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:35814 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:42860 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:35818 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:57922 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:57936 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:57938 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:53590 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:41232 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:41248 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:41258 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:34168 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:34176 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:56834 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:34182 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:58958 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:58974 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:58978 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:56318 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:55868 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:55880 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:55892 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:58652 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:58658 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:49524 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:58674 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:59222 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:59236 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:59246 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:35166 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:37436 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:37450 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:37460 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:59026 - "GET /health HTTP/1.1" 200 OK
+INFO:app.services.deriv.connection_monitor:Connection stats: {'active_connections': 0, 'total_connections': 0, 'failed_connections': 0, 'max_connections': 1000}
+INFO:     10.42.0.1:59040 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:49392 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:59046 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:44354 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:44360 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:44370 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:58152 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:52764 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:52780 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:52782 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:49360 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:49372 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:43106 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:49384 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:36402 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:36410 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:36422 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:52818 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:45202 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:45216 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:45220 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:39234 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:39244 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:54782 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:39248 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:51528 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:51530 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:51536 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:42292 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:58724 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:58726 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:58738 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:38762 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:38776 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:45930 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:38784 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:33164 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:33176 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:33178 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:55530 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:49172 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:49182 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:49186 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:33274 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:33278 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:38900 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:33284 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:33978 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:33980 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:33992 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:60434 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:60384 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:60386 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:60394 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:46348 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:46352 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:40732 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:46366 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:60412 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:60414 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:60416 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.96:36644 - "GET /metrics HTTP/1.1" 404 Not Found
+INFO:     10.42.0.1:45610 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:45618 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:45624 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.42.0.1:35758 - "GET /health HTTP/1.1" 200 OK
+williamsjohnson25200109@zenotradingtechnologies:~/ztt/ztt-infra$ POD="$(kubectl -n ztt get pod -l app=ztt-api -o jsonpath='{.items[0].metadata.name}')"
+williamsjohnson25200109@zenotradingtechnologies:~/ztt/ztt-infra$ kubectl -n ztt logs "$POD" --previous --tail=200
+Error from server (BadRequest): previous terminated container "ztt-api" in pod "ztt-api-c87b59465-bxqj9" not found
+williamsjohnson25200109@zenotradingtechnologies:~/ztt/ztt-infra$ kubectl -n ztt logs deploy/ztt-web -f --tail=200
+Found 2 pods, using pod/ztt-web-94cc877bf-rw5td
+   ▲ Next.js 15.5.4
+   - Local:        http://localhost:3000
+   - Network:      http://0.0.0.0:3000
+
+ ✓ Starting...
+ ✓ Ready in 555ms
+williamsjohnson25200109@zenotradingtechnologies:~/ztt/ztt-infra$ kubectl -n ztt logs deploy/ztt-web --since=30m --tail=50000
+Found 2 pods, using pod/ztt-web-94cc877bf-rw5td
+   ▲ Next.js 15.5.4
+   - Local:        http://localhost:3000
+   - Network:      http://0.0.0.0:3000
+
+ ✓ Starting...
+ ✓ Ready in 555ms
+williamsjohnson25200109@zenotradingtechnologies:~/ztt/ztt-infra$ kubectl -n ingress-nginx get pods -o wide
+NAME                                        READY   STATUS                   RESTARTS       AGE     IP           NODE                      NOMINATED NODE   READINESS GATES
+ingress-nginx-admission-create-dfwwj        0/1     Completed                0              19d     <none>       zenotradingtechnologies   <none>           <none>
+ingress-nginx-admission-patch-g7g4v         0/1     Completed                0              19d     <none>       zenotradingtechnologies   <none>           <none>
+ingress-nginx-controller-7cfc9845c9-5xdzt   1/1     Running                  3 (13h ago)    2d21h   10.42.0.86   zenotradingtechnologies   <none>           <none>
+ingress-nginx-controller-7cfc9845c9-m6rz7   0/1     Error                    0              2d22h   <none>       zenotradingtechnologies   <none>           <none>
+ingress-nginx-controller-7cfc9845c9-nw49w   0/1     ContainerStatusUnknown   1 (3d2h ago)   5d15h   <none>       zenotradingtechnologies   <none>           <none>
+ingress-nginx-controller-7cfc9845c9-rjvnm   0/1     ContainerStatusUnknown   1              5d16h   <none>       zenotradingtechnologies   <none>           <none>
+ingress-nginx-controller-7cfc9845c9-vxgh7   0/1     ContainerStatusUnknown   1              19d     <none>       zenotradingtechnologies   <none>           <none>
+williamsjohnson25200109@zenotradingtechnologies:~/ztt/ztt-infra$ kubectl -n ingress-nginx logs deploy/ingress-nginx-controller -f --tail=200
+Found 5 pods, using pod/ingress-nginx-controller-7cfc9845c9-5xdzt
+W0215 02:11:00.118300       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 02:11:00.118321       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 02:11:03.451762       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 02:11:03.451805       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 02:11:03.451825       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 02:11:06.786076       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 02:11:06.786156       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 02:11:06.786182       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 02:16:03.918707       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 02:16:03.918745       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 02:16:03.918763       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 02:16:11.270883       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 02:16:11.270924       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 02:16:11.270944       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 02:16:14.604878       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 02:16:14.604918       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 02:16:14.604950       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 02:16:17.938238       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 02:16:17.938307       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 02:16:17.938326       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 02:16:21.416351       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 02:16:21.416392       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 02:16:21.416410       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 02:16:24.750758       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 02:16:24.750795       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 02:16:24.750834       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 02:16:28.083897       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 02:16:28.083957       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 02:16:28.083977       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 08:45:50.346842       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 08:45:50.348073       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 08:45:50.348096       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 08:45:53.670839       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 08:45:53.670893       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 08:45:53.670907       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 08:49:07.366943       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 08:49:07.366988       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 08:49:07.367013       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 08:49:13.774917       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 08:49:13.774978       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 08:49:13.775003       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 08:49:17.109163       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 08:49:17.109206       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 08:49:17.109223       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 08:49:20.441625       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 08:49:20.441694       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 08:49:20.441716       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 08:49:23.774980       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 08:49:23.775021       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 08:49:23.775041       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 08:49:27.108261       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 08:49:27.108442       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 08:49:27.109319       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 08:49:30.442483       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 08:49:30.442557       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 08:49:30.442577       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 08:49:35.624449       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 08:49:35.624488       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 08:49:35.624505       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 08:49:38.957896       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 08:49:38.958067       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 08:49:38.958160       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 08:49:42.292073       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 08:49:42.292135       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 08:49:42.292154       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 08:49:48.635100       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 08:49:48.635141       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 08:49:48.635160       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 08:49:51.969059       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 08:49:51.969121       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 08:49:51.969142       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 08:49:55.303162       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 08:49:55.303206       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 08:49:55.303226       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 11:08:56.062799       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 11:08:56.064994       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 11:08:56.065029       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 11:09:03.403201       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 11:09:03.403262       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 11:09:03.403294       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 11:09:06.736742       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 11:09:06.736786       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 11:09:06.736803       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 11:09:10.070067       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 11:09:10.070175       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 11:09:10.070199       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 11:09:13.484557       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 11:09:13.484594       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 11:09:13.484612       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 11:09:16.818675       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 11:09:16.818713       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 11:09:16.818735       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 11:09:20.151390       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 11:09:20.151476       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 11:09:20.151494       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:18:34.477983       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:18:34.478134       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:18:34.478154       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:18:46.508962       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:18:46.509010       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:18:46.509026       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:18:49.844086       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:18:49.844128       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:18:49.844146       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:18:53.176167       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:18:53.176216       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:18:53.176241       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:19:01.577979       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:19:01.578022       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:19:01.578042       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:19:04.912177       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:19:04.912237       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:19:04.912261       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:19:08.244977       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:19:08.245020       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:19:08.245042       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:31:31.851908       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:31:31.851955       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:31:31.851977       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:31:35.186045       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:31:35.186113       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:31:35.186131       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:31:41.867808       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:31:41.867849       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:31:41.867875       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:31:45.202090       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:31:45.202133       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:31:45.202159       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:31:48.535511       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:31:48.535554       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:31:48.535576       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:31:51.868642       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:31:51.868696       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:31:51.868719       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:31:57.988784       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:31:57.988830       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:31:57.988885       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:32:01.323800       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:32:01.323931       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:32:01.323952       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:32:04.659124       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:32:04.659170       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:32:04.659192       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:32:07.990306       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:32:07.990348       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:32:07.990366       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:55:27.764089       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:55:27.764230       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:55:27.764280       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:55:31.087589       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:55:31.087638       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:55:31.087659       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:55:34.420444       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:55:34.420484       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:55:34.420505       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:55:37.754831       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:55:37.754872       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:55:37.754890       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:55:41.087925       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:55:41.087974       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:55:41.087995       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:55:44.421151       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:55:44.421300       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:55:44.421323       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:55:47.753923       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:55:47.753966       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:55:47.753983       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:55:51.087790       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:55:51.088339       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:55:51.089018       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:55:58.186381       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:55:58.186421       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 12:55:58.186438       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 13:06:56.687029       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 13:06:56.687101       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 13:06:56.687159       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 13:07:00.021115       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 13:07:00.021162       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 13:07:00.021180       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 13:07:03.354470       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 13:07:03.354559       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 13:07:03.354581       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 13:07:06.692220       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 13:07:06.692267       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 13:07:06.692305       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 13:07:10.020580       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 13:07:10.020641       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 13:07:10.020660       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 13:07:13.354527       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 13:07:13.354568       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 13:07:13.354600       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 13:07:16.687124       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 13:07:16.687262       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 13:07:16.687289       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 13:07:20.020794       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 13:07:20.020977       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 13:07:20.021156       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 13:07:27.000427       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 13:07:27.000470       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 13:07:27.000488       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+williamsjohnson25200109@zenotradingtechnologies:~/ztt/ztt-infra$ kubectl -n ingress-nginx logs deploy/ingress-nginx-controller --since=30m --tail=50000
+Found 5 pods, using pod/ingress-nginx-controller-7cfc9845c9-5xdzt
+W0215 13:06:56.687029       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 13:06:56.687101       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 13:06:56.687159       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 13:07:00.021115       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 13:07:00.021162       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 13:07:00.021180       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 13:07:03.354470       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 13:07:03.354559       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 13:07:03.354581       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 13:07:06.692220       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 13:07:06.692267       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 13:07:06.692305       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 13:07:10.020580       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 13:07:10.020641       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 13:07:10.020660       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 13:07:13.354527       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 13:07:13.354568       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 13:07:13.354600       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 13:07:16.687124       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 13:07:16.687262       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 13:07:16.687289       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 13:07:20.020794       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 13:07:20.020977       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 13:07:20.021156       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 13:07:27.000427       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 13:07:27.000470       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+W0215 13:07:27.000488       8 controller.go:1428] Error getting SSL certificate "ztt/ztt-tls-secret": local SSL certificate ztt/ztt-tls-secret was not found. Using default certificate
+williamsjohnson25200109@zenotradingtechnologies:~/ztt/ztt-infra$ kubectl -n ztt logs deploy/cloudflared -f --tail=200
+Found 2 pods, using pod/cloudflared-54f6bc7d64-4gqg8
+2026-02-15T03:36:23Z INF Starting tunnel tunnelID=64daf72e-1c84-4c06-b58f-c51bfc09dd5c
+2026-02-15T03:36:24Z INF Version 2026.2.0 (Checksum c420e54618f6ab69426677285738b0f03fba7ad4980409ace399f5284994fb4a)
+2026-02-15T03:36:24Z INF GOOS: linux, GOVersion: go1.24.13, GoArch: amd64
+2026-02-15T03:36:24Z INF Settings: map[metrics:0.0.0.0:2000 no-autoupdate:true]
+2026-02-15T03:36:24Z INF Environmental variables map[TUNNEL_TOKEN:*****]
+2026-02-15T03:36:24Z INF Generated Connector ID: 5a7d98e4-6bf2-4957-82ce-ffe40bf6020d
+2026-02-15T03:36:24Z INF Initial protocol quic
+2026-02-15T03:36:24Z INF ICMP proxy will use 10.42.0.99 as source for IPv4
+2026-02-15T03:36:24Z INF ICMP proxy will use fe80::7cb1:f6ff:fe39:b189 in zone eth0 as source for IPv6
+2026-02-15T03:36:24Z INF ICMP proxy will use 10.42.0.99 as source for IPv4
+2026-02-15T03:36:24Z INF ICMP proxy will use fe80::7cb1:f6ff:fe39:b189 in zone eth0 as source for IPv6
+2026-02-15T03:36:24Z INF Starting metrics server on [::]:2000/metrics
+2026-02-15T03:36:24Z INF Tunnel connection curve preferences: [X25519MLKEM768 CurveP256] connIndex=0 event=0 ip=198.41.192.37
+2026/02/15 03:36:24 failed to sufficiently increase receive buffer size (was: 208 kiB, wanted: 7168 kiB, got: 416 kiB). See https://github.com/quic-go/quic-go/wiki/UDP-Buffer-Sizes for details.
+2026-02-15T03:36:24Z INF Registered tunnel connection connIndex=0 connection=102fb0e0-55be-4721-be37-df81c51ec361 event=0 ip=198.41.192.37 location=ord06 protocol=quic
+2026-02-15T03:36:24Z INF Tunnel connection curve preferences: [X25519MLKEM768 CurveP256] connIndex=1 event=0 ip=198.41.200.13
+2026-02-15T03:36:24Z INF Updated to new configuration config="{\"ingress\":[{\"hostname\":\"app.askthe.online\",\"service\":\"http://ztt-web.ztt.svc.cluster.local:80\"},{\"hostname\":\"api.askthe.online\",\"originRequest\":{},\"service\":\"http://ztt-api.ztt.svc.cluster.local:80\"},{\"hostname\":\"grafana.askthe.online\",\"originRequest\":{},\"service\":\"http://grafana.ztt.svc.cluster.local:80\"},{\"service\":\"http_status:404\"}],\"warp-routing\":{\"enabled\":false}}" version=7
+2026-02-15T03:36:24Z INF Registered tunnel connection connIndex=1 connection=d14ab3da-d2ee-4abf-ab55-866e22e95e41 event=0 ip=198.41.200.13 location=ord12 protocol=quic
+2026-02-15T03:36:25Z INF Tunnel connection curve preferences: [X25519MLKEM768 CurveP256] connIndex=2 event=0 ip=198.41.200.233
+2026-02-15T03:36:25Z INF Registered tunnel connection connIndex=2 connection=b8b1e97f-e175-4c34-9b23-c7b0522aef59 event=0 ip=198.41.200.233 location=ord07 protocol=quic
+2026-02-15T03:36:26Z INF Tunnel connection curve preferences: [X25519MLKEM768 CurveP256] connIndex=3 event=0 ip=198.41.192.7
+2026-02-15T03:36:26Z INF Registered tunnel connection connIndex=3 connection=550c8e98-4314-40a9-b6c3-4cdf29bfd118 event=0 ip=198.41.192.7 location=ord02 protocol=quic
+williamsjohnson25200109@zenotradingtechnologies:~/ztt/ztt-infra$  kubectl get events -A --sort-by=.metadata.creationTimestamp | tail -n 8080
+ztt         59m         Normal   Scheduled           pod/ztt-api-c87b59465-bxqj9     Successfully assigned ztt/ztt-api-c87b59465-bxqj9 to zenotradingtechnologies
+ztt         59m         Normal   Pulling             pod/ztt-api-c87b59465-bxqj9     Pulling image "ghcr.io/zenotradingtechnologies/ztt-api:a0ae656affcafbe7304044bb10b2bac16158b919"
+ztt         59m         Normal   Pulled              pod/ztt-api-c87b59465-bxqj9     Successfully pulled image "ghcr.io/zenotradingtechnologies/ztt-api:a0ae656affcafbe7304044bb10b2bac16158b919" in 5.437s (5.437s including waiting). Image size: 92199525 bytes.
+ztt         59m         Normal   Created             pod/ztt-api-c87b59465-bxqj9     Created container: ztt-api
+ztt         59m         Normal   Created             pod/ztt-api-8b947c8b9-m25xn     Created container: ztt-api
+ztt         59m         Normal   Pulled              pod/ztt-api-8b947c8b9-m25xn     Successfully pulled image "ghcr.io/zenotradingtechnologies/ztt-api:latest" in 6.24s (6.24s including waiting). Image size: 92199525 bytes.
+ztt         59m         Normal   Killing             pod/ztt-api-8b947c8b9-m25xn     Stopping container ztt-api
+ztt         59m         Normal   Started             pod/ztt-api-c87b59465-bxqj9     Started container ztt-api
+ztt         59m         Normal   Started             pod/ztt-api-8b947c8b9-m25xn     Started container ztt-api
+ztt         58m         Normal   ScalingReplicaSet   deployment/ztt-api              Scaled down replica set ztt-api-db855d4d9 from 2 to 1
+ztt         58m         Normal   ScalingReplicaSet   deployment/ztt-api              Scaled up replica set ztt-api-c87b59465 from 1 to 2
+ztt         58m         Normal   Killing             pod/ztt-api-db855d4d9-q878h     Stopping container ztt-api
+ztt         58m         Normal   SuccessfulDelete    replicaset/ztt-api-db855d4d9    Deleted pod: ztt-api-db855d4d9-q878h
+ztt         58m         Normal   Scheduled           pod/ztt-api-c87b59465-c94m4     Successfully assigned ztt/ztt-api-c87b59465-c94m4 to zenotradingtechnologies
+ztt         58m         Normal   SuccessfulCreate    replicaset/ztt-api-c87b59465    Created pod: ztt-api-c87b59465-c94m4
+ztt         58m         Normal   Pulling             pod/ztt-api-c87b59465-c94m4     Pulling image "ghcr.io/zenotradingtechnologies/ztt-api:a0ae656affcafbe7304044bb10b2bac16158b919"
+ztt         58m         Normal   Started             pod/ztt-api-c87b59465-c94m4     Started container ztt-api
+ztt         58m         Normal   Created             pod/ztt-api-c87b59465-c94m4     Created container: ztt-api
+ztt         58m         Normal   Pulled              pod/ztt-api-c87b59465-c94m4     Successfully pulled image "ghcr.io/zenotradingtechnologies/ztt-api:a0ae656affcafbe7304044bb10b2bac16158b919" in 807ms (807ms including waiting). Image size: 92199525 bytes.
+ztt         58m         Normal   SuccessfulDelete    replicaset/ztt-api-db855d4d9    Deleted pod: ztt-api-db855d4d9-dvb7x
+ztt         58m         Normal   ScalingReplicaSet   deployment/ztt-api              Scaled down replica set ztt-api-db855d4d9 from 1 to 0
+ztt         58m         Normal   Killing             pod/ztt-api-db855d4d9-dvb7x     Stopping container ztt-api
+ztt         23m         Normal   ScalingReplicaSet   deployment/ztt-web              Scaled up replica set ztt-web-6d4d8978c5 from 0 to 1
+ztt         35m         Normal   Scheduled           pod/ztt-web-6d4d8978c5-2x5lc    Successfully assigned ztt/ztt-web-6d4d8978c5-2x5lc to zenotradingtechnologies
+ztt         35m         Normal   SuccessfulCreate    replicaset/ztt-web-6d4d8978c5   Created pod: ztt-web-6d4d8978c5-2x5lc
+ztt         35m         Normal   SuccessfulDelete    replicaset/ztt-web-6d4d8978c5   Deleted pod: ztt-web-6d4d8978c5-2x5lc
+ztt         23m         Normal   ScalingReplicaSet   deployment/ztt-web              Scaled down replica set ztt-web-6d4d8978c5 from 1 to 0
+ztt         35m         Normal   Scheduled           pod/ztt-web-bf87b9f5-xrqh9      Successfully assigned ztt/ztt-web-bf87b9f5-xrqh9 to zenotradingtechnologies
+ztt         35m         Normal   SuccessfulCreate    replicaset/ztt-web-bf87b9f5     Created pod: ztt-web-bf87b9f5-xrqh9
+ztt         35m         Normal   ScalingReplicaSet   deployment/ztt-web              Scaled up replica set ztt-web-bf87b9f5 from 0 to 1
+ztt         35m         Normal   Pulling             pod/ztt-web-6d4d8978c5-2x5lc    Pulling image "ghcr.io/zenotradingtechnologies/ztt-web:latest"
+ztt         35m         Normal   Pulling             pod/ztt-web-bf87b9f5-xrqh9      Pulling image "ghcr.io/zenotradingtechnologies/ztt-web:86ae0f3ab5e2a04443b0d8ecee22c00457be3b35"
+ztt         35m         Normal   Pulled              pod/ztt-web-6d4d8978c5-2x5lc    Successfully pulled image "ghcr.io/zenotradingtechnologies/ztt-web:latest" in 3.857s (3.857s including waiting). Image size: 73268050 bytes.
+ztt         35m         Normal   Started             pod/ztt-web-6d4d8978c5-2x5lc    Started container ztt-web
+ztt         35m         Normal   Created             pod/ztt-web-6d4d8978c5-2x5lc    Created container: ztt-web
+ztt         35m         Normal   Started             pod/ztt-web-bf87b9f5-xrqh9      Started container ztt-web
+ztt         35m         Normal   Created             pod/ztt-web-bf87b9f5-xrqh9      Created container: ztt-web
+ztt         35m         Normal   Pulled              pod/ztt-web-bf87b9f5-xrqh9      Successfully pulled image "ghcr.io/zenotradingtechnologies/ztt-web:86ae0f3ab5e2a04443b0d8ecee22c00457be3b35" in 3.332s (3.332s including waiting). Image size: 73268050 bytes.
+ztt         35m         Normal   Killing             pod/ztt-web-6d4d8978c5-2x5lc    Stopping container ztt-web
+ztt         35m         Normal   SuccessfulCreate    replicaset/ztt-web-bf87b9f5     Created pod: ztt-web-bf87b9f5-qckhg
+ztt         35m         Normal   ScalingReplicaSet   deployment/ztt-web              Scaled down replica set ztt-web-6db8998c74 from 2 to 1
+ztt         35m         Normal   Killing             pod/ztt-web-6db8998c74-x68ss    Stopping container ztt-web
+ztt         35m         Normal   SuccessfulDelete    replicaset/ztt-web-6db8998c74   Deleted pod: ztt-web-6db8998c74-x68ss
+ztt         35m         Normal   ScalingReplicaSet   deployment/ztt-web              Scaled up replica set ztt-web-bf87b9f5 from 1 to 2
+ztt         35m         Normal   Scheduled           pod/ztt-web-bf87b9f5-qckhg      Successfully assigned ztt/ztt-web-bf87b9f5-qckhg to zenotradingtechnologies
+ztt         35m         Normal   Started             pod/ztt-web-bf87b9f5-qckhg      Started container ztt-web
+ztt         35m         Normal   Created             pod/ztt-web-bf87b9f5-qckhg      Created container: ztt-web
+ztt         35m         Normal   Pulled              pod/ztt-web-bf87b9f5-qckhg      Successfully pulled image "ghcr.io/zenotradingtechnologies/ztt-web:86ae0f3ab5e2a04443b0d8ecee22c00457be3b35" in 374ms (374ms including waiting). Image size: 73268050 bytes.
+ztt         35m         Normal   Pulling             pod/ztt-web-bf87b9f5-qckhg      Pulling image "ghcr.io/zenotradingtechnologies/ztt-web:86ae0f3ab5e2a04443b0d8ecee22c00457be3b35"
+ztt         34m         Normal   Killing             pod/ztt-web-6db8998c74-bsgs4    Stopping container ztt-web
+ztt         34m         Normal   SuccessfulDelete    replicaset/ztt-web-6db8998c74   Deleted pod: ztt-web-6db8998c74-bsgs4
+ztt         34m         Normal   ScalingReplicaSet   deployment/ztt-web              Scaled down replica set ztt-web-6db8998c74 from 1 to 0
+ztt         23m         Normal   SuccessfulCreate    replicaset/ztt-web-6d4d8978c5   Created pod: ztt-web-6d4d8978c5-7vr6z
+ztt         23m         Normal   Scheduled           pod/ztt-web-6d4d8978c5-7vr6z    Successfully assigned ztt/ztt-web-6d4d8978c5-7vr6z to zenotradingtechnologies
+ztt         23m         Normal   ScalingReplicaSet   deployment/ztt-web              Scaled up replica set ztt-web-94cc877bf from 0 to 1
+ztt         23m         Normal   Pulling             pod/ztt-web-6d4d8978c5-7vr6z    Pulling image "ghcr.io/zenotradingtechnologies/ztt-web:latest"
+ztt         23m         Normal   SuccessfulCreate    replicaset/ztt-web-94cc877bf    Created pod: ztt-web-94cc877bf-rw5td
+ztt         23m         Normal   SuccessfulDelete    replicaset/ztt-web-6d4d8978c5   Deleted pod: ztt-web-6d4d8978c5-7vr6z
+ztt         23m         Normal   Scheduled           pod/ztt-web-94cc877bf-rw5td     Successfully assigned ztt/ztt-web-94cc877bf-rw5td to zenotradingtechnologies
+ztt         23m         Normal   Pulling             pod/ztt-web-94cc877bf-rw5td     Pulling image "ghcr.io/zenotradingtechnologies/ztt-web:71d7574b6e22f486b508da130b92f4fa53aab92f"
+ztt         23m         Normal   Started             pod/ztt-web-6d4d8978c5-7vr6z    Started container ztt-web
+ztt         23m         Normal   Pulled              pod/ztt-web-94cc877bf-rw5td     Successfully pulled image "ghcr.io/zenotradingtechnologies/ztt-web:71d7574b6e22f486b508da130b92f4fa53aab92f" in 3.019s (3.019s including waiting). Image size: 73268233 bytes.
+ztt         23m         Normal   Created             pod/ztt-web-94cc877bf-rw5td     Created container: ztt-web
+ztt         23m         Normal   Started             pod/ztt-web-94cc877bf-rw5td     Started container ztt-web
+ztt         23m         Normal   Pulled              pod/ztt-web-6d4d8978c5-7vr6z    Successfully pulled image "ghcr.io/zenotradingtechnologies/ztt-web:latest" in 3.852s (3.852s including waiting). Image size: 73268233 bytes.
+ztt         23m         Normal   Created             pod/ztt-web-6d4d8978c5-7vr6z    Created container: ztt-web
+ztt         23m         Normal   Killing             pod/ztt-web-6d4d8978c5-7vr6z    Stopping container ztt-web
+ztt         23m         Normal   ScalingReplicaSet   deployment/ztt-web              Scaled up replica set ztt-web-94cc877bf from 1 to 2
+ztt         23m         Normal   SuccessfulDelete    replicaset/ztt-web-bf87b9f5     Deleted pod: ztt-web-bf87b9f5-qckhg
+ztt         23m         Normal   ScalingReplicaSet   deployment/ztt-web              Scaled down replica set ztt-web-bf87b9f5 from 2 to 1
+ztt         23m         Normal   Scheduled           pod/ztt-web-94cc877bf-fv4kk     Successfully assigned ztt/ztt-web-94cc877bf-fv4kk to zenotradingtechnologies
+ztt         23m         Normal   SuccessfulCreate    replicaset/ztt-web-94cc877bf    Created pod: ztt-web-94cc877bf-fv4kk
+ztt         23m         Normal   Killing             pod/ztt-web-bf87b9f5-qckhg      Stopping container ztt-web
+ztt         23m         Normal   Started             pod/ztt-web-94cc877bf-fv4kk     Started container ztt-web
+ztt         23m         Normal   Created             pod/ztt-web-94cc877bf-fv4kk     Created container: ztt-web
+ztt         23m         Normal   Pulled              pod/ztt-web-94cc877bf-fv4kk     Successfully pulled image "ghcr.io/zenotradingtechnologies/ztt-web:71d7574b6e22f486b508da130b92f4fa53aab92f" in 378ms (378ms including waiting). Image size: 73268233 bytes.
+ztt         23m         Normal   Pulling             pod/ztt-web-94cc877bf-fv4kk     Pulling image "ghcr.io/zenotradingtechnologies/ztt-web:71d7574b6e22f486b508da130b92f4fa53aab92f"
+ztt         23m         Normal   Killing             pod/ztt-web-bf87b9f5-xrqh9      Stopping container ztt-web
+ztt         23m         Normal   SuccessfulDelete    replicaset/ztt-web-bf87b9f5     Deleted pod: ztt-web-bf87b9f5-xrqh9
+ztt         23m         Normal   ScalingReplicaSet   deployment/ztt-web              Scaled down replica set ztt-web-bf87b9f5 from 1 to 0
+williamsjohnson25200109@zenotradingtechnologies:~/ztt/ztt-infra$ kubectl get events -A --sort-by=.metadata.creationTimestamp | tail -n 80
+ztt         59m         Normal   Scheduled           pod/ztt-api-c87b59465-bxqj9     Successfully assigned ztt/ztt-api-c87b59465-bxqj9 to zenotradingtechnologies
+ztt         59m         Normal   Pulling             pod/ztt-api-c87b59465-bxqj9     Pulling image "ghcr.io/zenotradingtechnologies/ztt-api:a0ae656affcafbe7304044bb10b2bac16158b919"
+ztt         59m         Normal   Pulled              pod/ztt-api-c87b59465-bxqj9     Successfully pulled image "ghcr.io/zenotradingtechnologies/ztt-api:a0ae656affcafbe7304044bb10b2bac16158b919" in 5.437s (5.437s including waiting). Image size: 92199525 bytes.
+ztt         59m         Normal   Created             pod/ztt-api-c87b59465-bxqj9     Created container: ztt-api
+ztt         59m         Normal   Created             pod/ztt-api-8b947c8b9-m25xn     Created container: ztt-api
+ztt         59m         Normal   Pulled              pod/ztt-api-8b947c8b9-m25xn     Successfully pulled image "ghcr.io/zenotradingtechnologies/ztt-api:latest" in 6.24s (6.24s including waiting). Image size: 92199525 bytes.
+ztt         59m         Normal   Killing             pod/ztt-api-8b947c8b9-m25xn     Stopping container ztt-api
+ztt         59m         Normal   Started             pod/ztt-api-c87b59465-bxqj9     Started container ztt-api
+ztt         59m         Normal   Started             pod/ztt-api-8b947c8b9-m25xn     Started container ztt-api
+ztt         59m         Normal   ScalingReplicaSet   deployment/ztt-api              Scaled down replica set ztt-api-db855d4d9 from 2 to 1
+ztt         59m         Normal   ScalingReplicaSet   deployment/ztt-api              Scaled up replica set ztt-api-c87b59465 from 1 to 2
+ztt         59m         Normal   Killing             pod/ztt-api-db855d4d9-q878h     Stopping container ztt-api
+ztt         59m         Normal   SuccessfulDelete    replicaset/ztt-api-db855d4d9    Deleted pod: ztt-api-db855d4d9-q878h
+ztt         59m         Normal   Scheduled           pod/ztt-api-c87b59465-c94m4     Successfully assigned ztt/ztt-api-c87b59465-c94m4 to zenotradingtechnologies
+ztt         59m         Normal   SuccessfulCreate    replicaset/ztt-api-c87b59465    Created pod: ztt-api-c87b59465-c94m4
+ztt         59m         Normal   Pulling             pod/ztt-api-c87b59465-c94m4     Pulling image "ghcr.io/zenotradingtechnologies/ztt-api:a0ae656affcafbe7304044bb10b2bac16158b919"
+ztt         59m         Normal   Started             pod/ztt-api-c87b59465-c94m4     Started container ztt-api
+ztt         59m         Normal   Created             pod/ztt-api-c87b59465-c94m4     Created container: ztt-api
+ztt         59m         Normal   Pulled              pod/ztt-api-c87b59465-c94m4     Successfully pulled image "ghcr.io/zenotradingtechnologies/ztt-api:a0ae656affcafbe7304044bb10b2bac16158b919" in 807ms (807ms including waiting). Image size: 92199525 bytes.
+ztt         59m         Normal   SuccessfulDelete    replicaset/ztt-api-db855d4d9    Deleted pod: ztt-api-db855d4d9-dvb7x
+ztt         59m         Normal   ScalingReplicaSet   deployment/ztt-api              Scaled down replica set ztt-api-db855d4d9 from 1 to 0
+ztt         59m         Normal   Killing             pod/ztt-api-db855d4d9-dvb7x     Stopping container ztt-api
+ztt         24m         Normal   ScalingReplicaSet   deployment/ztt-web              Scaled up replica set ztt-web-6d4d8978c5 from 0 to 1
+ztt         35m         Normal   Scheduled           pod/ztt-web-6d4d8978c5-2x5lc    Successfully assigned ztt/ztt-web-6d4d8978c5-2x5lc to zenotradingtechnologies
+ztt         35m         Normal   SuccessfulCreate    replicaset/ztt-web-6d4d8978c5   Created pod: ztt-web-6d4d8978c5-2x5lc
+ztt         35m         Normal   SuccessfulDelete    replicaset/ztt-web-6d4d8978c5   Deleted pod: ztt-web-6d4d8978c5-2x5lc
+ztt         24m         Normal   ScalingReplicaSet   deployment/ztt-web              Scaled down replica set ztt-web-6d4d8978c5 from 1 to 0
+ztt         35m         Normal   Scheduled           pod/ztt-web-bf87b9f5-xrqh9      Successfully assigned ztt/ztt-web-bf87b9f5-xrqh9 to zenotradingtechnologies
+ztt         35m         Normal   SuccessfulCreate    replicaset/ztt-web-bf87b9f5     Created pod: ztt-web-bf87b9f5-xrqh9
+ztt         35m         Normal   ScalingReplicaSet   deployment/ztt-web              Scaled up replica set ztt-web-bf87b9f5 from 0 to 1
+ztt         35m         Normal   Pulling             pod/ztt-web-6d4d8978c5-2x5lc    Pulling image "ghcr.io/zenotradingtechnologies/ztt-web:latest"
+ztt         35m         Normal   Pulling             pod/ztt-web-bf87b9f5-xrqh9      Pulling image "ghcr.io/zenotradingtechnologies/ztt-web:86ae0f3ab5e2a04443b0d8ecee22c00457be3b35"
+ztt         35m         Normal   Pulled              pod/ztt-web-6d4d8978c5-2x5lc    Successfully pulled image "ghcr.io/zenotradingtechnologies/ztt-web:latest" in 3.857s (3.857s including waiting). Image size: 73268050 bytes.
+ztt         35m         Normal   Started             pod/ztt-web-6d4d8978c5-2x5lc    Started container ztt-web
+ztt         35m         Normal   Created             pod/ztt-web-6d4d8978c5-2x5lc    Created container: ztt-web
+ztt         35m         Normal   Started             pod/ztt-web-bf87b9f5-xrqh9      Started container ztt-web
+ztt         35m         Normal   Created             pod/ztt-web-bf87b9f5-xrqh9      Created container: ztt-web
+ztt         35m         Normal   Pulled              pod/ztt-web-bf87b9f5-xrqh9      Successfully pulled image "ghcr.io/zenotradingtechnologies/ztt-web:86ae0f3ab5e2a04443b0d8ecee22c00457be3b35" in 3.332s (3.332s including waiting). Image size: 73268050 bytes.
+ztt         35m         Normal   Killing             pod/ztt-web-6d4d8978c5-2x5lc    Stopping container ztt-web
+ztt         35m         Normal   SuccessfulCreate    replicaset/ztt-web-bf87b9f5     Created pod: ztt-web-bf87b9f5-qckhg
+ztt         35m         Normal   ScalingReplicaSet   deployment/ztt-web              Scaled down replica set ztt-web-6db8998c74 from 2 to 1
+ztt         35m         Normal   Killing             pod/ztt-web-6db8998c74-x68ss    Stopping container ztt-web
+ztt         35m         Normal   SuccessfulDelete    replicaset/ztt-web-6db8998c74   Deleted pod: ztt-web-6db8998c74-x68ss
+ztt         35m         Normal   ScalingReplicaSet   deployment/ztt-web              Scaled up replica set ztt-web-bf87b9f5 from 1 to 2
+ztt         35m         Normal   Scheduled           pod/ztt-web-bf87b9f5-qckhg      Successfully assigned ztt/ztt-web-bf87b9f5-qckhg to zenotradingtechnologies
+ztt         35m         Normal   Started             pod/ztt-web-bf87b9f5-qckhg      Started container ztt-web
+ztt         35m         Normal   Created             pod/ztt-web-bf87b9f5-qckhg      Created container: ztt-web
+ztt         35m         Normal   Pulled              pod/ztt-web-bf87b9f5-qckhg      Successfully pulled image "ghcr.io/zenotradingtechnologies/ztt-web:86ae0f3ab5e2a04443b0d8ecee22c00457be3b35" in 374ms (374ms including waiting). Image size: 73268050 bytes.
+ztt         35m         Normal   Pulling             pod/ztt-web-bf87b9f5-qckhg      Pulling image "ghcr.io/zenotradingtechnologies/ztt-web:86ae0f3ab5e2a04443b0d8ecee22c00457be3b35"
+ztt         35m         Normal   Killing             pod/ztt-web-6db8998c74-bsgs4    Stopping container ztt-web
+ztt         35m         Normal   SuccessfulDelete    replicaset/ztt-web-6db8998c74   Deleted pod: ztt-web-6db8998c74-bsgs4
+ztt         35m         Normal   ScalingReplicaSet   deployment/ztt-web              Scaled down replica set ztt-web-6db8998c74 from 1 to 0
+ztt         24m         Normal   SuccessfulCreate    replicaset/ztt-web-6d4d8978c5   Created pod: ztt-web-6d4d8978c5-7vr6z
+ztt         24m         Normal   Scheduled           pod/ztt-web-6d4d8978c5-7vr6z    Successfully assigned ztt/ztt-web-6d4d8978c5-7vr6z to zenotradingtechnologies
+ztt         24m         Normal   ScalingReplicaSet   deployment/ztt-web              Scaled up replica set ztt-web-94cc877bf from 0 to 1
+ztt         24m         Normal   Pulling             pod/ztt-web-6d4d8978c5-7vr6z    Pulling image "ghcr.io/zenotradingtechnologies/ztt-web:latest"
+ztt         24m         Normal   SuccessfulCreate    replicaset/ztt-web-94cc877bf    Created pod: ztt-web-94cc877bf-rw5td
+ztt         24m         Normal   SuccessfulDelete    replicaset/ztt-web-6d4d8978c5   Deleted pod: ztt-web-6d4d8978c5-7vr6z
+ztt         24m         Normal   Scheduled           pod/ztt-web-94cc877bf-rw5td     Successfully assigned ztt/ztt-web-94cc877bf-rw5td to zenotradingtechnologies
+ztt         24m         Normal   Pulling             pod/ztt-web-94cc877bf-rw5td     Pulling image "ghcr.io/zenotradingtechnologies/ztt-web:71d7574b6e22f486b508da130b92f4fa53aab92f"
+ztt         24m         Normal   Started             pod/ztt-web-6d4d8978c5-7vr6z    Started container ztt-web
+ztt         24m         Normal   Pulled              pod/ztt-web-94cc877bf-rw5td     Successfully pulled image "ghcr.io/zenotradingtechnologies/ztt-web:71d7574b6e22f486b508da130b92f4fa53aab92f" in 3.019s (3.019s including waiting). Image size: 73268233 bytes.
+ztt         24m         Normal   Created             pod/ztt-web-94cc877bf-rw5td     Created container: ztt-web
+ztt         24m         Normal   Started             pod/ztt-web-94cc877bf-rw5td     Started container ztt-web
+ztt         24m         Normal   Pulled              pod/ztt-web-6d4d8978c5-7vr6z    Successfully pulled image "ghcr.io/zenotradingtechnologies/ztt-web:latest" in 3.852s (3.852s including waiting). Image size: 73268233 bytes.
+ztt         24m         Normal   Created             pod/ztt-web-6d4d8978c5-7vr6z    Created container: ztt-web
+ztt         24m         Normal   Killing             pod/ztt-web-6d4d8978c5-7vr6z    Stopping container ztt-web
+ztt         23m         Normal   ScalingReplicaSet   deployment/ztt-web              Scaled up replica set ztt-web-94cc877bf from 1 to 2
+ztt         23m         Normal   SuccessfulDelete    replicaset/ztt-web-bf87b9f5     Deleted pod: ztt-web-bf87b9f5-qckhg
+ztt         23m         Normal   ScalingReplicaSet   deployment/ztt-web              Scaled down replica set ztt-web-bf87b9f5 from 2 to 1
+ztt         23m         Normal   Scheduled           pod/ztt-web-94cc877bf-fv4kk     Successfully assigned ztt/ztt-web-94cc877bf-fv4kk to zenotradingtechnologies
+ztt         23m         Normal   SuccessfulCreate    replicaset/ztt-web-94cc877bf    Created pod: ztt-web-94cc877bf-fv4kk
+ztt         23m         Normal   Killing             pod/ztt-web-bf87b9f5-qckhg      Stopping container ztt-web
+ztt         23m         Normal   Started             pod/ztt-web-94cc877bf-fv4kk     Started container ztt-web
+ztt         23m         Normal   Created             pod/ztt-web-94cc877bf-fv4kk     Created container: ztt-web
+ztt         23m         Normal   Pulled              pod/ztt-web-94cc877bf-fv4kk     Successfully pulled image "ghcr.io/zenotradingtechnologies/ztt-web:71d7574b6e22f486b508da130b92f4fa53aab92f" in 378ms (378ms including waiting). Image size: 73268233 bytes.
+ztt         23m         Normal   Pulling             pod/ztt-web-94cc877bf-fv4kk     Pulling image "ghcr.io/zenotradingtechnologies/ztt-web:71d7574b6e22f486b508da130b92f4fa53aab92f"
+ztt         23m         Normal   Killing             pod/ztt-web-bf87b9f5-xrqh9      Stopping container ztt-web
+ztt         23m         Normal   SuccessfulDelete    replicaset/ztt-web-bf87b9f5     Deleted pod: ztt-web-bf87b9f5-xrqh9
+ztt         23m         Normal   ScalingReplicaSet   deployment/ztt-web              Scaled down replica set ztt-web-bf87b9f5 from 1 to 0
+williamsjohnson25200109@zenotradingtechnologies:~/ztt/ztt-infra$ 

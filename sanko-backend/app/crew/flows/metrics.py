@@ -52,11 +52,15 @@ MODEL_TO_TIER: Dict[str, str] = {
     "gemini-3-flash-preview": "flash",
     "gemini-3-flash-preview-05-20": "flash",
     "models/gemini-3-flash": "flash",
+    "gemini/gemini-3-flash": "flash",
+    "gemini/gemini-3-flash-preview": "flash",
     
     # Gemini 3 Pro variants
     "gemini-3-pro": "pro",
     "gemini-3-pro-preview": "pro",
     "models/gemini-3-pro": "pro",
+    "gemini/gemini-3-pro": "pro",
+    "gemini/gemini-3-pro-preview": "pro",
     
     # Legacy Gemini 2.x (fallback)
     "gemini-2.0-flash": "flash",
@@ -254,6 +258,9 @@ class MetricsCollector:
     def __init__(self, session_id: str):
         self.session_id = session_id
         self._metrics = SessionMetrics(session_id=session_id)
+        # Context is filled in by the API layer / flow runner (best-effort).
+        # Keep it PII-safe; use stable ids only.
+        self._context: Dict[str, Any] = {}
         MetricsCollector._instances[session_id] = self
     
     @classmethod
@@ -288,6 +295,28 @@ class MetricsCollector:
     def get_metrics(self) -> SessionMetrics:
         """Get current metrics."""
         return self._metrics
+
+    def set_context(
+        self,
+        *,
+        user_id: Optional[str] = None,
+        project_id: Optional[str] = None,
+        mode: Optional[str] = None,
+    ) -> None:
+        """
+        Attach stable identifiers for attribution (PostHog/OTel).
+
+        This is safe to call multiple times; we only set non-empty values.
+        """
+        if isinstance(user_id, str) and user_id.strip():
+            self._context["user_id"] = user_id.strip()
+        if isinstance(project_id, str) and project_id.strip():
+            self._context["project_id"] = project_id.strip()
+        if isinstance(mode, str) and mode.strip():
+            self._context["mode"] = mode.strip()
+
+    def get_context(self) -> Dict[str, Any]:
+        return dict(self._context)
     
     def to_dict(self) -> Dict[str, Any]:
         """Export metrics as dict."""
@@ -318,6 +347,27 @@ def extract_usage_from_response(response: Any, model: str = "") -> TokenUsage:
         usage.input_tokens = getattr(u, 'prompt_tokens', 0) or getattr(u, 'input_tokens', 0) or 0
         usage.output_tokens = getattr(u, 'completion_tokens', 0) or getattr(u, 'output_tokens', 0) or 0
         usage.thinking_tokens = getattr(u, 'thinking_tokens', 0) or 0
+
+    elif hasattr(response, 'token_usage'):
+        # CrewAI / LiteLLM outputs often expose a token_usage dict-like object.
+        u = getattr(response, 'token_usage', None)
+        try:
+            if isinstance(u, dict):
+                usage.input_tokens = int(u.get('prompt_tokens', u.get('input_tokens', 0)) or 0)
+                usage.output_tokens = int(u.get('completion_tokens', u.get('output_tokens', 0)) or 0)
+                usage.thinking_tokens = int(u.get('thinking_tokens', 0) or 0)
+        except Exception:
+            pass
+
+    elif hasattr(response, 'usage_metrics'):
+        # Some outputs provide usage metrics with similar fields.
+        u = getattr(response, 'usage_metrics', None)
+        try:
+            usage.input_tokens = int(getattr(u, 'prompt_tokens', 0) or getattr(u, 'input_tokens', 0) or 0)
+            usage.output_tokens = int(getattr(u, 'completion_tokens', 0) or getattr(u, 'output_tokens', 0) or 0)
+            usage.thinking_tokens = int(getattr(u, 'thinking_tokens', 0) or 0)
+        except Exception:
+            pass
     
     elif isinstance(response, dict):
         # Dict-style response
@@ -331,5 +381,11 @@ def extract_usage_from_response(response: Any, model: str = "") -> TokenUsage:
             usage.input_tokens = u.get('input_tokens', u.get('prompt_tokens', 0))
             usage.output_tokens = u.get('output_tokens', u.get('completion_tokens', 0))
             usage.thinking_tokens = u.get('thinking_tokens', 0)
+        elif 'token_usage' in response:
+            u = response['token_usage']
+            if isinstance(u, dict):
+                usage.input_tokens = int(u.get('prompt_tokens', u.get('input_tokens', 0)) or 0)
+                usage.output_tokens = int(u.get('completion_tokens', u.get('output_tokens', 0)) or 0)
+                usage.thinking_tokens = int(u.get('thinking_tokens', 0) or 0)
     
     return usage

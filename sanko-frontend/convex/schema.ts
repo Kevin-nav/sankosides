@@ -170,6 +170,7 @@ export default defineSchema({
         scope: v.optional(v.any()), // Persist selected sections/figures + overrides
         outline: v.optional(v.any()), // Persist outline version/meta (and optionally JSON)
         result: v.optional(v.any()), // Persist result pointers, exports, QA summary
+        runtime: v.optional(v.any()), // Backend flow snapshot for resumable sessions
 
         error: v.optional(v.string()),
 

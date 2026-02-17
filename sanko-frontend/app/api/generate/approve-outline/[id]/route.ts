@@ -10,11 +10,13 @@ export async function POST(
     try {
         const { id } = await params;
         const body = await request.json().catch(() => ({}));
+        const authHeader = request.headers.get("authorization");
 
         const response = await fetch(`${BACKEND_URL}/api/generation/approve-outline/${id}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                ...(authHeader ? { Authorization: authHeader } : {}),
             },
             body: JSON.stringify(body),
         });

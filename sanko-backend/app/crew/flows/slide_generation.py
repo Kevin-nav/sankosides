@@ -367,6 +367,16 @@ class SlideGenerationFlow:
         self.emitter = event_emitter or FlowEventEmitter.get_or_create(self.state.session_id)
         self.retry_tracker = RetryBudget()
         self.metrics = MetricsCollector.get_or_create(self.state.session_id)
+        # State is sometimes overwritten after construction (see flow runner helpers),
+        # so context is also refreshed there. This initial set covers the common case.
+        try:
+            self.metrics.set_context(
+                user_id=getattr(self.state, "user_id", None),
+                project_id=getattr(self.state, "project_id", None),
+                mode=getattr(self.state, "mode", None),
+            )
+        except Exception:
+            pass
     
     # =========================================================================
     # Stage 0: Synthesis (Pre-processing)
@@ -954,11 +964,10 @@ Be efficient and accurate - reference document content when relevant!""",
         )
         
         try:
-            # Execute the agent in a thread pool to avoid blocking the event loop
-            # crew.kickoff() is synchronous and can take 5-30+ seconds
+            # Execute via the shared retry/timeout wrapper (also records token + duration metrics).
             crew = Crew(agents=[clarifier], tasks=[task])
-            loop = asyncio.get_running_loop()
-            result = await loop.run_in_executor(None, crew.kickoff)
+            from app.crew.utils.agent_execution import execute_crew_with_retry
+            result = await execute_crew_with_retry(crew, "clarifier", session_id=self.state.session_id)
             
             # Parse the response
             response_text = str(result)
@@ -1636,7 +1645,7 @@ Be efficient and accurate - reference document content when relevant!""",
         
         # Use retry wrapper with configurable timeout and automatic retries
         from app.crew.utils.agent_execution import execute_crew_with_retry
-        result = await execute_crew_with_retry(crew, "outliner")
+        result = await execute_crew_with_retry(crew, "outliner", session_id=self.state.session_id)
         
         # Parse the skeleton from agent output
         skeleton = self._parse_skeleton_from_result(result)
@@ -1851,6 +1860,7 @@ Be efficient and accurate - reference document content when relevant!""",
             raise ValueError(f"Cannot generate: status is {self.state.status}")
         
         self.state.status = FlowStatus.GENERATING
+        self.metrics.start_pipeline()
         
         # Log pipeline start
         logger.info("[FLOW] ====== PIPELINE START ======")
@@ -1909,6 +1919,7 @@ Be efficient and accurate - reference document content when relevant!""",
             logger.info("[FLOW] Completed Stage 6/6: Visual QA")
             
             self.state.status = FlowStatus.COMPLETED
+            self.metrics.end_pipeline()
             
             logger.info("[FLOW] ====== PIPELINE COMPLETE ======")
             logger.info(f"[FLOW] Total slides: {self.state.generated_presentation.total_slides}")
@@ -1957,6 +1968,7 @@ Be efficient and accurate - reference document content when relevant!""",
             
             self.state.status = FlowStatus.FAILED
             self.state.error_message = str(e)
+            self.metrics.end_pipeline()
             
             # Emit pipeline_error for frontend
             await self.emitter.emit("pipeline_error", {
@@ -2014,7 +2026,7 @@ Be efficient and accurate - reference document content when relevant!""",
         
         # Use retry wrapper with configurable timeout and automatic retries
         from app.crew.utils.agent_execution import execute_crew_with_retry
-        result = await execute_crew_with_retry(crew, "planner")
+        result = await execute_crew_with_retry(crew, "planner", session_id=self.state.session_id)
         
         # Debug: Log what we got from CrewAI
         logger.info(f"[PLANNER] CrewAI result type: {type(result)}")
@@ -2487,6 +2499,8 @@ Return a JSON object with 'slides' array containing PlannedSlide objects."""
         self.state.current_stage = "citation_auditor"
         
         logger.info("[CITATION AUDITOR] ====== Stage Start ======")
+        import time
+        auditor_start = time.time()
         
         refined = self.state.refined_content
         citation_style = self.state.order_form.citation_style or "apa"
@@ -2558,6 +2572,12 @@ Return a JSON object with 'slides' array containing PlannedSlide objects."""
             "dois_invalid": doi_invalid,
             "unsupported_claims": unsupported_total,
         })
+
+        try:
+            auditor_elapsed_ms = int((time.time() - auditor_start) * 1000)
+            self.metrics.record("citation_auditor", TokenUsage(model="internal"), duration_ms=auditor_elapsed_ms)
+        except Exception:
+            pass
         
         return refined
     
@@ -2681,6 +2701,8 @@ Return a JSON object with 'slides' array containing PlannedSlide objects."""
         self.state.current_stage = "final_slides"
         
         logger.info("[FINAL SLIDES] ====== Stage Start ======")
+        import time
+        final_start = time.time()
         
         slides_added = 0
         
@@ -2707,6 +2729,11 @@ Return a JSON object with 'slides' array containing PlannedSlide objects."""
             "slides_added": slides_added,
             "has_references": references_slide is not None,
         })
+        try:
+            final_elapsed_ms = int((time.time() - final_start) * 1000)
+            self.metrics.record("final_slides", TokenUsage(model="internal"), duration_ms=final_elapsed_ms)
+        except Exception:
+            pass
     
     def _generate_thank_you_slide(self) -> RefinedSlide:
         """
@@ -2798,7 +2825,7 @@ IMPORTANT:
             
             # Use retry wrapper with configurable timeout and automatic retries
             from app.crew.utils.agent_execution import execute_crew_with_retry
-            result = await execute_crew_with_retry(crew, "refiner")
+            result = await execute_crew_with_retry(crew, "refiner", session_id=self.state.session_id)
             
             # Parse conversions
             conversions = self._parse_conversions(str(result))
@@ -3229,6 +3256,9 @@ IMPORTANT:
         
         
         # Generate slides in parallel
+        import time
+        generator_start = time.time()
+
         async def generate_slide(slide, slide_number):
             return await self._generate_slide_html_with_db_template(
                 slide, 
@@ -3245,6 +3275,12 @@ IMPORTANT:
         ]
         
         generated_slides = await asyncio.gather(*tasks)
+        generator_elapsed_ms = int((time.time() - generator_start) * 1000)
+        try:
+            # Record stage duration (no tokens; this is template rendering, not LLM usage).
+            self.metrics.record("generator", TokenUsage(model="template"), duration_ms=generator_elapsed_ms)
+        except Exception:
+            pass
         
         self.state.generated_presentation = GeneratedPresentation(
             title=self.state.refined_content.presentation_title,
@@ -3578,7 +3614,15 @@ RESPOND WITH JSON ONLY:
             
             # Generate grading with retry (run sync call in thread to keep async context)
             import asyncio
+            import time
+            vision_start = time.time()
             response = await asyncio.to_thread(call_vision_api)
+            vision_elapsed_ms = int((time.time() - vision_start) * 1000)
+            try:
+                usage = extract_usage_from_response(response, model=settings.model_flash)
+                self.metrics.record("visual_qa", usage, duration_ms=vision_elapsed_ms)
+            except Exception:
+                pass
             
             # Parse response
             import json
@@ -3753,8 +3797,8 @@ RESPOND WITH JSON ONLY:
                 tasks=[task],
                 verbose=False,
             )
-            
-            result = await asyncio.to_thread(crew.kickoff)
+            from app.crew.utils.agent_execution import execute_crew_with_retry
+            result = await execute_crew_with_retry(crew, "helper", session_id=self.state.session_id)
             
             # Parse Helper decision
             decision = self._parse_helper_decision(result)
@@ -3948,6 +3992,14 @@ async def process_clarification(
     flow = SlideGenerationFlow(session_id=session_id)
     if state:
         flow.state = state
+        try:
+            flow.metrics.set_context(
+                user_id=getattr(flow.state, "user_id", None),
+                project_id=getattr(flow.state, "project_id", None),
+                mode=getattr(flow.state, "mode", None),
+            )
+        except Exception:
+            pass
     return await flow.process_clarification(user_message)
 
 
@@ -3958,6 +4010,14 @@ async def generate_outline(
     """Generate the presentation outline."""
     flow = SlideGenerationFlow(session_id=session_id)
     flow.state = state
+    try:
+        flow.metrics.set_context(
+            user_id=getattr(flow.state, "user_id", None),
+            project_id=getattr(flow.state, "project_id", None),
+            mode=getattr(flow.state, "mode", None),
+        )
+    except Exception:
+        pass
     return await flow.generate_outline()
 
 
@@ -3970,6 +4030,14 @@ async def approve_outline(
     """Approve and optionally modify the outline."""
     flow = SlideGenerationFlow(session_id=session_id)
     flow.state = state
+    try:
+        flow.metrics.set_context(
+            user_id=getattr(flow.state, "user_id", None),
+            project_id=getattr(flow.state, "project_id", None),
+            mode=getattr(flow.state, "mode", None),
+        )
+    except Exception:
+        pass
     return await flow.approve_outline(modifications, modified_skeleton)
 
 
@@ -3985,4 +4053,12 @@ async def run_generation(
     
     flow = SlideGenerationFlow(session_id=session_id, event_emitter=emitter)
     flow.state = state
+    try:
+        flow.metrics.set_context(
+            user_id=getattr(flow.state, "user_id", None),
+            project_id=getattr(flow.state, "project_id", None),
+            mode=getattr(flow.state, "mode", None),
+        )
+    except Exception:
+        pass
     return await flow.run_generation()

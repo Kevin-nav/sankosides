@@ -3,6 +3,8 @@
  * Main Entry Point
  */
 
+require("./otel");
+
 const express = require('express');
 const cors = require('cors');
 const { log, colors, timestamp } = require('./utils/logger');

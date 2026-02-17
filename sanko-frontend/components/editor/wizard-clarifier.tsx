@@ -15,15 +15,57 @@ import { FileAttachmentBar, useFileUpload } from "@/components/ui/file-attachmen
 import { Id, useCreateRun, useUpdateProject, useRunBySession, useUpdateRun } from "@/hooks/convex";
 
 // Wizard phases
-type WizardPhase = "upload" | "scope" | "settings" | "clarify" | "summary";
+type WizardPhase = "upload" | "scope" | "settings" | "summary";
 
-interface AIQuestion {
-    id: string;
-    question: string;
-    options: ChoiceOption[];
-    fieldKey?: string | null;
-    allowCustom: boolean;
-    allowMultiple: boolean;
+const SETUP_AUDIENCE_OPTIONS: ChoiceOption[] = [
+    { id: "classmates", label: "Classmates", description: "Peer-level class presentations" },
+    { id: "class_instructor", label: "Class + instructor", description: "Students plus lecturer/supervisor" },
+    { id: "technical", label: "Technical audience", description: "Discipline experts and researchers" },
+    { id: "general", label: "General audience", description: "Non-specialist listeners" },
+];
+
+const SETUP_SLIDE_RANGE_OPTIONS: ChoiceOption[] = [
+    { id: "6-8", label: "6-8 slides", description: "Fast and focused" },
+    { id: "8-10", label: "8-10 slides", description: "Balanced detail" },
+    { id: "10-12", label: "10-12 slides", description: "Deeper coverage" },
+    { id: "auto", label: "Based on structure", description: "Recommended: estimated from your outline inputs" },
+];
+
+function parseSlideRangeToCount(range: string | undefined, sectionCount: number): number {
+    if (!range || range === "auto") {
+        if (sectionCount <= 2) return 8;
+        if (sectionCount <= 5) return 10;
+        return 12;
+    }
+    const match = range.match(/^(\d+)\s*-\s*(\d+)$/);
+    if (!match) return 10;
+    const low = Number(match[1]);
+    const high = Number(match[2]);
+    if (!Number.isFinite(low) || !Number.isFinite(high) || low <= 0 || high < low) return 10;
+    return Math.round((low + high) / 2);
+}
+
+function inferFocusAreas(topic: string, existing: string[]): string[] {
+    if (existing.length > 0) return existing;
+    const normalizedTopic = topic.trim();
+    if (!normalizedTopic) return ["Core concepts"];
+    const split = normalizedTopic
+        .split(/,|;| and /gi)
+        .map((part) => part.trim())
+        .filter((part) => part.length >= 3);
+    if (split.length > 0) return split.slice(0, 5);
+    return [normalizedTopic];
+}
+
+function toAudienceLabel(value: string | undefined): string {
+    const normalized = (value || "").trim().toLowerCase();
+    if (normalized === "classmates") return "Classmates";
+    if (normalized === "class_instructor") return "Class + instructor";
+    if (normalized === "students") return "University students";
+    if (normalized === "mixed_academic") return "Mixed academic audience";
+    if (normalized === "technical") return "Technical audience";
+    if (normalized === "general") return "General audience";
+    return value?.trim() || "Classmates";
 }
 
 interface UniversityDefaults {
@@ -64,38 +106,18 @@ interface DocumentScope {
     error?: string;
 }
 
-function normalizeQuestion(raw: unknown, sessionId: string): AIQuestion | null {
-    if (!raw || typeof raw !== "object") return null;
-    const record = raw as Record<string, unknown>;
-    const questionText =
-        typeof record.question_text === "string"
-            ? record.question_text
-            : typeof record.question === "string"
-                ? record.question
-                : null;
-    if (!questionText) return null;
-
-    return {
-        id: typeof record.id === "string" ? record.id : `${sessionId}-q-${Date.now()}`,
-        question: questionText,
-        options: Array.isArray(record.suggested_options) ? (record.suggested_options as ChoiceOption[]) : [],
-        fieldKey: typeof record.field_key === "string" ? record.field_key : null,
-        allowCustom: typeof record.allow_custom === "boolean" ? record.allow_custom : true,
-        allowMultiple: typeof record.allow_multiple === "boolean" ? record.allow_multiple : false,
-    };
-}
-
 interface CollectedData {
     topic?: string;
     audience?: string;
-    slideCount?: number | "auto";
+    slideCount?: number;
+    slideRange?: string;
     style?: string;
     sections?: string[];
     sections_by_document?: Record<string, string[]>;
     [key: string]: unknown;
 }
 
-type LastAction = "start" | "clarify" | "confirm" | null;
+type LastAction = "start" | "confirm" | null;
 
 export function WizardClarifier({ projectId, mode, onComplete, initialSessionId = null }: WizardClarifierProps) {
     const { user } = useAuth();
@@ -117,10 +139,6 @@ export function WizardClarifier({ projectId, mode, onComplete, initialSessionId 
     const [documents, setDocuments] = useState<DocumentScope[]>([]);
     const [openDocumentHash, setOpenDocumentHash] = useState<string | null>(null);
     const [selectedSectionKeys, setSelectedSectionKeys] = useState<Set<string>>(new Set());
-
-    // AI clarification state
-    const [currentQuestion, setCurrentQuestion] = useState<AIQuestion | null>(null);
-    const [answeredQuestions, setAnsweredQuestions] = useState<{ question: string; answer: string }[]>([]);
 
     // University defaults (would come from user profile)
     const [universityDefaults, setUniversityDefaults] = useState<UniversityDefaults | null>(null);
@@ -250,15 +268,14 @@ export function WizardClarifier({ projectId, mode, onComplete, initialSessionId 
     }, [user, sessionId]);
 
     useEffect(() => {
-        if (!initialSessionId || sessionId) return;
+        if (!initialSessionId) return;
+        if (sessionId === initialSessionId) return;
+        hydratedRef.current = false;
         setSessionId(initialSessionId);
-        setPhase("clarify");
+        setPhase("settings");
         setError(null);
-        void startAIClarification(initialSessionId);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [initialSessionId, sessionId]);
 
-    // Hydrate local wizard state from persisted run (best effort).
     useEffect(() => {
         if (!run || hydratedRef.current) return;
         hydratedRef.current = true;
@@ -267,14 +284,12 @@ export function WizardClarifier({ projectId, mode, onComplete, initialSessionId 
         if (brief) {
             const savedTopic = typeof brief.topic === "string" ? brief.topic : "";
             const savedPhase = typeof brief.phase === "string" ? (brief.phase as WizardPhase) : null;
-            const savedAnswered = Array.isArray(brief.answeredQuestions) ? (brief.answeredQuestions as { question: string; answer: string }[]) : null;
             const savedCollected = typeof brief.collectedData === "object" && brief.collectedData ? (brief.collectedData as CollectedData) : null;
 
             if (!topic && savedTopic) setTopic(savedTopic);
             if (Object.keys(collectedData).length === 0 && savedCollected) setCollectedData(savedCollected);
-            if (answeredQuestions.length === 0 && savedAnswered) setAnsweredQuestions(savedAnswered);
             // Only set phase if we haven't moved forward yet.
-            if (phase === "upload" && savedPhase && ["upload", "scope", "settings", "clarify", "summary"].includes(savedPhase)) {
+            if ((phase === "upload" || phase === "settings") && savedPhase && ["upload", "scope", "settings", "summary"].includes(savedPhase)) {
                 setPhase(savedPhase);
             }
         }
@@ -298,7 +313,7 @@ export function WizardClarifier({ projectId, mode, onComplete, initialSessionId 
             }
             if (next.size > 0) setSelectedSectionKeys(next);
         }
-    }, [run, topic, collectedData, answeredQuestions.length, phase]);
+    }, [run, topic, collectedData, phase]);
 
     // If we resume into scope without local File objects, load section previews from cached hashes.
     useEffect(() => {
@@ -321,8 +336,6 @@ export function WizardClarifier({ projectId, mode, onComplete, initialSessionId 
                     topic,
                     phase,
                     collectedData,
-                    answeredQuestions,
-                    currentQuestion: currentQuestion?.question ?? null,
                 },
                 uploads: {
                     file_hashes: getEffectiveFileHashes(),
@@ -333,7 +346,7 @@ export function WizardClarifier({ projectId, mode, onComplete, initialSessionId 
         return () => {
             if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
         };
-    }, [run?._id, topic, phase, collectedData, answeredQuestions, currentQuestion?.question, updateRun, getEffectiveFileHashes]);
+    }, [run?._id, topic, phase, collectedData, updateRun, getEffectiveFileHashes]);
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files.length > 0) {
@@ -365,7 +378,6 @@ export function WizardClarifier({ projectId, mode, onComplete, initialSessionId 
                     mode: mode,
                     topic: topic.trim() ? topic : undefined,
                     file_hashes: fileHashes.length > 0 ? fileHashes : undefined,
-                    wizard_data: { ...collectedData, topic }
                 })
             });
 
@@ -401,8 +413,6 @@ export function WizardClarifier({ projectId, mode, onComplete, initialSessionId 
                     console.error("Failed to persist run history:", e);
                 }
 
-                const normalizedQuestion = normalizeQuestion(data.next_question, data.session_id);
-
                 // If we have any ready/cached PDFs (including from prior runs), always show section scope.
                 if (hasAnyPdf) {
                     const allHashes = getEffectiveFileHashes();
@@ -417,18 +427,10 @@ export function WizardClarifier({ projectId, mode, onComplete, initialSessionId 
                     }
                     setSelectedSectionKeys(nextSelected);
                     setPhase("scope");
-                } else if (normalizedQuestion) {
-                    setCurrentQuestion(normalizedQuestion);
-                    setPhase("clarify");
                 } else if (data.complete || data.needs_confirmation || data.next_step === "summary") {
-                    setCurrentQuestion(null);
                     setPhase("summary");
-                } else if (mode !== "research") {
-                    setPhase("settings");
                 } else {
-                    // For research mode, go straight to clarify
-                    setPhase("clarify");
-                    startAIClarification(data.session_id);
+                    setPhase("settings");
                 }
             } else {
                 const err = await res.json();
@@ -442,103 +444,27 @@ export function WizardClarifier({ projectId, mode, onComplete, initialSessionId 
         }
     };
 
-    const handleQuestionAnswer = async (answer: string, customText?: string) => {
-        if (!currentQuestion || !sessionId) return;
+    const buildWizardPayload = (): CollectedData => {
+        const selectedSections = Array.isArray(collectedData.sections)
+            ? collectedData.sections.filter((s) => typeof s === "string" && s.trim())
+            : [];
+        const focusAreas = inferFocusAreas(topic, selectedSections);
+        const slideRange = typeof collectedData.slideRange === "string" ? collectedData.slideRange : "auto";
+        const slideCount = typeof collectedData.slideCount === "number"
+            ? collectedData.slideCount
+            : parseSlideRangeToCount(slideRange, focusAreas.length);
 
-        const finalAnswer = customText || answer;
-
-        // Record the answer
-        setAnsweredQuestions(prev => [...prev, {
-            question: currentQuestion.question,
-            answer: finalAnswer
-        }]);
-
-        if (currentQuestion.fieldKey) {
-            setCollectedData(prev => ({
-                ...prev,
-                [currentQuestion.fieldKey as string]: finalAnswer
-            }));
-        }
-
-        setIsLoading(true);
-        setError(null);
-        setLastAction("clarify");
-
-        try {
-            const token = await user?.getIdToken();
-            const fileHashes = getEffectiveFileHashes();
-            const res = await fetch("/api/generate/clarify/stream", {
-                method: "POST",
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    session_id: sessionId,
-                    answer: finalAnswer,
-                    field_key: currentQuestion.fieldKey || undefined,
-                    file_hashes: fileHashes.length > 0 ? fileHashes : undefined,
-                })
-            });
-
-            if (!res.ok) throw new Error("Failed to submit answer");
-
-            // Process SSE response for next question or completion
-            const reader = res.body?.getReader();
-            const decoder = new TextDecoder();
-
-            if (reader) {
-                let buffer = "";
-
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-
-                    buffer += decoder.decode(value, { stream: true });
-                    const events = buffer.split("\n\n");
-                    buffer = events.pop() || "";
-
-                    for (const eventStr of events) {
-                        if (!eventStr.trim()) continue;
-
-                        const lines = eventStr.split("\n");
-                        let eventType = "";
-                        let eventData = "";
-
-                        for (const line of lines) {
-                            if (line.startsWith("event: ")) eventType = line.slice(7);
-                            else if (line.startsWith("data: ")) eventData = line.slice(6);
-                        }
-
-                        if (!eventType || !eventData) continue;
-
-                        try {
-                            const data = JSON.parse(eventData);
-
-                            if (eventType === "question") {
-                                // New question from AI
-                                const nextQuestion = normalizeQuestion(data, sessionId);
-                                if (nextQuestion) setCurrentQuestion(nextQuestion);
-                            } else if (eventType === "needs_confirmation" || (eventType === "done" && data.complete)) {
-                                // All questions answered, show summary
-                                setCurrentQuestion(null);
-                                setPhase("summary");
-                            } else if (eventType === "blueprint_ready") {
-                                // Skip to completion
-                                onComplete(sessionId);
-                            }
-                        } catch (parseError) {
-                            console.error("Failed to parse SSE data:", parseError);
-                        }
-                    }
-                }
-            }
-        } catch (e) {
-            console.error("Error submitting answer:", e);
-            setError("Failed to submit answer. Please try again.");
-        } finally {
-            setIsLoading(false);
-        }
+        return {
+            ...collectedData,
+            topic: topic.trim() ? topic.trim() : undefined,
+            audience: toAudienceLabel(collectedData.audience),
+            slideRange,
+            slideCount,
+            sections: focusAreas,
+            focus_areas: focusAreas,
+            style: "detailed",
+            emphasis_style: "detailed",
+        };
     };
 
     const handleConfirm = async () => {
@@ -556,7 +482,11 @@ export function WizardClarifier({ projectId, mode, onComplete, initialSessionId 
                     Authorization: `Bearer ${token}`,
                     "Content-Type": "application/json"
                 },
-                body: JSON.stringify({ session_id: sessionId })
+                body: JSON.stringify({
+                    session_id: sessionId,
+                    wizard_data: buildWizardPayload(),
+                    source: "wizard_setup_v2",
+                })
             });
 
             if (res.ok) {
@@ -575,24 +505,19 @@ export function WizardClarifier({ projectId, mode, onComplete, initialSessionId 
 
     // Progress bar calculation
     const getProgress = () => {
-        const phases: WizardPhase[] = ["upload", "scope", "settings", "clarify", "summary"];
+        const phases: WizardPhase[] = ["upload", "scope", "settings", "summary"];
         return ((phases.indexOf(phase) + 1) / phases.length) * 100;
     };
 
     const goBack = () => {
         if (phase === "scope") setPhase("upload");
         else if (phase === "settings") setPhase(hasAnyPdf ? "scope" : "upload");
-        else if (phase === "clarify") setPhase("settings");
-        else if (phase === "summary") setPhase("clarify");
+        else if (phase === "summary") setPhase("settings");
     };
 
     const retryLastAction = async () => {
         if (lastAction === "start") {
             await startSession();
-            return;
-        }
-        if (lastAction === "clarify") {
-            await startAIClarification();
             return;
         }
         if (lastAction === "confirm") {
@@ -605,12 +530,12 @@ export function WizardClarifier({ projectId, mode, onComplete, initialSessionId 
             {/* Progress Bar */}
             <div className="px-4 py-3 border-b border-neutral-800/50">
                 <div className="flex items-center gap-2 mb-2">
-                    {["upload", "scope", "settings", "clarify", "summary"].map((p, i) => (
+                    {["upload", "scope", "settings", "summary"].map((p, i) => (
                         <div
                             key={p}
                             className={cn(
                                 "flex-1 h-1 rounded-full transition-colors",
-                                i <= ["upload", "scope", "settings", "clarify", "summary"].indexOf(phase)
+                                i <= ["upload", "scope", "settings", "summary"].indexOf(phase)
                                     ? "bg-emerald-500"
                                     : "bg-neutral-800"
                             )}
@@ -621,8 +546,7 @@ export function WizardClarifier({ projectId, mode, onComplete, initialSessionId 
                     <span className="text-neutral-500 uppercase tracking-wider font-medium">
                         {phase === "upload" && "Getting Started"}
                         {phase === "scope" && "Document Sections"}
-                        {phase === "settings" && "Quick Settings"}
-                        {phase === "clarify" && "Refining Details"}
+                        {phase === "settings" && "Setup"}
                         {phase === "summary" && "Review & Confirm"}
                     </span>
                     <span className="text-emerald-500 font-mono" title="Wizard step estimate">
@@ -976,7 +900,7 @@ export function WizardClarifier({ projectId, mode, onComplete, initialSessionId 
                         </motion.div>
                     )}
 
-                    {/* Settings Phase (Quick Settings) */}
+                    {/* Settings Phase */}
                     {phase === "settings" && (
                         <motion.div
                             key="settings"
@@ -985,108 +909,63 @@ export function WizardClarifier({ projectId, mode, onComplete, initialSessionId 
                             exit={{ opacity: 0, x: -20 }}
                             className="space-y-6"
                         >
-                            {/* Audience Question */}
                             <ChoiceQuestionCard
-                                question="Who is the target audience?"
-                                options={[
-                                    { id: "undergrad", label: "Undergraduates", description: "College/university students" },
-                                    { id: "graduate", label: "Graduate Level", description: "Masters/PhD researchers" },
-                                    { id: "industry", label: "Industry Experts", description: "Working professionals" },
-                                    { id: "general", label: "General Audience", description: "Non-specialists" },
-                                ]}
+                                question="How long should the deck be?"
+                                options={SETUP_SLIDE_RANGE_OPTIONS}
                                 onSelect={(id) => {
-                                    setCollectedData(prev => ({ ...prev, audience: id }));
+                                    const sectionCount = Array.isArray(collectedData.sections) ? collectedData.sections.length : 0;
+                                    setCollectedData(prev => ({
+                                        ...prev,
+                                        slideRange: id,
+                                        slideCount: parseSlideRangeToCount(id, sectionCount),
+                                    }));
                                 }}
+                                showCustomInput={false}
                                 isLoading={isLoading}
                             />
 
-                            {collectedData.audience && (
-                                <>
-                                    {/* Slide Count */}
-                                    <ChoiceQuestionCard
-                                        question="How many slides?"
-                                        options={[
-                                            { id: "5", label: "5 slides", description: "Brief overview" },
-                                            { id: "10", label: "10 slides", description: "Standard length" },
-                                            { id: "15", label: "15 slides", description: "Detailed coverage" },
-                                            { id: "auto", label: "Let AI decide", description: "Based on content" },
-                                        ]}
-                                        onSelect={(id) => {
-                                            setCollectedData(prev => ({
-                                                ...prev,
-                                                slideCount: id === "auto" ? "auto" : parseInt(id)
-                                            }));
-                                        }}
-                                        showCustomInput={true}
-                                        isLoading={isLoading}
-                                    />
-                                </>
-                            )}
-
-                            {collectedData.slideCount && (
-                                <>
-                                    {/* Style */}
-                                    <ChoiceQuestionCard
-                                        question="Presentation style?"
-                                        options={[
-                                            { id: "detailed", label: "Detailed", description: "In-depth with examples" },
-                                            { id: "concise", label: "Concise", description: "Key points only" },
-                                            { id: "visual", label: "Visual Heavy", description: "Emphasis on graphics" },
-                                        ]}
-                                        onSelect={(id) => {
-                                            setCollectedData(prev => ({ ...prev, style: id }));
-                                            // Move to clarify phase
-                                            setPhase("clarify");
-                                            // Start AI questions
-                                            startAIClarification();
-                                        }}
-                                        isLoading={isLoading}
-                                    />
-                                </>
-                            )}
-                        </motion.div>
-                    )}
-
-                    {/* Clarify Phase (AI Questions) */}
-                    {phase === "clarify" && (
-                        <motion.div
-                            key="clarify"
-                            initial={{ opacity: 0, x: 20 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            exit={{ opacity: 0, x: -20 }}
-                            className="space-y-6"
-                        >
-                            {/* Answered questions (collapsed) */}
-                            {answeredQuestions.length > 0 && (
-                                <div className="space-y-2">
-                                    {answeredQuestions.map((qa, i) => (
-                                        <div key={i} className="flex items-center gap-2 text-xs text-neutral-500">
-                                            <Check className="h-3 w-3 text-emerald-500" />
-                                            <span className="truncate">{qa.question}</span>
-                                            <span className="text-emerald-400 ml-auto">{qa.answer}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-
-                            {/* Current AI Question */}
-                            {currentQuestion && (
+                            {collectedData.slideRange && (
                                 <ChoiceQuestionCard
-                                    question={currentQuestion.question}
-                                    options={currentQuestion.options}
-                                    onSelect={handleQuestionAnswer}
-                                    allowMultiple={currentQuestion.allowMultiple}
-                                    showCustomInput={currentQuestion.allowCustom}
+                                    question="Who will this be presented to?"
+                                    options={SETUP_AUDIENCE_OPTIONS}
+                                    onSelect={(id) => {
+                                        setCollectedData(prev => ({ ...prev, audience: id }));
+                                    }}
+                                    showCustomInput={false}
                                     isLoading={isLoading}
                                 />
                             )}
 
-                            {/* Loading state */}
-                            {isLoading && !currentQuestion && (
-                                <div className="flex items-center justify-center py-8">
-                                    <Loader2 className="h-6 w-6 text-emerald-500 animate-spin" />
-                                </div>
-                            )}
+                            <div className="rounded-lg border border-neutral-800 bg-neutral-900/30 p-4 text-xs text-neutral-400">
+                                Next step is outline review. You can edit structure directly and use prompts to fine-tune before generation.
+                            </div>
+
+                            <Button
+                                disabled={!collectedData.audience || !collectedData.slideRange || isLoading}
+                                onClick={() => {
+                                    const selectedSections = Array.isArray(collectedData.sections)
+                                        ? collectedData.sections.filter((s) => typeof s === "string" && s.trim())
+                                        : [];
+                                    const focusAreas = inferFocusAreas(topic, selectedSections);
+                                    const slideRange = typeof collectedData.slideRange === "string" ? collectedData.slideRange : "auto";
+                                    const nextCollected: CollectedData = {
+                                        ...collectedData,
+                                        audience: toAudienceLabel(collectedData.audience),
+                                        slideRange,
+                                        slideCount: parseSlideRangeToCount(slideRange, focusAreas.length),
+                                        sections: focusAreas,
+                                        focus_areas: focusAreas,
+                                        style: "detailed",
+                                        emphasis_style: "detailed",
+                                    };
+                                    setCollectedData(nextCollected);
+                                    setPhase("summary");
+                                }}
+                                className="w-full bg-emerald-600 hover:bg-emerald-500"
+                            >
+                                Review setup
+                                <ChevronRight className="ml-2 h-4 w-4" />
+                            </Button>
                         </motion.div>
                     )}
 
@@ -1120,16 +999,18 @@ export function WizardClarifier({ projectId, mode, onComplete, initialSessionId 
                                 )}
                                 {collectedData.slideCount && (
                                     <div className="flex justify-between text-sm">
-                                        <span className="text-neutral-500">Slides</span>
+                                        <span className="text-neutral-500">Deck length</span>
                                         <span className="text-white">
-                                            {collectedData.slideCount === "auto" ? "AI decides" : collectedData.slideCount}
+                                            {typeof collectedData.slideRange === "string" && collectedData.slideRange !== "auto"
+                                                ? `${collectedData.slideRange} (target ${collectedData.slideCount})`
+                                                : `Based on structure (target ${collectedData.slideCount})`}
                                         </span>
                                     </div>
                                 )}
-                                {collectedData.style && (
+                                {Array.isArray(collectedData.sections) && collectedData.sections.length > 0 && (
                                     <div className="flex justify-between text-sm">
-                                        <span className="text-neutral-500">Style</span>
-                                        <span className="text-white capitalize">{collectedData.style}</span>
+                                        <span className="text-neutral-500">Outline focus</span>
+                                        <span className="text-white">{collectedData.sections.length} section(s)</span>
                                     </div>
                                 )}
                                 {universityDefaults && (
@@ -1145,23 +1026,6 @@ export function WizardClarifier({ projectId, mode, onComplete, initialSessionId 
                                     </>
                                 )}
                             </div>
-
-                            {/* Answered Questions */}
-                            {answeredQuestions.length > 0 && (
-                                <div className="rounded-lg bg-neutral-900/30 border border-neutral-800/50 p-4">
-                                    <p className="text-xs text-neutral-500 mb-2 uppercase tracking-wider">
-                                        Additional Details
-                                    </p>
-                                    <div className="space-y-2">
-                                        {answeredQuestions.map((qa, i) => (
-                                            <div key={i} className="flex justify-between text-sm">
-                                                <span className="text-neutral-500 truncate max-w-[60%]">{qa.question}</span>
-                                                <span className="text-white">{qa.answer}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
 
                             {/* Confirm Button */}
                             <Button
@@ -1219,86 +1083,4 @@ export function WizardClarifier({ projectId, mode, onComplete, initialSessionId 
             </div>
         </div>
     );
-
-    // Helper function to start AI clarification
-    async function startAIClarification(overrideSessionId?: string) {
-        const activeSessionId = overrideSessionId || sessionId;
-        if (!activeSessionId) return;
-
-        setIsLoading(true);
-        setError(null);
-        setLastAction("clarify");
-
-        try {
-            const token = await user?.getIdToken();
-            const fileHashes = getEffectiveFileHashes();
-            const res = await fetch("/api/generate/clarify/stream", {
-                method: "POST",
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    session_id: activeSessionId,
-                    wizard_data: collectedData,
-                    request_next_question: true,
-                    file_hashes: fileHashes.length > 0 ? fileHashes : undefined,
-                })
-            });
-
-            if (!res.ok) throw new Error("Failed to start clarification");
-
-            // Process SSE for first question
-            const reader = res.body?.getReader();
-            const decoder = new TextDecoder();
-
-            if (reader) {
-                let buffer = "";
-
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-
-                    buffer += decoder.decode(value, { stream: true });
-                    const events = buffer.split("\n\n");
-                    buffer = events.pop() || "";
-
-                    for (const eventStr of events) {
-                        if (!eventStr.trim()) continue;
-
-                        const lines = eventStr.split("\n");
-                        let eventType = "";
-                        let eventData = "";
-
-                        for (const line of lines) {
-                            if (line.startsWith("event: ")) eventType = line.slice(7);
-                            else if (line.startsWith("data: ")) eventData = line.slice(6);
-                        }
-
-                        if (!eventType || !eventData) continue;
-
-                        try {
-                            const data = JSON.parse(eventData);
-
-                            if (eventType === "question") {
-                                const nextQuestion = normalizeQuestion(data, activeSessionId);
-                                if (nextQuestion) setCurrentQuestion(nextQuestion);
-                            } else if (eventType === "needs_confirmation" || (eventType === "done" && data.complete)) {
-                                // No more questions needed, go to summary
-                                setCurrentQuestion(null);
-                                setPhase("summary");
-                            }
-                        } catch (parseError) {
-                            console.error("Failed to parse SSE:", parseError);
-                        }
-                    }
-                }
-            }
-        } catch (e) {
-            console.error("Error starting AI clarification:", e);
-            setError("Failed to continue clarification. You can retry or go back.");
-        } finally {
-            setIsLoading(false);
-        }
-    }
 }

@@ -6,6 +6,8 @@ import { ConvexClientProvider } from "@/components/providers/convex-provider";
 import { Navbar } from "@/components/navbar";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ToastProvider } from "@/components/ui/toast";
+import { SankoPostHogProvider } from "@/components/posthog-provider";
+import { PostHogPageview } from "@/components/posthog-pageview";
 import "./globals.css";
 
 const notoSans = Noto_Sans({ variable: '--font-sans' });
@@ -38,12 +40,15 @@ export default function RootLayout({
         <QueryProvider>
           <ConvexClientProvider>
             <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-              <AuthProvider>
-                <ToastProvider>
-                  <Navbar />
-                  {children}
-                </ToastProvider>
-              </AuthProvider>
+              <SankoPostHogProvider>
+                <AuthProvider>
+                  <ToastProvider>
+                    <PostHogPageview />
+                    <Navbar />
+                    {children}
+                  </ToastProvider>
+                </AuthProvider>
+              </SankoPostHogProvider>
             </ThemeProvider>
           </ConvexClientProvider>
         </QueryProvider>

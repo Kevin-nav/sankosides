@@ -1,37 +1,17 @@
 // app/api/generate/clarify/stream/route.ts
 // Streaming clarification endpoint - proxies events from backend
 import { NextRequest, NextResponse } from 'next/server';
+import { resolveSuggestedOptions } from "@/lib/clarifier-options";
 
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8000';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-function normalizeSuggestedOptions(raw: unknown) {
-    if (!Array.isArray(raw)) return [];
-    return raw
-        .map((entry, index) => {
-            if (typeof entry === "string") {
-                return { id: `option-${index + 1}`, label: entry };
-            }
-            if (entry && typeof entry === "object") {
-                const record = entry as Record<string, unknown>;
-                const label = typeof record.label === "string" ? record.label : undefined;
-                if (!label) return null;
-                return {
-                    id: typeof record.id === "string" ? record.id : `option-${index + 1}`,
-                    label,
-                    description: typeof record.description === "string" ? record.description : undefined,
-                };
-            }
-            return null;
-        })
-        .filter((entry): entry is { id: string; label: string; description?: string } => !!entry);
-}
-
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
+        const authHeader = request.headers.get("authorization");
         const {
             session_id,
             answer,
@@ -54,6 +34,7 @@ export async function POST(request: NextRequest) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                ...(authHeader ? { Authorization: authHeader } : {}),
             },
             body: JSON.stringify({
                 // Ensure message is never undefined - backend requires this field
@@ -103,7 +84,7 @@ export async function POST(request: NextRequest) {
                             id: `${session_id}-${Date.now()}`,
                             question_text: data.question,
                             field_key: typeof data.field_key === "string" ? data.field_key : (typeof field_key === "string" ? field_key : null),
-                            suggested_options: normalizeSuggestedOptions(data.suggested_options),
+                            suggested_options: resolveSuggestedOptions(data.question, data.suggested_options),
                             allow_custom: typeof data.allow_custom === "boolean" ? data.allow_custom : true,
                             allow_multiple: typeof data.allow_multiple === "boolean" ? data.allow_multiple : false,
                         })}\n\n`)

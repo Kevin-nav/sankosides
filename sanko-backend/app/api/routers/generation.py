@@ -20,14 +20,15 @@ import json
 import asyncio
 import os
 import re
-from pathlib import Path
 import threading
+import base64
 
 from app.models.schemas import (
     OrderForm,
     Skeleton,
     GeneratedPresentation,
     GatheredInfo,
+    ClarificationMessage,
 )
 from app.crew.flows.slide_generation import (
     SlideGenerationFlow,
@@ -43,6 +44,8 @@ from app.crew.flows.slide_generation import (
 from app.crew.flows.metrics import MetricsCollector
 from app.core.logging import get_logger
 from app.core.config import settings
+from app.core.convex_client import get_convex_client
+from app.core.posthog import capture as posthog_capture, build_common_props
 from app.core.database import get_db, get_async_session
 from app.services.storage import get_storage_service, PDFCacheService
 from app.services.convex_service import get_convex_service
@@ -50,6 +53,101 @@ from app.clients.gemini.client import GeminiInteractionsClient
 from lxml import html as lxml_html
 
 logger = get_logger(__name__)
+
+# Optional: manual spans to add high-value attributes (session_id/project_id) around background tasks.
+try:
+    from opentelemetry import trace  # type: ignore
+    _tracer = trace.get_tracer(__name__)
+except Exception:
+    _tracer = None
+
+
+def _token_metrics_for_posthog(session_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Return compact metrics suitable for PostHog properties:
+    - totals
+    - per-agent totals
+    - per-agent per-model totals (aggregated from call history)
+    """
+    collector = MetricsCollector.get(session_id)
+    if not collector:
+        return None
+
+    metrics = collector.get_metrics()
+    data = metrics.to_dict()
+
+    # Strip per-call history (too large/noisy for analytics).
+    agents_in = data.get("agents", {}) or {}
+    agents_out: Dict[str, Any] = {}
+
+    # Walk the underlying call_history for full fidelity model aggregation.
+    for agent_name, agent in metrics.agents.items():
+        models: Dict[str, Dict[str, Any]] = {}
+        for usage in agent.call_history:
+            model = getattr(usage, "model", "") or "unknown"
+            entry = models.get(model)
+            if not entry:
+                entry = {
+                    "calls": 0,
+                    "input_tokens": 0,
+                    "output_tokens": 0,
+                    "thinking_tokens": 0,
+                    "total_tokens": 0,
+                    "cost_usd": 0.0,
+                }
+                models[model] = entry
+
+            entry["calls"] += 1
+            entry["input_tokens"] += int(getattr(usage, "input_tokens", 0) or 0)
+            entry["output_tokens"] += int(getattr(usage, "output_tokens", 0) or 0)
+            entry["thinking_tokens"] += int(getattr(usage, "thinking_tokens", 0) or 0)
+            entry["total_tokens"] += int(getattr(usage, "total_tokens", 0) or 0)
+            try:
+                entry["cost_usd"] += float(usage.calculate_cost() or 0.0)
+            except Exception:
+                pass
+
+        agents_out[agent_name] = {
+            "calls": int(agent.calls or 0),
+            "input_tokens": int(agent.total_input_tokens or 0),
+            "output_tokens": int(agent.total_output_tokens or 0),
+            "thinking_tokens": int(agent.total_thinking_tokens or 0),
+            "total_tokens": int(agent.total_tokens or 0),
+            "cost_usd": round(float(agent.total_cost_usd or 0.0), 6),
+            "total_duration_ms": int(agent.total_duration_ms or 0),
+            "avg_duration_ms": round(float(agent.avg_duration_ms or 0.0), 2),
+            "models": {
+                model: {
+                    **vals,
+                    "cost_usd": round(float(vals.get("cost_usd", 0.0)), 6),
+                }
+                for model, vals in models.items()
+            },
+        }
+
+    totals = data.get("totals", {}) or {}
+    flat: Dict[str, Any] = {
+        "total_input_tokens": int(totals.get("input_tokens", 0) or 0),
+        "total_output_tokens": int(totals.get("output_tokens", 0) or 0),
+        "total_thinking_tokens": int(totals.get("thinking_tokens", 0) or 0),
+        "total_tokens": int(totals.get("total_tokens", 0) or 0),
+        "total_cost_usd": float(totals.get("cost_usd", 0.0) or 0.0),
+        "total_api_calls": int(totals.get("api_calls", 0) or 0),
+        "pipeline_duration_ms": totals.get("pipeline_duration_ms", None),
+    }
+    for agent_name, agent_vals in agents_out.items():
+        safe_name = str(agent_name).strip().lower().replace(" ", "_")
+        flat[f"agent_calls_{safe_name}"] = int(agent_vals.get("calls", 0) or 0)
+        flat[f"agent_total_tokens_{safe_name}"] = int(agent_vals.get("total_tokens", 0) or 0)
+        flat[f"agent_cost_usd_{safe_name}"] = float(agent_vals.get("cost_usd", 0.0) or 0.0)
+        flat[f"agent_total_duration_ms_{safe_name}"] = int(agent_vals.get("total_duration_ms", 0) or 0)
+        flat[f"agent_avg_duration_ms_{safe_name}"] = float(agent_vals.get("avg_duration_ms", 0.0) or 0.0)
+
+    return {
+        "totals": totals,
+        "agents": agents_out,
+        "flat": flat,
+    }
 
 router = APIRouter(prefix="/generation", tags=["generation"])
 
@@ -90,26 +188,259 @@ def get_current_user(authorization: Optional[str] = Header(default=None)) -> Dic
     return {"token": token}
 
 
+def _try_get_user_id_from_authorization(authorization: Optional[str]) -> Optional[str]:
+    """
+    Best-effort extraction of the Firebase UID from an Authorization header.
+
+    In production, set `FIREBASE_PROJECT_ID` so we can verify ID tokens.
+    """
+    if not authorization:
+        return None
+    if not authorization.lower().startswith("bearer "):
+        return None
+
+    token = authorization.split(" ", 1)[1].strip()
+    if not token:
+        return None
+
+    firebase_project_id = getattr(settings, "firebase_project_id", None)
+    if firebase_project_id:
+        try:
+            from google.auth.transport.requests import Request as GoogleRequest
+            from google.oauth2 import id_token as google_id_token
+
+            claims = google_id_token.verify_firebase_token(
+                token,
+                GoogleRequest(),
+                audience=firebase_project_id,
+            ) or {}
+
+            uid = claims.get("user_id") or claims.get("sub") or claims.get("uid")
+            if isinstance(uid, str) and uid:
+                return uid
+        except Exception:
+            return None
+
+    # Optionally allow unverified extraction in local dev.
+    allow_unverified = str(os.getenv("ALLOW_UNVERIFIED_JWT_USER_ID", "false")).strip().lower() in {"1", "true", "yes", "on"}
+    if not allow_unverified:
+        return None
+
+    try:
+        parts = token.split(".")
+        if len(parts) < 2:
+            return None
+        payload_b64 = parts[1]
+        padding = "=" * (-len(payload_b64) % 4)
+        payload_json = base64.urlsafe_b64decode((payload_b64 + padding).encode("utf-8")).decode("utf-8")
+        claims = json.loads(payload_json) if payload_json else {}
+        uid = claims.get("user_id") or claims.get("sub") or claims.get("uid")
+        if isinstance(uid, str) and uid:
+            return uid
+    except Exception:
+        return None
+
+    return None
+
+
 # =============================================================================
 # Thread-Safe In-Memory Session Store
 # =============================================================================
 
-_sessions: Dict[str, FlowState] = {}
 _sessions_lock = threading.RLock()  # Thread-safe lock for session access
+_convex_session_persistence_enabled = (
+    str(os.getenv("GENERATION_SESSION_PERSISTENCE", "true")).strip().lower()
+    not in {"0", "false", "no", "off"}
+) and bool(os.getenv("CONVEX_URL"))
+
+
+def _flow_to_run_stage_and_status(flow_status: Any) -> tuple[str, str]:
+    s = str(flow_status or "").strip().lower()
+    if s in {"failed"}:
+        return "failed", "failed"
+    if s in {"completed"}:
+        return "completed", "completed"
+    if s in {"generating", "qa_in_progress"}:
+        return "generating", "active"
+    if s in {"clarification_complete", "awaiting_outline_approval", "outline_approved"}:
+        return "blueprint", "active"
+    return "clarifying", "active"
+
+
+def _build_persistable_flow_state(state: FlowState) -> Dict[str, Any]:
+    """
+    Persist only resumability-critical fields.
+
+    We intentionally skip heavy blobs (knowledge_base, planned/refined/generated slide payloads)
+    to avoid oversized Convex documents.
+    """
+    payload = {
+        "session_id": state.session_id,
+        "user_id": state.user_id,
+        "project_id": state.project_id,
+        "mode": state.mode,
+        "topic": state.topic,
+        "created_at": state.created_at,
+        "updated_at": state.updated_at,
+        "order_form": state.order_form,
+        "skeleton": state.skeleton,
+        "uploaded_files": state.uploaded_files,
+        "conversation_history": state.conversation_history,
+        "gathered_info": state.gathered_info,
+        "selected_sections": state.selected_sections,
+        "approved_related": state.approved_related,
+        "declined_related": state.declined_related,
+        "document_scoped": state.document_scoped,
+        "pending_related_sections": state.pending_related_sections,
+        "status": state.status,
+        "current_stage": state.current_stage,
+        "qa_loops": state.qa_loops,
+        "max_qa_loops": state.max_qa_loops,
+        "helper_attempts": state.helper_attempts,
+        "failure_context": state.failure_context,
+        "needs_helper": state.needs_helper,
+        "helper_context": state.helper_context,
+        "error_message": state.error_message,
+        "slides_completed": state.slides_completed,
+        "total_slides": state.total_slides,
+    }
+    return FlowState.model_validate(payload).model_dump(mode="json")
+
+
+def _load_run_by_session_from_convex(session_id: str) -> Optional[Dict[str, Any]]:
+    if not _convex_session_persistence_enabled:
+        return None
+    try:
+        client = get_convex_client()
+        run = client.query("generationRuns:getBySession", {"sessionId": session_id})
+        return run if isinstance(run, dict) else None
+    except Exception as exc:
+        logger.warning(f"Convex session lookup failed for {session_id}: {exc}")
+        return None
+
+
+def _restore_state_from_run(session_id: str, run: Dict[str, Any]) -> Optional[FlowState]:
+    runtime = run.get("runtime")
+    if isinstance(runtime, dict):
+        flow_state_raw = runtime.get("flow_state")
+        if isinstance(flow_state_raw, dict):
+            try:
+                restored = FlowState.model_validate(flow_state_raw)
+                if not restored.project_id and run.get("projectId"):
+                    restored.project_id = str(run.get("projectId"))
+                return restored
+            except Exception as exc:
+                logger.warning(f"Invalid runtime flow_state for session {session_id}: {exc}")
+
+    # Backward-compat rebuild for older runs that predate backend runtime snapshots.
+    try:
+        rebuilt = FlowState(session_id=session_id)
+        rebuilt.project_id = str(run.get("projectId")) if run.get("projectId") else None
+        rebuilt.mode = str(run.get("mode")) if run.get("mode") else None
+
+        stage = str(run.get("stage") or "").strip().lower()
+        if stage == "completed":
+            rebuilt.status = FlowStatus.COMPLETED
+        elif stage == "failed":
+            rebuilt.status = FlowStatus.FAILED
+        elif stage == "generating":
+            rebuilt.status = FlowStatus.GENERATING
+        elif stage == "blueprint":
+            rebuilt.status = FlowStatus.AWAITING_OUTLINE_APPROVAL
+        else:
+            rebuilt.status = FlowStatus.AWAITING_CLARIFICATION
+
+        uploads = run.get("uploads")
+        if isinstance(uploads, dict):
+            file_hashes = uploads.get("file_hashes")
+            if isinstance(file_hashes, list):
+                rebuilt.uploaded_files = [{"file_hash": str(h)} for h in file_hashes if isinstance(h, str) and h.strip()]
+
+        brief = run.get("brief")
+        if isinstance(brief, dict):
+            if isinstance(brief.get("topic"), str):
+                rebuilt.topic = brief.get("topic")
+            collected = brief.get("collectedData")
+            if isinstance(collected, dict):
+                _apply_wizard_data_to_state(rebuilt, collected)
+            answered = brief.get("answeredQuestions")
+            if isinstance(answered, list):
+                for qa in answered:
+                    if not isinstance(qa, dict):
+                        continue
+                    q = qa.get("question")
+                    a = qa.get("answer")
+                    if isinstance(q, str) and q.strip():
+                        rebuilt.conversation_history.append(
+                            ClarificationMessage(role="assistant", content=q.strip())
+                        )
+                    if isinstance(a, str) and a.strip():
+                        rebuilt.conversation_history.append(
+                            ClarificationMessage(role="user", content=a.strip())
+                        )
+
+        return rebuilt
+    except Exception as exc:
+        logger.warning(f"Failed to rebuild FlowState from Convex run for {session_id}: {exc}")
+        return None
+
+
+def _persist_session_to_convex(state: FlowState) -> None:
+    if not _convex_session_persistence_enabled:
+        return
+    try:
+        client = get_convex_client()
+        run_stage, run_status = _flow_to_run_stage_and_status(state.status)
+        payload: Dict[str, Any] = {
+            "sessionId": state.session_id,
+            "runtime": {
+                "version": 1,
+                "persisted_at": datetime.utcnow().isoformat(),
+                "flow_state": _build_persistable_flow_state(state),
+            },
+            "mode": state.mode,
+            "stage": run_stage,
+            "status": run_status,
+        }
+        if state.project_id:
+            payload["projectId"] = str(state.project_id)
+        client.mutation("generationRuns:upsertRuntimeBySession", payload)
+    except Exception as exc:
+        logger.warning(f"Convex session persist failed for {state.session_id}: {exc}")
+
+
+def _load_sessions() -> Dict[str, FlowState]:
+    # Keep startup fast; sessions are lazy-restored from Convex on cache miss.
+    return {}
+
+
+_sessions: Dict[str, FlowState] = _load_sessions()
 
 
 def get_session(session_id: str) -> FlowState:
     """Get session from store (thread-safe)."""
     with _sessions_lock:
-        if session_id not in _sessions:
-            raise HTTPException(status_code=404, detail="Session not found")
-        return _sessions[session_id]
+        cached = _sessions.get(session_id)
+        if cached is not None:
+            return cached
+
+    run = _load_run_by_session_from_convex(session_id)
+    if run is not None:
+        restored = _restore_state_from_run(session_id, run)
+        if restored is not None:
+            with _sessions_lock:
+                _sessions[session_id] = restored
+            return restored
+
+    raise HTTPException(status_code=404, detail="Session not found")
 
 
 def save_session(state: FlowState):
     """Save session to store (thread-safe)."""
     with _sessions_lock:
+        state.updated_at = datetime.utcnow()
         _sessions[state.session_id] = state
+    _persist_session_to_convex(state)
 
 
 # =============================================================================
@@ -225,6 +556,12 @@ class ClarifyRequest(BaseModel):
     field_key: Optional[str] = None
 
 
+class ConfirmRequest(BaseModel):
+    """Optional payload for deterministic wizard confirmations."""
+    wizard_data: Optional[Dict[str, Any]] = None
+    source: Optional[str] = None
+
+
 def _normalize_emphasis_style(value: Optional[str]) -> Optional[str]:
     if not value:
         return None
@@ -237,6 +574,71 @@ def _normalize_emphasis_style(value: Optional[str]) -> Optional[str]:
         "concise": "concise",
     }
     return mapping.get(normalized, normalized)
+
+
+def _parse_slide_count_from_wizard(wizard_data: Dict[str, Any]) -> Optional[int]:
+    slide_count = wizard_data.get("slideCount") or wizard_data.get("slide_count")
+    if isinstance(slide_count, str):
+        normalized = slide_count.strip().lower()
+        if normalized.isdigit():
+            slide_count = int(normalized)
+        elif normalized == "auto":
+            slide_count = None
+
+    if isinstance(slide_count, int) and slide_count > 0:
+        return slide_count
+
+    slide_range = wizard_data.get("slideRange") or wizard_data.get("slide_range")
+    if isinstance(slide_range, str):
+        normalized_range = slide_range.strip().lower()
+        if normalized_range == "auto":
+            return None
+        match = re.match(r"^\s*(\d+)\s*-\s*(\d+)\s*$", normalized_range)
+        if match:
+            low = int(match.group(1))
+            high = int(match.group(2))
+            if low > 0 and high >= low:
+                return round((low + high) / 2)
+
+    return None
+
+
+def _is_wizard_setup_v2(source: Optional[str]) -> bool:
+    return isinstance(source, str) and source.strip().lower() == "wizard_setup_v2"
+
+
+def _apply_wizard_completion_fallbacks(state: FlowState) -> None:
+    """
+    Ensure deterministic wizard sessions are confirmable without conversational clarifier turns.
+    """
+    info = state.gathered_info or GatheredInfo()
+
+    if not info.has_title:
+        topic = (state.topic or "").strip()
+        if topic:
+            info.title = topic
+            info.has_title = True
+            if not info.key_topics:
+                info.key_topics = [topic]
+
+    if not info.has_focus_areas:
+        scoped = [str(s).strip() for s in (state.selected_sections or []) if str(s).strip()]
+        if scoped:
+            info.focus_areas = scoped
+            info.has_focus_areas = True
+        elif info.title:
+            info.focus_areas = [info.title]
+            info.has_focus_areas = True
+
+    if not info.has_slide_count:
+        info.slide_count = info.slide_count or 10
+        info.has_slide_count = True
+
+    if not info.has_audience:
+        info.audience = info.audience or "University students"
+        info.has_audience = True
+
+    state.gathered_info = info
 
 
 def _apply_wizard_data_to_state(state: FlowState, wizard_data: Dict[str, Any]) -> None:
@@ -255,16 +657,17 @@ def _apply_wizard_data_to_state(state: FlowState, wizard_data: Dict[str, Any]) -
 
     audience = wizard_data.get("audience") or wizard_data.get("target_audience")
     if isinstance(audience, str) and audience.strip():
-        info.audience = audience.strip()
+        normalized_audience = audience.strip()
+        audience_map = {
+            "students": "University students",
+            "mixed_academic": "Mixed academic audience",
+            "technical": "Technical audience",
+            "general": "General audience",
+        }
+        info.audience = audience_map.get(normalized_audience.lower(), normalized_audience)
         info.has_audience = True
 
-    slide_count = wizard_data.get("slideCount") or wizard_data.get("slide_count")
-    if isinstance(slide_count, str):
-        slide_count = slide_count.strip().lower()
-        if slide_count.isdigit():
-            slide_count = int(slide_count)
-        elif slide_count == "auto":
-            slide_count = None
+    slide_count = _parse_slide_count_from_wizard(wizard_data)
     if isinstance(slide_count, int) and slide_count > 0:
         info.slide_count = slide_count
         info.has_slide_count = True
@@ -483,6 +886,7 @@ async def start_session_endpoint(
     mode: Optional[str] = None,
     topic: Optional[str] = None,
     files: Optional[List[UploadFile]] = File(None),
+    authorization: Optional[str] = Header(default=None),
 ):
     """
     Start a new generation session.
@@ -499,6 +903,7 @@ async def start_session_endpoint(
     Files are uploaded to R2 cloud storage with content-hash deduplication.
     """
     state = await create_session(project_id=project_id, mode=mode, topic=topic)
+    state.user_id = _try_get_user_id_from_authorization(authorization) or state.user_id
     save_session(state)
     
     # If files are provided, upload to R2 and run synthesis
@@ -1056,7 +1461,11 @@ async def clarify_session(session_id: str, request: ClarifyRequest):
 
 
 @router.post("/confirm/{session_id}", response_model=ClarifyResponse)
-async def confirm_clarification(session_id: str, background_tasks: BackgroundTasks):
+async def confirm_clarification(
+    session_id: str,
+    background_tasks: BackgroundTasks,
+    request: Optional[ConfirmRequest] = None,
+):
     """
     Confirm the gathered clarification info.
     
@@ -1066,6 +1475,10 @@ async def confirm_clarification(session_id: str, background_tasks: BackgroundTas
     Automatically triggers background outline generation.
     """
     state = get_session(session_id)
+    if request and request.wizard_data:
+        _apply_wizard_data_to_state(state, request.wizard_data)
+    if request and _is_wizard_setup_v2(request.source):
+        _apply_wizard_completion_fallbacks(state)
     return await _confirm_clarification_logic(session_id, state, background_tasks)
 
 async def _confirm_clarification_logic(session_id: str, state: FlowState, background_tasks: BackgroundTasks):
@@ -1196,7 +1609,11 @@ async def approve_outline_endpoint(session_id: str, request: ApproveRequest):
 
 
 @router.post("/generate/{session_id}", response_model=GenerationStartResponse)
-async def start_generation(session_id: str, background_tasks: BackgroundTasks):
+async def start_generation(
+    session_id: str,
+    background_tasks: BackgroundTasks,
+    authorization: Optional[str] = Header(default=None),
+):
     """
     Start the generation pipeline.
     
@@ -1205,6 +1622,9 @@ async def start_generation(session_id: str, background_tasks: BackgroundTasks):
     Use /status/{session_id} to poll status.
     """
     state = get_session(session_id)
+    if not getattr(state, "user_id", None):
+        state.user_id = _try_get_user_id_from_authorization(authorization) or state.user_id
+        save_session(state)
     
     if state.status not in [FlowStatus.OUTLINE_APPROVED, "outline_approved"]:
         raise HTTPException(
@@ -1227,6 +1647,7 @@ async def _run_generation_task(session_id: str, state: FlowState):
     """Background task for generation with Convex progress tracking."""
     convex = get_convex_service()
     project_id = getattr(state, 'project_id', None)
+    mode = str(getattr(state, "mode", "") or "")
     
     try:
         # Start Convex progress tracking if we have a project ID
@@ -1250,8 +1671,39 @@ async def _run_generation_task(session_id: str, state: FlowState):
                 logger.warning(f"[CONVEX] Failed to update progress: {e}")
         
         # Run the actual generation
-        await run_generation(session_id, state)
+        if _tracer:
+            with _tracer.start_as_current_span(
+                "sanko.generation.run_generation",
+                attributes={
+                    "sanko.session_id": session_id,
+                    "sanko.project_id": str(project_id) if project_id else "",
+                    "sanko.total_slides": int(getattr(state, "total_slides", 0) or 0),
+                    "sanko.mode": mode,
+                },
+            ):
+                await run_generation(session_id, state)
+        else:
+            await run_generation(session_id, state)
         save_session(state)
+
+        # PostHog: token usage per agent for pricing analysis.
+        distinct_id = str(getattr(state, "user_id", "") or "") or (str(project_id) if project_id else session_id)
+        metrics_payload = _token_metrics_for_posthog(session_id)
+        if metrics_payload:
+            posthog_capture(
+                event="generation_token_metrics",
+                distinct_id=distinct_id,
+                properties=build_common_props(
+                    session_id=session_id,
+                    project_id=str(project_id) if project_id else None,
+                    mode=mode or None,
+                    status=str(getattr(state, "status", "") or ""),
+                    total_slides=int(getattr(state, "total_slides", 0) or 0),
+                    **({"$groups": {"project": str(project_id)}} if project_id else {}),
+                    **(metrics_payload.get("flat", {}) or {}),
+                    metrics=metrics_payload,
+                ),
+            )
         
         # Complete Convex progress tracking
         if project_id:
@@ -1279,6 +1731,24 @@ async def _run_generation_task(session_id: str, state: FlowState):
             state.error_message = f"Generation failed: {str(e)[:200]}"
         
         save_session(state)
+
+        # PostHog: failure + partial token metrics (if any).
+        distinct_id = str(getattr(state, "user_id", "") or "") or (str(project_id) if project_id else session_id)
+        metrics_payload = _token_metrics_for_posthog(session_id)
+        posthog_capture(
+            event="generation_failed_token_metrics",
+            distinct_id=distinct_id,
+            properties=build_common_props(
+                session_id=session_id,
+                project_id=str(project_id) if project_id else None,
+                mode=mode or None,
+                status=str(getattr(state, "status", "") or ""),
+                error_message=state.error_message,
+                **({"$groups": {"project": str(project_id)}} if project_id else {}),
+                **(metrics_payload.get("flat", {}) or {}) if metrics_payload else {},
+                metrics=metrics_payload,
+            ),
+        )
         
         # Report failure to Convex
         if project_id:
@@ -1294,7 +1764,20 @@ async def _run_outline_generation_task(session_id: str, state: FlowState):
         logger.info(f"[OUTLINE_TASK] Starting background outline generation for session {session_id}")
         logger.info(f"[OUTLINE_TASK] State BEFORE generate_outline: status={state.status}, skeleton={'SET' if state.skeleton else 'NONE'}")
         
-        await generate_outline(session_id, state)
+        project_id = getattr(state, "project_id", None)
+        mode = str(getattr(state, "mode", "") or "")
+        if _tracer:
+            with _tracer.start_as_current_span(
+                "sanko.generation.generate_outline",
+                attributes={
+                    "sanko.session_id": session_id,
+                    "sanko.project_id": str(getattr(state, "project_id", "") or ""),
+                    "sanko.mode": mode,
+                },
+            ):
+                await generate_outline(session_id, state)
+        else:
+            await generate_outline(session_id, state)
         
         logger.info(f"[OUTLINE_TASK] State AFTER generate_outline: status={state.status}, skeleton={'SET' if state.skeleton else 'NONE'}")
         if state.skeleton:
@@ -1302,6 +1785,25 @@ async def _run_outline_generation_task(session_id: str, state: FlowState):
         
         save_session(state)
         logger.info(f"[OUTLINE_TASK] save_session() completed for session {session_id}")
+
+        # PostHog: outline stage token metrics.
+        distinct_id = str(getattr(state, "user_id", "") or "") or (str(project_id) if project_id else session_id)
+        metrics_payload = _token_metrics_for_posthog(session_id)
+        if metrics_payload:
+            posthog_capture(
+                event="outline_token_metrics",
+                distinct_id=distinct_id,
+                properties=build_common_props(
+                    session_id=session_id,
+                    project_id=str(project_id) if project_id else None,
+                    mode=mode or None,
+                    status=str(getattr(state, "status", "") or ""),
+                    slides_planned=int(len(state.skeleton.slides)) if state.skeleton and getattr(state.skeleton, "slides", None) else None,
+                    **({"$groups": {"project": str(project_id)}} if project_id else {}),
+                    **(metrics_payload.get("flat", {}) or {}),
+                    metrics=metrics_payload,
+                ),
+            )
         
         # Sync with Convex
         try:

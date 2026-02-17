@@ -9,11 +9,13 @@ export async function POST(
 ) {
     try {
         const { id } = await params;
+        const authHeader = request.headers.get("authorization");
 
         const response = await fetch(`${BACKEND_URL}/api/generation/generate/${id}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                ...(authHeader ? { Authorization: authHeader } : {}),
             },
         });
 

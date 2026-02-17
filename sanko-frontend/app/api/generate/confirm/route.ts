@@ -6,6 +6,7 @@ const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8000';
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json().catch(() => ({}));
+        const authHeader = request.headers.get("authorization");
         const sessionId = body.session_id;
 
         if (!sessionId) {
@@ -19,7 +20,12 @@ export async function POST(request: NextRequest) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                ...(authHeader ? { Authorization: authHeader } : {}),
             },
+            body: JSON.stringify({
+                wizard_data: body.wizard_data ?? undefined,
+                source: body.source ?? undefined,
+            }),
         });
 
         const data = await response.json();

@@ -1,8 +1,10 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Check, MessageSquare, Send, Loader2 } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -36,6 +38,39 @@ export function ChoiceQuestionCard({
     const [selectedOptions, setSelectedOptions] = useState<Set<string>>(new Set());
     const [showCustom, setShowCustom] = useState(false);
     const [customText, setCustomText] = useState("");
+
+    const normalizedOptions = useMemo(() => {
+        const seen = new Set<string>();
+        const next: ChoiceOption[] = [];
+
+        for (let index = 0; index < options.length; index += 1) {
+            const option = options[index];
+            const label =
+                typeof option?.label === "string" && option.label.trim()
+                    ? option.label.trim()
+                    : typeof option?.id === "string" && option.id.trim()
+                        ? option.id.trim()
+                        : `Option ${index + 1}`;
+            const id =
+                typeof option?.id === "string" && option.id.trim()
+                    ? option.id.trim()
+                    : `option-${index + 1}-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+
+            if (seen.has(id)) continue;
+            seen.add(id);
+            next.push({
+                ...option,
+                id,
+                label,
+                description:
+                    typeof option?.description === "string" && option.description.trim()
+                        ? option.description.trim()
+                        : undefined,
+            });
+        }
+
+        return next;
+    }, [options]);
 
     const handleOptionClick = useCallback((optionId: string) => {
         if (allowMultiple) {
@@ -87,15 +122,26 @@ export function ChoiceQuestionCard({
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 border border-emerald-500/20">
                     <MessageSquare className="h-4 w-4 text-emerald-500" />
                 </div>
-                <h3 className="text-lg font-medium text-white leading-relaxed pt-0.5">
-                    {question}
-                </h3>
+                <div className="pt-0.5 text-base text-neutral-100 leading-relaxed">
+                    <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                            p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                            ul: ({ children }) => <ul className="mb-2 list-disc pl-5 space-y-1">{children}</ul>,
+                            ol: ({ children }) => <ol className="mb-2 list-decimal pl-5 space-y-1">{children}</ol>,
+                            li: ({ children }) => <li className="text-neutral-100">{children}</li>,
+                            strong: ({ children }) => <strong className="font-semibold text-white">{children}</strong>,
+                        }}
+                    >
+                        {question}
+                    </ReactMarkdown>
+                </div>
             </div>
 
             {/* Option Cards Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pl-11">
                 <AnimatePresence mode="popLayout">
-                    {options.map((option, index) => (
+                    {normalizedOptions.map((option, index) => (
                         <motion.button
                             key={option.id}
                             initial={{ opacity: 0, scale: 0.95 }}

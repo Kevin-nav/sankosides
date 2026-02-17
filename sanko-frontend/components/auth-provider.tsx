@@ -14,6 +14,7 @@ import { auth } from "@/lib/firebase";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
+import posthog from "posthog-js";
 
 // Types for our Convex user
 type ConvexUser = {
@@ -93,6 +94,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             if (firebaseUser) {
                 // Sync to Convex - creates user if doesn't exist
                 await syncToConvex(firebaseUser);
+                try {
+                    if (process.env.NEXT_PUBLIC_POSTHOG_KEY) {
+                        posthog.identify(firebaseUser.uid, {
+                            email: firebaseUser.email || undefined,
+                            name: firebaseUser.displayName || undefined,
+                        });
+                    }
+                } catch {
+                    // Best-effort; do not block auth flows.
+                }
             }
 
             setLoading(false);
@@ -116,6 +127,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const signOut = async () => {
         await firebaseSignOut(auth);
+        try {
+            if (process.env.NEXT_PUBLIC_POSTHOG_KEY) {
+                posthog.reset();
+            }
+        } catch {
+            // ignore
+        }
     };
 
     return (

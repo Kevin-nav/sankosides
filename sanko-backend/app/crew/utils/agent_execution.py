@@ -114,11 +114,13 @@ def get_circuit_breaker(stage_name: str) -> CircuitBreaker:
 def get_timeout_for_stage(stage_name: str) -> int:
     """Get the configured timeout for a stage."""
     timeout_map = {
+        "clarifier": settings.agent_timeout_outliner,
         "outliner": settings.agent_timeout_outliner,
         "planner": settings.agent_timeout_planner,
         "refiner": settings.agent_timeout_refiner,
         "generator": settings.agent_timeout_generator,
         "visual_qa": settings.agent_timeout_visual_qa,
+        "helper": settings.agent_timeout_refiner,
     }
     return timeout_map.get(stage_name, 180)  # Default 180s
 
@@ -132,6 +134,7 @@ async def execute_crew_with_retry(
     stage_name: str,
     timeout: Optional[int] = None,
     max_retries: Optional[int] = None,
+    session_id: Optional[str] = None,
 ) -> Any:
     """
     Execute a CrewAI crew with timeout, retries, and circuit breaker.
@@ -181,6 +184,77 @@ async def execute_crew_with_retry(
             
             elapsed = time.time() - start_time
             logger.info(f"[{stage_name.upper()}] Completed successfully in {elapsed:.1f}s")
+
+            # Record token usage + timings (best-effort).
+            if session_id:
+                try:
+                    from app.crew.flows.metrics import MetricsCollector, extract_usage_from_response
+                    from app.core.posthog import capture as posthog_capture, build_common_props
+
+                    model_name = ""
+                    try:
+                        if getattr(crew, "agents", None):
+                            agent0 = crew.agents[0]
+                            llm = getattr(agent0, "llm", None)
+                            model_name = getattr(llm, "model", "") or ""
+                    except Exception:
+                        model_name = ""
+
+                    usage = extract_usage_from_response(result, model=model_name)
+                    duration_ms = int(elapsed * 1000)
+                    collector = MetricsCollector.get_or_create(session_id)
+                    collector.record(
+                        stage_name,
+                        usage,
+                        duration_ms=duration_ms,
+                    )
+
+                    # High ROI: per-agent-per-run event for cost attribution in PostHog.
+                    # This enables: cost per session, per user, per project, per agent, per run.
+                    try:
+                        ctx = collector.get_context() if hasattr(collector, "get_context") else {}
+                        user_id = ctx.get("user_id") if isinstance(ctx, dict) else None
+                        project_id = ctx.get("project_id") if isinstance(ctx, dict) else None
+                        mode = ctx.get("mode") if isinstance(ctx, dict) else None
+
+                        distinct_id = (
+                            str(user_id).strip()
+                            if isinstance(user_id, str) and user_id.strip()
+                            else (
+                                str(project_id).strip()
+                                if isinstance(project_id, str) and project_id.strip()
+                                else session_id
+                            )
+                        )
+
+                        cost_usd = 0.0
+                        try:
+                            cost_usd = float(usage.calculate_cost() or 0.0)
+                        except Exception:
+                            cost_usd = 0.0
+
+                        props = build_common_props(
+                            session_id=session_id,
+                            project_id=str(project_id) if project_id else None,
+                            user_id=str(user_id) if user_id else None,
+                            mode=mode or None,
+                            agent_name=stage_name,
+                            model=(model_name or None),
+                            duration_ms=duration_ms,
+                            input_tokens=int(getattr(usage, "input_tokens", 0) or 0),
+                            output_tokens=int(getattr(usage, "output_tokens", 0) or 0),
+                            thinking_tokens=int(getattr(usage, "thinking_tokens", 0) or 0),
+                            total_tokens=int(getattr(usage, "total_tokens", 0) or 0),
+                            cost_usd=cost_usd,
+                            success=True,
+                            attempt=int(attempt),
+                            **({"$groups": {"project": str(project_id)}} if project_id else {}),
+                        )
+                        posthog_capture(event="agent_run_metrics", distinct_id=distinct_id, properties=props)
+                    except Exception:
+                        pass
+                except Exception:
+                    pass
             
             # Record success
             circuit.record_success()

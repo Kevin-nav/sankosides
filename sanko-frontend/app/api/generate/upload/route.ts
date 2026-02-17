@@ -5,6 +5,7 @@ const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8000';
 
 export async function POST(request: NextRequest) {
     try {
+        const authHeader = request.headers.get("authorization");
         // Get the form data from the request
         const formData = await request.formData();
 
@@ -20,6 +21,9 @@ export async function POST(request: NextRequest) {
         // Forward the multipart form data to the backend
         const response = await fetch(`${BACKEND_URL}/api/generation/upload`, {
             method: 'POST',
+            headers: {
+                ...(authHeader ? { Authorization: authHeader } : {}),
+            },
             body: formData,
         });
 

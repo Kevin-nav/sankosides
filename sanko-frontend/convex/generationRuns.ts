@@ -62,6 +62,7 @@ export const update = mutation({
         scope: v.optional(v.any()),
         outline: v.optional(v.any()),
         result: v.optional(v.any()),
+        runtime: v.optional(v.any()),
         error: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
@@ -75,9 +76,57 @@ export const update = mutation({
         if (updates.scope !== undefined) patch.scope = updates.scope;
         if (updates.outline !== undefined) patch.outline = updates.outline;
         if (updates.result !== undefined) patch.result = updates.result;
+        if (updates.runtime !== undefined) patch.runtime = updates.runtime;
         if (updates.error !== undefined) patch.error = updates.error;
 
         await ctx.db.patch(id, patch);
+    },
+});
+
+export const upsertRuntimeBySession = mutation({
+    args: {
+        sessionId: v.string(),
+        runtime: v.any(),
+        projectId: v.optional(v.id("projects")),
+        mode: v.optional(v.string()),
+        stage: v.optional(v.string()),
+        status: v.optional(v.string()),
+    },
+    handler: async (ctx, args) => {
+        const now = Date.now();
+
+        const existing = await ctx.db
+            .query("generationRuns")
+            .withIndex("by_session_id", (q) => q.eq("sessionId", args.sessionId))
+            .first();
+
+        if (existing) {
+            const patch: Record<string, unknown> = {
+                runtime: args.runtime,
+                updatedAt: now,
+            };
+            if (args.mode !== undefined) patch.mode = args.mode;
+            if (args.stage !== undefined) patch.stage = normalizeStage(args.stage);
+            if (args.status !== undefined) patch.status = args.status;
+            await ctx.db.patch(existing._id, patch);
+            return existing._id;
+        }
+
+        if (!args.projectId) {
+            // No run to patch and no project to create one from.
+            return null;
+        }
+
+        return await ctx.db.insert("generationRuns", {
+            projectId: args.projectId,
+            sessionId: args.sessionId,
+            mode: args.mode,
+            stage: normalizeStage(args.stage),
+            status: args.status ?? "active",
+            runtime: args.runtime,
+            createdAt: now,
+            updatedAt: now,
+        });
     },
 });
 
@@ -110,4 +159,3 @@ export const listByProject = query({
         return runs.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
     },
 });
-
