@@ -30,6 +30,7 @@ from app.models.schemas import (
     GatheredInfo,
     ClarificationMessage,
 )
+from app.models.slide_elements import SlideElementTree
 from app.crew.flows.slide_generation import (
     SlideGenerationFlow,
     FlowState,
@@ -870,6 +871,23 @@ class PatchSlideRequest(BaseModel):
 
 
 class PatchSlideResponse(BaseModel):
+    session_id: str
+    slide_order: int
+    slide: Dict[str, Any]
+    message: str
+
+
+class PatchElementTreeRequest(BaseModel):
+    """Persist an edited element tree for a single slide."""
+    slide_order: int = Field(..., ge=1, description="1-indexed slide order")
+    element_tree: SlideElementTree
+    regenerate_html: bool = Field(
+        default=True,
+        description="If true, regenerate rendered_html from element_tree before saving",
+    )
+
+
+class PatchElementTreeResponse(BaseModel):
     session_id: str
     slide_order: int
     slide: Dict[str, Any]
@@ -2177,6 +2195,71 @@ async def patch_slide(session_id: str, request: PatchSlideRequest):
         slide_order=request.slide_order,
         slide=slide.model_dump(),
         message="Slide patched successfully.",
+    )
+
+
+@router.patch("/patch-element-tree/{session_id}", response_model=PatchElementTreeResponse)
+async def patch_element_tree(session_id: str, request: PatchElementTreeRequest):
+    """
+    Persist a single slide's edited element tree.
+
+    This keeps Convex slidesData in sync with backend session state.
+    """
+    state = get_session(session_id)
+
+    if state.status not in [FlowStatus.COMPLETED, "completed"]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot patch element trees unless generation is complete. Status: {state.status}",
+        )
+
+    if not state.generated_presentation or not getattr(state.generated_presentation, "slides", None):
+        raise HTTPException(status_code=500, detail="No generated presentation found to patch")
+
+    slide = next(
+        (s for s in state.generated_presentation.slides if getattr(s, "order", None) == request.slide_order),
+        None,
+    )
+    if not slide:
+        raise HTTPException(status_code=404, detail=f"Slide {request.slide_order} not found")
+
+    slide.element_tree = request.element_tree
+
+    if request.regenerate_html:
+        try:
+            from app.templates.html_generator import element_tree_to_html
+            from app.themes import get_theme
+
+            theme_id = getattr(slide, "theme_id", None) or getattr(state.order_form, "theme_id", "modern")
+            theme = get_theme(theme_id or "modern")
+            slide.rendered_html = element_tree_to_html(tree=request.element_tree, theme=theme)
+        except Exception as e:
+            logger.warning(f"[PATCH_ELEMENT_TREE] HTML regeneration failed for session={session_id[:8]}...: {e}")
+
+    save_session(state)
+
+    # Best-effort persistence to Convex project slidesData.
+    project_id = getattr(state, "project_id", None)
+    if project_id:
+        try:
+            client = get_db()
+            slides_data = state.generated_presentation.model_dump()
+            await asyncio.wait_for(
+                asyncio.to_thread(
+                    client.mutation,
+                    "projects:update",
+                    {"id": project_id, "slidesData": slides_data, "status": "completed"},
+                ),
+                timeout=10.0,
+            )
+        except Exception as e:
+            logger.warning(f"[PATCH_ELEMENT_TREE] Failed to persist to Convex: {e}")
+
+    return PatchElementTreeResponse(
+        session_id=session_id,
+        slide_order=request.slide_order,
+        slide=slide.model_dump(),
+        message="Element tree patched successfully.",
     )
 
 
