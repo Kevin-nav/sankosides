@@ -9,6 +9,10 @@ Key features:
 - R2 cloud storage with signed URLs
 """
 
-from app.export.router import router
+try:
+    from app.export.router import router
+except ModuleNotFoundError:
+    # Allows utility-level imports (e.g., exporter unit tests) without API deps.
+    router = None
 
 __all__ = ["router"]
