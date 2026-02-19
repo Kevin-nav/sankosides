@@ -25,6 +25,21 @@ from app.models.schemas import (
     QAResult,
     QAReport,
 )
+from app.models.slide_elements import (
+    ElementType,
+    TextRun,
+    TextContent,
+    ImageContent,
+    EquationContent,
+    DiagramContent,
+    ShapeContent,
+    ChartContent,
+    ElementStyle,
+    LayoutConstraint,
+    SlideElement,
+    SlideElementTree,
+    BackgroundConfig,
+)
 
 # Backwards compatibility aliases for templates
 # They use EnrichedSlide which maps to RefinedSlide
@@ -54,6 +69,20 @@ __all__ = [
     # QA
     "QAResult",
     "QAReport",
+    # Slide element tree
+    "ElementType",
+    "TextRun",
+    "TextContent",
+    "ImageContent",
+    "EquationContent",
+    "DiagramContent",
+    "ShapeContent",
+    "ChartContent",
+    "ElementStyle",
+    "LayoutConstraint",
+    "SlideElement",
+    "SlideElementTree",
+    "BackgroundConfig",
     
     # Backwards compatibility
     "EnrichedSlide",
