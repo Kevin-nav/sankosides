@@ -3330,7 +3330,11 @@ IMPORTANT:
         It queries the database for Jinja2 templates and falls back to
         hardcoded Python templates if not found.
         """
-        from app.templates.html_generator import generate_slide_html_with_db_template, element_tree_to_html
+        from app.templates.html_generator import (
+            generate_slide_html_with_db_template,
+            element_tree_to_html,
+            should_render_element_tree_html,
+        )
         from app.routers.generation.models import EnrichedSlide
         
         await self.emitter.slide_progress(refined.order, total_slides, "generating")
@@ -3351,8 +3355,8 @@ IMPORTANT:
             formatted_citations=refined.formatted_citations or [],
         )
         
-        # Prefer structured rendering path when the element tree exists.
-        if refined.element_tree is not None:
+        # Prefer structured rendering path only when rollout flag is enabled.
+        if should_render_element_tree_html(refined.element_tree):
             html = element_tree_to_html(tree=refined.element_tree, theme=theme)
         else:
             # Generate HTML using DATABASE-AWARE template system
@@ -3387,7 +3391,11 @@ IMPORTANT:
         total_slides: int,
     ) -> GeneratedSlide:
         """Generate HTML for a single slide using the template system."""
-        from app.templates.html_generator import generate_slide_html_with_branding, element_tree_to_html
+        from app.templates.html_generator import (
+            generate_slide_html_with_branding,
+            element_tree_to_html,
+            should_render_element_tree_html,
+        )
         from app.routers.generation.models import EnrichedSlide
         
         await self.emitter.slide_progress(refined.order, total_slides, "generating")
@@ -3408,7 +3416,7 @@ IMPORTANT:
             formatted_citations=refined.formatted_citations or [],
         )
         
-        if refined.element_tree is not None:
+        if should_render_element_tree_html(refined.element_tree):
             html = element_tree_to_html(tree=refined.element_tree, theme=theme)
         else:
             # Generate HTML using template system

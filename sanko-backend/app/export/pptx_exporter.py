@@ -43,6 +43,7 @@ except ModuleNotFoundError:
         return int(value)
 
 from app.models.schemas import RefinedSlide, SlideContentType
+from app.core.config import settings
 try:
     from app.export.converters.latex_to_omml import latex_to_omml, OMML_NS
 except ModuleNotFoundError:
@@ -173,8 +174,8 @@ class PptxExporter:
         blank_layout = prs.slide_layouts[6]  # Blank layout
         pptx_slide = prs.slides.add_slide(blank_layout)
 
-        # New path: if an element tree exists, render from one universal coordinate source.
-        if getattr(slide, "element_tree", None):
+        # New path: render from element tree only when export rollout is enabled.
+        if settings.enable_element_tree_export and getattr(slide, "element_tree", None):
             self._render_element_tree_slide(pptx_slide, slide.element_tree)
             return
         

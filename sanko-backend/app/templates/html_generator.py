@@ -9,7 +9,7 @@ Supports university branding (badges, names) and slide numbering.
 from html import escape
 from typing import TYPE_CHECKING, Union, Optional
 
-from app.core.config import SLIDE_WIDTH, SLIDE_HEIGHT
+from app.core.config import SLIDE_WIDTH, SLIDE_HEIGHT, settings
 from app.models.slide_elements import SlideElementTree
 
 if TYPE_CHECKING:
@@ -20,6 +20,11 @@ from app.themes import SlideTheme, ColorPalette, UniversityBranding
 
 ASSETS_DIR = Path(__file__).parent / "assets"
 VIEWS_DIR = Path(__file__).parent / "views"
+
+
+def should_render_element_tree_html(tree: Optional[SlideElementTree]) -> bool:
+    """Feature-gated switch for element-tree HTML rendering."""
+    return bool(tree is not None and settings.enable_element_tree_pipeline)
 
 
 def _render_element_content(element) -> str:

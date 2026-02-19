@@ -13,7 +13,11 @@ def test_percent_to_emu_conversion():
     assert height > top
 
 
-def test_export_uses_element_tree_when_present():
+def test_export_uses_element_tree_when_present(monkeypatch):
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "enable_element_tree_export", True)
+
     if not HAS_PPTX:
         pytest.skip("python-pptx unavailable in this environment")
 

@@ -51,6 +51,8 @@ class Settings(BaseSettings):
     require_evidence_for_claims: bool = False
     enable_gemini_explicit_cache: bool = False
     enable_element_tree_pipeline: bool = False
+    enable_element_tree_canvas: bool = False
+    enable_element_tree_export: bool = False
     gemini_cache_ttl_seconds: int = 900
     extraction_min_sections: int = 3
     extraction_min_coverage_ratio: float = 0.6
