@@ -41,3 +41,17 @@ def test_knowledge_base_serialization():
     restored_kb = KnowledgeBase(**json_data)
     assert restored_kb.summary == "Summary"
     assert restored_kb.sections[0].content == "Content"
+
+
+def test_generated_slide_supports_optional_element_tree():
+    from app.models.schemas import GeneratedSlide
+
+    payload = {
+        "order": 1,
+        "title": "Title",
+        "theme_id": "modern",
+        "rendered_html": "<html></html>",
+        "element_tree": None,
+    }
+    model = GeneratedSlide(**payload)
+    assert hasattr(model, "element_tree")

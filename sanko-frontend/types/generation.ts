@@ -124,11 +124,38 @@ export type SessionStatus =
 // Result
 // ============================================================================
 
+export type SlideElementType = "text" | "image" | "equation" | "diagram" | "shape" | "chart";
+
+export interface SlideElement {
+    id: string;
+    type: SlideElementType;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    z_index: number;
+    rotation?: number;
+    locked?: boolean;
+    style?: Record<string, unknown>;
+    content?: Record<string, unknown>;
+}
+
+export interface SlideElementTree {
+    slide_id: string;
+    order: number;
+    layout_id: string;
+    background?: Record<string, unknown>;
+    elements: SlideElement[];
+    constraints?: Array<Record<string, unknown>>;
+    warnings?: string[];
+}
+
 export interface GeneratedSlide {
     order: number;
     title: string;
     theme_id: string;
     rendered_html: string;
+    element_tree?: SlideElementTree | null;
     speaker_notes?: string;
 }
 

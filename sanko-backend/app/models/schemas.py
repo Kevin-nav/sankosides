@@ -9,6 +9,7 @@ from typing import Optional, List, Dict, Literal, Any
 from pydantic import BaseModel, Field, field_validator, model_validator
 from enum import Enum
 from datetime import datetime
+from app.models.slide_elements import SlideElementTree
 
 
 # =============================================================================
@@ -637,6 +638,10 @@ class RefinedSlide(BaseModel):
         default_factory=list,
         description="Claims rejected due to missing supporting evidence",
     )
+    element_tree: Optional[SlideElementTree] = Field(
+        default=None,
+        description="Structured, positioned slide elements for canvas/edit/export pipelines",
+    )
 
 
 class RefinedContent(BaseModel):
@@ -672,6 +677,10 @@ class GeneratedSlide(BaseModel):
     theme_id: str
     color_palette: Optional[ColorPalette] = None
     rendered_html: str = Field(..., description="Complete HTML for this slide")
+    element_tree: Optional[SlideElementTree] = Field(
+        default=None,
+        description="Structured, positioned slide elements used by editable canvas",
+    )
     speaker_notes: Optional[str] = None
 
 

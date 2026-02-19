@@ -7,12 +7,14 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import type { SlideElementTree } from "@/types/generation";
 
 interface Slide {
     order: number;
     title: string;
     theme_id: string;
     rendered_html: string;
+    element_tree?: SlideElementTree | null;
     speaker_notes?: string;
     html_content?: string; // Legacy
 }
