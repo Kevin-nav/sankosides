@@ -74,6 +74,7 @@ yarn-error.log*
 .DS_Store
 *.pem
 .agent/
+.worktrees/
 
 # University papers
 university_guidelines_draft/
