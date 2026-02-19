@@ -16,7 +16,9 @@ def _estimate_line_capacity(box_width_px: int, font_size: int) -> int:
 
 def _estimate_text_height(text: str, box_width_px: int, font_size: int) -> int:
     capacity = _estimate_line_capacity(box_width_px, font_size)
-    line_count = max(1, len(text) // capacity + 1)
+    if capacity <= 0:
+        capacity = 1
+    line_count = max(1, (len(text) + capacity - 1) // capacity)
     line_height = font_size * 1.25
     return int(line_count * line_height)
 

@@ -1,5 +1,6 @@
 "use client";
 
+import DOMPurify from "dompurify";
 import type { SlideElement } from "@/types/generation";
 
 type DiagramContent = {
@@ -13,12 +14,18 @@ function getDiagramContent(element: SlideElement): DiagramContent {
 
 export function DiagramElement({ element }: { element: SlideElement }) {
     const content = getDiagramContent(element);
+    const sanitizedSvg = content.rendered_svg
+        ? DOMPurify.sanitize(content.rendered_svg, {
+            USE_PROFILES: { svg: true, svgFilters: true },
+            FORBID_TAGS: ["foreignObject"],
+        })
+        : "";
 
-    if (content.rendered_svg) {
+    if (sanitizedSvg) {
         return (
             <div
                 className="h-full w-full"
-                dangerouslySetInnerHTML={{ __html: content.rendered_svg }}
+                dangerouslySetInnerHTML={{ __html: sanitizedSvg }}
             />
         );
     }

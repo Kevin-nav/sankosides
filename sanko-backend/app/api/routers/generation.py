@@ -2232,7 +2232,8 @@ async def patch_element_tree(session_id: str, request: PatchElementTreeRequest):
 
             theme_id = getattr(slide, "theme_id", None) or getattr(state.order_form, "theme_id", "modern")
             theme = get_theme(theme_id or "modern")
-            slide.rendered_html = element_tree_to_html(tree=request.element_tree, theme=theme)
+            generated_html = element_tree_to_html(tree=request.element_tree, theme=theme)
+            slide.rendered_html = sanitize_slide_html(generated_html)
         except Exception as e:
             logger.warning(f"[PATCH_ELEMENT_TREE] HTML regeneration failed for session={session_id[:8]}...: {e}")
 

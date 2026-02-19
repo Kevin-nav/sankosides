@@ -237,8 +237,13 @@ class PptxExporter:
                             height=Emu(height),
                         )
                         continue
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.error(
+                            "Failed to decode/embed base64 image for element '%s': %s",
+                            getattr(element, "id", "unknown"),
+                            e,
+                            exc_info=True,
+                        )
                 placeholder = pptx_slide.shapes.add_shape(
                     MSO_SHAPE.RECTANGLE, Emu(left), Emu(top), Emu(width), Emu(height)
                 )

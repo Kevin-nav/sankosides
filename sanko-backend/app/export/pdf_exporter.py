@@ -72,7 +72,8 @@ def _generate_slide_html(slide: RefinedSlide, title: str) -> str:
     the full template system with proper styling.
     """
     if settings.enable_element_tree_export and getattr(slide, "element_tree", None) is not None:
-        return element_tree_to_html(tree=slide.element_tree, theme=get_theme("modern"))
+        theme_id = getattr(slide, "theme_id", None) or "modern"
+        return element_tree_to_html(tree=slide.element_tree, theme=get_theme(theme_id))
 
     # Base styles for slides
     styles = """

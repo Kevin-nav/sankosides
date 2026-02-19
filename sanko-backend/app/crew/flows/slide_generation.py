@@ -30,6 +30,7 @@ import json
 import os
 import re
 import hashlib
+from html import unescape
 
 from app.models.schemas import (
     OrderForm,
@@ -3259,6 +3260,10 @@ IMPORTANT:
             from app.core.layout_engine import layout_slide
             from app.core.layout_presets import has_layout_preset
 
+            def _strip_html_markup(text: str) -> str:
+                cleaned = re.sub(r"<[^>]+>", "", text or "")
+                return unescape(cleaned).strip()
+
             for slide in self.state.refined_content.slides:
                 preferred_preset = slide.layout_preset_id if slide.layout_preset_id else None
                 if preferred_preset and not has_layout_preset(preferred_preset):
@@ -3269,7 +3274,15 @@ IMPORTANT:
                     )
                     preferred_preset = None
 
-                slide.element_tree = layout_slide(slide=slide, preset_id=preferred_preset)
+                plain_bullets = [_strip_html_markup(point) for point in (slide.bullet_points or [])]
+                plain_bullets = [point for point in plain_bullets if point]
+                layout_input = slide.model_copy(
+                    update={
+                        "title": _strip_html_markup(slide.title or ""),
+                        "bullet_points": plain_bullets,
+                    }
+                )
+                slide.element_tree = layout_slide(slide=layout_input, preset_id=preferred_preset)
         
         
         # Generate slides in parallel

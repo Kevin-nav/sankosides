@@ -46,7 +46,7 @@ async function renderMermaid(diagram, theme = 'default') {
                 mermaid.initialize({ 
                     startOnLoad: false,
                     theme: '${theme}',
-                    securityLevel: 'loose',
+                    securityLevel: 'strict',
                 });
                 
                 const diagramCode = \`${escapedDiagram}\`;
