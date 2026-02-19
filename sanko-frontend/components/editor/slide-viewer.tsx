@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import type { SlideElementTree } from "@/types/generation";
+import { SlideCanvas } from "@/components/editor/slide-canvas";
 
 interface Slide {
     order: number;
@@ -292,21 +293,29 @@ export function SlideViewer({ sessionId, onExport }: SlideViewerProps) {
                                 <div className="w-full h-full flex items-center justify-center p-0">
                                     {/* This wrapper forces a 16:9 max ratio fit within the screen */}
                                     <div className="aspect-video w-full h-full max-h-screen max-w-[177.78vh] bg-white shadow-2xl">
-                                        <iframe
-                                            srcDoc={slide.rendered_html || slide.html_content || ""}
-                                            className="w-full h-full border-0"
-                                            title={`Slide ${idx + 1}`}
-                                            sandbox="allow-same-origin allow-scripts"
-                                        />
+                                        {slide.element_tree ? (
+                                            <SlideCanvas tree={slide.element_tree} />
+                                        ) : (
+                                            <iframe
+                                                srcDoc={slide.rendered_html || slide.html_content || ""}
+                                                className="w-full h-full border-0"
+                                                title={`Slide ${idx + 1}`}
+                                                sandbox="allow-same-origin allow-scripts"
+                                            />
+                                        )}
                                     </div>
                                 </div>
                             ) : (
-                                <iframe
-                                    srcDoc={slide.rendered_html || slide.html_content || ""}
-                                    className="w-full h-full border-0"
-                                    title={`Slide ${idx + 1}`}
-                                    sandbox="allow-same-origin allow-scripts"
-                                />
+                                slide.element_tree ? (
+                                    <SlideCanvas tree={slide.element_tree} />
+                                ) : (
+                                    <iframe
+                                        srcDoc={slide.rendered_html || slide.html_content || ""}
+                                        className="w-full h-full border-0"
+                                        title={`Slide ${idx + 1}`}
+                                        sandbox="allow-same-origin allow-scripts"
+                                    />
+                                )
                             )}
                         </div>
                     ))}
