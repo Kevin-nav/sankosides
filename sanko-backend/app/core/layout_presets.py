@@ -133,6 +133,11 @@ def get_layout_preset(preset_id: str) -> LayoutPreset:
     return PRESETS[preset_id]
 
 
+def has_layout_preset(preset_id: str) -> bool:
+    """Return True when the preset id exists in the registry."""
+    return preset_id in PRESETS
+
+
 def list_layout_presets() -> Dict[str, LayoutPreset]:
     """Return all registered presets."""
     return PRESETS

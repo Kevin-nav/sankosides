@@ -1,10 +1,18 @@
 import pytest
 from unittest.mock import patch, MagicMock
-from app.crew.flows.slide_generation import SlideGenerationFlow, FlowStatus
 from app.models.schemas import KnowledgeBase, DocumentSection
+
+
+def test_generator_has_element_tree_feature_flag():
+    from app.core.config import settings
+
+    assert hasattr(settings, "enable_element_tree_pipeline")
+
 
 @pytest.mark.asyncio
 async def test_run_synthesis_success():
+    from app.crew.flows.slide_generation import SlideGenerationFlow, FlowStatus
+
     # Setup
     flow = SlideGenerationFlow(session_id="test-session")
     file_paths = ["file1.pdf", "file2.pdf"]
@@ -39,6 +47,8 @@ async def test_run_synthesis_success():
 
 @pytest.mark.asyncio
 async def test_run_synthesis_with_error():
+    from app.crew.flows.slide_generation import SlideGenerationFlow, FlowStatus
+
     flow = SlideGenerationFlow(session_id="test-session")
     file_paths = ["error.pdf"]
     

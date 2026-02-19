@@ -50,6 +50,7 @@ class Settings(BaseSettings):
     enable_convex_cache: bool = False
     require_evidence_for_claims: bool = False
     enable_gemini_explicit_cache: bool = False
+    enable_element_tree_pipeline: bool = False
     gemini_cache_ttl_seconds: int = 900
     extraction_min_sections: int = 3
     extraction_min_coverage_ratio: float = 0.6

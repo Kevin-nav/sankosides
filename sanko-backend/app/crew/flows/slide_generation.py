@@ -3253,6 +3253,23 @@ IMPORTANT:
                 if not slide.layout_preset_id:
                     slide.layout_preset_id = layout.get("preset_id")
                 logger.debug(f"Slide {slide.order}: assigned layout '{layout.get('preset_id')}'")
+
+        # Optionally materialize structured element trees before html generation.
+        if settings.enable_element_tree_pipeline:
+            from app.core.layout_engine import layout_slide
+            from app.core.layout_presets import has_layout_preset
+
+            for slide in self.state.refined_content.slides:
+                preferred_preset = slide.layout_preset_id if slide.layout_preset_id else None
+                if preferred_preset and not has_layout_preset(preferred_preset):
+                    logger.debug(
+                        "Slide %s layout preset '%s' not found in element-tree registry; falling back to content-based preset",
+                        slide.order,
+                        preferred_preset,
+                    )
+                    preferred_preset = None
+
+                slide.element_tree = layout_slide(slide=slide, preset_id=preferred_preset)
         
         
         # Generate slides in parallel
@@ -3352,6 +3369,7 @@ IMPORTANT:
             title=refined.title,
             theme_id=theme.id,
             rendered_html=html,
+            element_tree=refined.element_tree,
             speaker_notes=refined.speaker_notes,
         )
     
@@ -3403,6 +3421,7 @@ IMPORTANT:
             title=refined.title,
             theme_id=theme.id,
             rendered_html=html,
+            element_tree=refined.element_tree,
             speaker_notes=refined.speaker_notes,
         )
     
