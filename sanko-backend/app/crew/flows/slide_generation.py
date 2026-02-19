@@ -30,6 +30,7 @@ import json
 import os
 import re
 import hashlib
+from html import unescape
 
 from app.models.schemas import (
     OrderForm,
@@ -3253,6 +3254,35 @@ IMPORTANT:
                 if not slide.layout_preset_id:
                     slide.layout_preset_id = layout.get("preset_id")
                 logger.debug(f"Slide {slide.order}: assigned layout '{layout.get('preset_id')}'")
+
+        # Optionally materialize structured element trees before html generation.
+        if settings.enable_element_tree_pipeline:
+            from app.core.layout_engine import layout_slide
+            from app.core.layout_presets import has_layout_preset
+
+            def _strip_html_markup(text: str) -> str:
+                cleaned = re.sub(r"<[^>]+>", "", text or "")
+                return unescape(cleaned).strip()
+
+            for slide in self.state.refined_content.slides:
+                preferred_preset = slide.layout_preset_id if slide.layout_preset_id else None
+                if preferred_preset and not has_layout_preset(preferred_preset):
+                    logger.debug(
+                        "Slide %s layout preset '%s' not found in element-tree registry; falling back to content-based preset",
+                        slide.order,
+                        preferred_preset,
+                    )
+                    preferred_preset = None
+
+                plain_bullets = [_strip_html_markup(point) for point in (slide.bullet_points or [])]
+                plain_bullets = [point for point in plain_bullets if point]
+                layout_input = slide.model_copy(
+                    update={
+                        "title": _strip_html_markup(slide.title or ""),
+                        "bullet_points": plain_bullets,
+                    }
+                )
+                slide.element_tree = layout_slide(slide=layout_input, preset_id=preferred_preset)
         
         
         # Generate slides in parallel
@@ -3313,7 +3343,11 @@ IMPORTANT:
         It queries the database for Jinja2 templates and falls back to
         hardcoded Python templates if not found.
         """
-        from app.templates.html_generator import generate_slide_html_with_db_template
+        from app.templates.html_generator import (
+            generate_slide_html_with_db_template,
+            element_tree_to_html,
+            should_render_element_tree_html,
+        )
         from app.routers.generation.models import EnrichedSlide
         
         await self.emitter.slide_progress(refined.order, total_slides, "generating")
@@ -3334,16 +3368,20 @@ IMPORTANT:
             formatted_citations=refined.formatted_citations or [],
         )
         
-        # Generate HTML using DATABASE-AWARE template system
-        html = await generate_slide_html_with_db_template(
-            slide=enriched,
-            theme=theme,
-            colors=theme.colors,
-            branding=branding,
-            slide_number=slide_number,
-            total_slides=total_slides,
-            layout_style=layout_style,
-        )
+        # Prefer structured rendering path only when rollout flag is enabled.
+        if should_render_element_tree_html(refined.element_tree):
+            html = element_tree_to_html(tree=refined.element_tree, theme=theme)
+        else:
+            # Generate HTML using DATABASE-AWARE template system
+            html = await generate_slide_html_with_db_template(
+                slide=enriched,
+                theme=theme,
+                colors=theme.colors,
+                branding=branding,
+                slide_number=slide_number,
+                total_slides=total_slides,
+                layout_style=layout_style,
+            )
         
         self.state.slides_completed += 1
         
@@ -3352,6 +3390,7 @@ IMPORTANT:
             title=refined.title,
             theme_id=theme.id,
             rendered_html=html,
+            element_tree=refined.element_tree,
             speaker_notes=refined.speaker_notes,
         )
     
@@ -3365,7 +3404,11 @@ IMPORTANT:
         total_slides: int,
     ) -> GeneratedSlide:
         """Generate HTML for a single slide using the template system."""
-        from app.templates.html_generator import generate_slide_html_with_branding
+        from app.templates.html_generator import (
+            generate_slide_html_with_branding,
+            element_tree_to_html,
+            should_render_element_tree_html,
+        )
         from app.routers.generation.models import EnrichedSlide
         
         await self.emitter.slide_progress(refined.order, total_slides, "generating")
@@ -3386,15 +3429,18 @@ IMPORTANT:
             formatted_citations=refined.formatted_citations or [],
         )
         
-        # Generate HTML using template system
-        html = generate_slide_html_with_branding(
-            slide=enriched,
-            theme=theme,
-            colors=theme.colors,
-            branding=branding,
-            slide_number=slide_number,
-            total_slides=total_slides,
-        )
+        if should_render_element_tree_html(refined.element_tree):
+            html = element_tree_to_html(tree=refined.element_tree, theme=theme)
+        else:
+            # Generate HTML using template system
+            html = generate_slide_html_with_branding(
+                slide=enriched,
+                theme=theme,
+                colors=theme.colors,
+                branding=branding,
+                slide_number=slide_number,
+                total_slides=total_slides,
+            )
         
         self.state.slides_completed += 1
         
@@ -3403,6 +3449,7 @@ IMPORTANT:
             title=refined.title,
             theme_id=theme.id,
             rendered_html=html,
+            element_tree=refined.element_tree,
             speaker_notes=refined.speaker_notes,
         )
     

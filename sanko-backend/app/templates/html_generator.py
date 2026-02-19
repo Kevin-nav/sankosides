@@ -6,9 +6,11 @@ Wraps template output in complete HTML documents with theme CSS.
 Supports university branding (badges, names) and slide numbering.
 """
 
+from html import escape
 from typing import TYPE_CHECKING, Union, Optional
 
-from app.core.config import SLIDE_WIDTH, SLIDE_HEIGHT
+from app.core.config import SLIDE_WIDTH, SLIDE_HEIGHT, settings
+from app.models.slide_elements import SlideElementTree
 
 if TYPE_CHECKING:
     from app.agents.planner import EnrichedSlide as LegacyEnrichedSlide
@@ -18,6 +20,118 @@ from app.themes import SlideTheme, ColorPalette, UniversityBranding
 
 ASSETS_DIR = Path(__file__).parent / "assets"
 VIEWS_DIR = Path(__file__).parent / "views"
+
+
+def should_render_element_tree_html(tree: Optional[SlideElementTree]) -> bool:
+    """Feature-gated switch for element-tree HTML rendering."""
+    return bool(tree is not None and settings.enable_element_tree_pipeline)
+
+
+def _render_element_content(element) -> str:
+    """Render one slide element's content to static html."""
+    content = element.content
+    content_type = getattr(content, "type", "")
+
+    if content_type == "text":
+        runs = getattr(content, "runs", []) or []
+        run_html = []
+        for run in runs:
+            style_parts = []
+            if getattr(run, "size", None):
+                style_parts.append(f"font-size:{int(run.size)}px")
+            if getattr(run, "color", None):
+                style_parts.append(f"color:{escape(str(run.color), quote=True)}")
+            if getattr(run, "font", None):
+                style_parts.append(f"font-family:{escape(str(run.font), quote=True)}")
+            if getattr(run, "bold", False):
+                style_parts.append("font-weight:700")
+            if getattr(run, "italic", False):
+                style_parts.append("font-style:italic")
+            styles = f' style="{";".join(style_parts)}"' if style_parts else ""
+            run_html.append(f"<span{styles}>{escape(str(getattr(run, 'text', '')))}</span>")
+        return f'<div class="el-text">{"".join(run_html)}</div>'
+
+    if content_type == "image":
+        url = escape(str(getattr(content, "url", "")), quote=True)
+        alt = escape(str(getattr(content, "alt", "") or ""), quote=True)
+        caption = getattr(content, "caption", None)
+        caption_html = f'<div class="el-caption">{escape(str(caption))}</div>' if caption else ""
+        return f'<img class="el-image" src="{url}" alt="{alt}" />{caption_html}'
+
+    if content_type == "equation":
+        rendered_svg = getattr(content, "rendered_svg", None)
+        latex = getattr(content, "latex", "")
+        if rendered_svg:
+            return f'<div class="el-equation">{rendered_svg}</div>'
+        return f'<div class="el-equation"><code>{escape(str(latex))}</code></div>'
+
+    if content_type == "diagram":
+        rendered_svg = getattr(content, "rendered_svg", None)
+        mermaid_source = getattr(content, "mermaid_source", "")
+        if rendered_svg:
+            return f'<div class="el-diagram">{rendered_svg}</div>'
+        return f'<pre class="el-diagram-fallback">{escape(str(mermaid_source))}</pre>'
+
+    return "<div></div>"
+
+
+def element_tree_to_html(tree: SlideElementTree, theme: "SlideTheme") -> str:
+    """Convert a SlideElementTree into static absolute-positioned html."""
+    colors = theme.colors
+    theme_css_vars = _generate_theme_css_vars(theme, colors)
+
+    bg = tree.background
+    background_style = "background: var(--color-background);"
+    if bg.type == "solid" and bg.color:
+        background_style = f"background:{escape(str(bg.color), quote=True)};"
+    elif bg.type == "gradient" and bg.gradient:
+        background_style = f"background:{escape(str(bg.gradient), quote=True)};"
+    elif bg.type == "image" and bg.image_url:
+        image_url = escape(str(bg.image_url), quote=True)
+        background_style = f"background-image:url('{image_url}');background-size:cover;background-position:center;"
+
+    elements_html = []
+    for el in tree.elements:
+        elements_html.append(
+            (
+                f'<div class="tree-element" style="position:absolute;left:{el.x}%;top:{el.y}%;'
+                f'width:{el.width}%;height:{el.height}%;z-index:{el.z_index};">'
+                f"{_render_element_content(el)}"
+                "</div>"
+            )
+        )
+
+    return f"""<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+{theme_css_vars}
+* {{ box-sizing: border-box; margin: 0; padding: 0; }}
+body {{ background: #111; display: flex; align-items: center; justify-content: center; min-height: 100vh; }}
+.slide-wrapper {{
+  position: relative;
+  width: {SLIDE_WIDTH}px;
+  height: {SLIDE_HEIGHT}px;
+  overflow: hidden;
+  color: var(--color-text-primary);
+  font-family: var(--font-body);
+  {background_style}
+}}
+.tree-element {{ overflow: hidden; }}
+.el-image {{ width: 100%; height: 100%; object-fit: contain; }}
+.el-caption {{ font-size: 12px; color: var(--color-text-secondary); margin-top: 4px; }}
+.el-text {{ width: 100%; height: 100%; white-space: pre-wrap; line-height: 1.3; }}
+.el-equation, .el-diagram {{ width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }}
+.el-diagram-fallback {{ width: 100%; height: 100%; overflow: auto; }}
+  </style>
+</head>
+<body>
+  <div class="slide-wrapper">
+    {''.join(elements_html)}
+  </div>
+</body>
+</html>"""
 
 def _load_sdk_asset(filename: str) -> str:
     """Load a static asset from the SDK directory."""

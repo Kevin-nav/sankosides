@@ -12,17 +12,45 @@ import base64
 from typing import List, Optional, Tuple
 from pathlib import Path
 
-from pptx import Presentation
-from pptx.util import Inches, Pt, Emu
-from pptx.dml.color import RGBColor
-from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
-from pptx.enum.shapes import MSO_SHAPE
-from pptx.oxml.ns import qn
-from pptx.oxml import parse_xml
-from lxml import etree
+try:
+    from pptx import Presentation
+    from pptx.util import Inches, Pt, Emu
+    from pptx.dml.color import RGBColor
+    from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
+    from pptx.enum.shapes import MSO_SHAPE
+    from pptx.oxml.ns import qn
+    from pptx.oxml import parse_xml
+    from lxml import etree
+    HAS_PPTX = True
+except ModuleNotFoundError:
+    Presentation = None
+    RGBColor = None
+    PP_ALIGN = None
+    MSO_ANCHOR = None
+    MSO_SHAPE = None
+    qn = None
+    parse_xml = None
+    etree = None
+    HAS_PPTX = False
+
+    def Inches(value):  # type: ignore
+        return float(value)
+
+    def Pt(value):  # type: ignore
+        return float(value)
+
+    def Emu(value):  # type: ignore
+        return int(value)
 
 from app.models.schemas import RefinedSlide, SlideContentType
-from app.export.converters.latex_to_omml import latex_to_omml, OMML_NS
+from app.core.config import settings
+try:
+    from app.export.converters.latex_to_omml import latex_to_omml, OMML_NS
+except ModuleNotFoundError:
+    OMML_NS = "http://schemas.openxmlformats.org/officeDocument/2006/math"
+
+    def latex_to_omml(_latex: str):
+        return None, "LaTeX converter dependencies unavailable"
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -30,6 +58,8 @@ logger = get_logger(__name__)
 # Slide dimensions (16:9 widescreen)
 SLIDE_WIDTH = Inches(13.333)
 SLIDE_HEIGHT = Inches(7.5)
+SLIDE_WIDTH_EMU = 12192000   # 13.333" in EMU
+SLIDE_HEIGHT_EMU = 6858000   # 7.5" in EMU
 
 # Layout constants
 MARGIN_LEFT = Inches(0.5)
@@ -38,6 +68,16 @@ MARGIN_RIGHT = Inches(0.5)
 MARGIN_BOTTOM = Inches(0.5)
 TITLE_HEIGHT = Inches(1.0)
 CONTENT_TOP = MARGIN_TOP + TITLE_HEIGHT + Inches(0.25)
+
+
+def percent_to_emu(x_pct: float, y_pct: float, w_pct: float, h_pct: float):
+    """Convert percentage-based coordinates into PPTX EMU values."""
+    return (
+        int(SLIDE_WIDTH_EMU * x_pct / 100),
+        int(SLIDE_HEIGHT_EMU * y_pct / 100),
+        int(SLIDE_WIDTH_EMU * w_pct / 100),
+        int(SLIDE_HEIGHT_EMU * h_pct / 100),
+    )
 
 
 class PptxExporter:
@@ -61,10 +101,13 @@ class PptxExporter:
         self.image_dpi = image_dpi
         
         # Theme color mapping (will be expanded with real theme system)
-        self._theme_colors = self._get_theme_colors(theme_id)
+        self._theme_colors = self._get_theme_colors(theme_id) if HAS_PPTX else {}
     
     def _get_theme_colors(self, theme_id: str) -> dict:
         """Get color palette for theme."""
+        if not HAS_PPTX:
+            return {}
+
         themes = {
             "academic": {
                 "primary": RGBColor(0x2D, 0x40, 0x59),      # Dark blue
@@ -105,6 +148,9 @@ class PptxExporter:
         Returns:
             PowerPoint file as bytes
         """
+        if not HAS_PPTX:
+            raise RuntimeError("python-pptx is required for PPTX export but is not installed")
+
         # Create presentation with 16:9 aspect ratio
         prs = Presentation()
         prs.slide_width = SLIDE_WIDTH
@@ -127,6 +173,11 @@ class PptxExporter:
         # Use blank layout
         blank_layout = prs.slide_layouts[6]  # Blank layout
         pptx_slide = prs.slides.add_slide(blank_layout)
+
+        # New path: render from element tree only when export rollout is enabled.
+        if settings.enable_element_tree_export and getattr(slide, "element_tree", None):
+            self._render_element_tree_slide(pptx_slide, slide.element_tree)
+            return
         
         # Route to appropriate renderer based on content type
         if slide.content_type == SlideContentType.TITLE:
@@ -142,6 +193,72 @@ class PptxExporter:
         else:
             # Default content slide
             self._render_content_slide(pptx_slide, slide)
+
+    def _render_element_tree_slide(self, pptx_slide, tree):
+        """Render a slide directly from structured element coordinates."""
+        for element in getattr(tree, "elements", []) or []:
+            left, top, width, height = percent_to_emu(
+                element.x, element.y, element.width, element.height
+            )
+            element_type = element.type.value if hasattr(element.type, "value") else str(element.type)
+
+            if element_type == "text":
+                shape = pptx_slide.shapes.add_textbox(Emu(left), Emu(top), Emu(width), Emu(height))
+                frame = shape.text_frame
+                frame.clear()
+                paragraph = frame.paragraphs[0]
+                runs = getattr(element.content, "runs", []) or []
+                if not runs:
+                    paragraph.text = ""
+                    continue
+                for idx, run_data in enumerate(runs):
+                    run = paragraph.add_run()
+                    run.text = str(getattr(run_data, "text", ""))
+                    if getattr(run_data, "size", None):
+                        run.font.size = Pt(int(run_data.size))
+                    if getattr(run_data, "bold", False):
+                        run.font.bold = True
+                    if getattr(run_data, "italic", False):
+                        run.font.italic = True
+                continue
+
+            if element_type == "image":
+                image_url = getattr(element.content, "url", "") or ""
+                # If we have an embedded data URL, decode and place it; otherwise placeholder.
+                if image_url.startswith("data:image/") and ";base64," in image_url:
+                    try:
+                        b64 = image_url.split(";base64,", 1)[1]
+                        raw = base64.b64decode(b64)
+                        pptx_slide.shapes.add_picture(
+                            io.BytesIO(raw),
+                            Emu(left),
+                            Emu(top),
+                            width=Emu(width),
+                            height=Emu(height),
+                        )
+                        continue
+                    except Exception as e:
+                        logger.error(
+                            "Failed to decode/embed base64 image for element '%s': %s",
+                            getattr(element, "id", "unknown"),
+                            e,
+                            exc_info=True,
+                        )
+                placeholder = pptx_slide.shapes.add_shape(
+                    MSO_SHAPE.RECTANGLE, Emu(left), Emu(top), Emu(width), Emu(height)
+                )
+                placeholder.text_frame.text = "[Image]"
+                continue
+
+            if element_type in {"equation", "diagram"}:
+                shape = pptx_slide.shapes.add_textbox(Emu(left), Emu(top), Emu(width), Emu(height))
+                frame = shape.text_frame
+                frame.clear()
+                paragraph = frame.paragraphs[0]
+                paragraph.text = "[Equation]" if element_type == "equation" else "[Diagram]"
+                paragraph.font.size = Pt(16)
+                paragraph.font.italic = True
+                continue
     
     def _render_title_slide(self, pptx_slide, slide: RefinedSlide):
         """Render a title slide."""
@@ -377,7 +494,7 @@ class PptxExporter:
         if center:
             p.alignment = PP_ALIGN.CENTER
     
-    def _insert_omml_equation(self, pptx_slide, omml: etree._Element, center: bool, size: str):
+    def _insert_omml_equation(self, pptx_slide, omml, center: bool, size: str):
         """Insert OMML equation into slide."""
         # Create a text box to hold the equation
         left = Inches(2) if center else MARGIN_LEFT

@@ -1,6 +1,5 @@
 /* 
-   SankoSlides Typography System 
-   Clean, readable, and balanced for presentation
+   SankoSlides typography baseline.
 */
 
 body {
@@ -91,8 +90,7 @@ li li {
 }
 
 li li::before {
-    content: "Process";
-    /* Dash for nested */
+    content: "-";
     color: var(--color-text-secondary);
     font-size: 0.8em;
     top: 0;
@@ -165,3 +163,4 @@ code {
     color: var(--color-text-primary);
     margin-top: 16px;
 }
+

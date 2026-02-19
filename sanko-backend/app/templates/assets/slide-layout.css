@@ -1,9 +1,11 @@
-/* 
-   SankoSlides Layout System 
-   12-Column Grid optimized for 1920x1080 slides
+/*
+   SankoSlides layout system.
+   Shared by legacy templates and element-tree rendering.
 */
 
 :root {
+    --slide-width: 1280px;
+    --slide-height: 720px;
     --grid-cols: 12;
     --grid-gap: var(--spacing-md, 32px);
     --slide-padding-x: var(--spacing-lg, 64px);
@@ -12,8 +14,10 @@
 
 /* Base resets */
 .slide-wrapper {
+    position: relative;
+    width: var(--slide-width);
+    height: var(--slide-height);
     overflow: hidden;
-    /* Ensure content never spills out of iframe */
 }
 
 .slide {
@@ -189,4 +193,10 @@
     display: flex;
     justify-content: center;
     align-items: center;
+}
+
+/* Element-tree primitive */
+.tree-element {
+    position: absolute;
+    overflow: hidden;
 }
