@@ -14,6 +14,8 @@ type DragState = {
     startY: number;
     originalX: number;
     originalY: number;
+    width: number;
+    height: number;
 } | null;
 
 interface SlideCanvasProps {
@@ -22,9 +24,9 @@ interface SlideCanvasProps {
     onTreeChange?: (tree: SlideElementTree) => void;
 }
 
-function clampPercent(value: number): number {
-    if (value < 0) return 0;
-    if (value > 100) return 100;
+function clamp(value: number, min: number, max: number): number {
+    if (value < min) return min;
+    if (value > max) return max;
     return value;
 }
 
@@ -72,6 +74,8 @@ export function SlideCanvas({ tree: inputTree, editable = false, onTreeChange }:
             startY: event.clientY,
             originalX: element.x,
             originalY: element.y,
+            width: element.width,
+            height: element.height,
         };
         setActiveId(element.id);
     };
@@ -83,8 +87,10 @@ export function SlideCanvas({ tree: inputTree, editable = false, onTreeChange }:
 
         const dxPercent = ((event.clientX - dragRef.current.startX) / rect.width) * 100;
         const dyPercent = ((event.clientY - dragRef.current.startY) / rect.height) * 100;
-        const nextX = clampPercent(dragRef.current.originalX + dxPercent);
-        const nextY = clampPercent(dragRef.current.originalY + dyPercent);
+        const maxX = Math.max(0, 100 - dragRef.current.width);
+        const maxY = Math.max(0, 100 - dragRef.current.height);
+        const nextX = clamp(dragRef.current.originalX + dxPercent, 0, maxX);
+        const nextY = clamp(dragRef.current.originalY + dyPercent, 0, maxY);
 
         updateElementPosition(dragRef.current.id, nextX, nextY);
     };

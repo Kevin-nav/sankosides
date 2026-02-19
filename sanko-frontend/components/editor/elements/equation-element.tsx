@@ -1,5 +1,6 @@
 "use client";
 
+import DOMPurify from "dompurify";
 import type { SlideElement } from "@/types/generation";
 
 type EquationContent = {
@@ -13,12 +14,18 @@ function getEquationContent(element: SlideElement): EquationContent {
 
 export function EquationElement({ element }: { element: SlideElement }) {
     const content = getEquationContent(element);
+    const sanitizedSvg = content.rendered_svg
+        ? DOMPurify.sanitize(content.rendered_svg, {
+            USE_PROFILES: { svg: true, svgFilters: true },
+            FORBID_TAGS: ["foreignObject"],
+        })
+        : "";
 
-    if (content.rendered_svg) {
+    if (sanitizedSvg) {
         return (
             <div
                 className="flex h-full w-full items-center justify-center"
-                dangerouslySetInnerHTML={{ __html: content.rendered_svg }}
+                dangerouslySetInnerHTML={{ __html: sanitizedSvg }}
             />
         );
     }
