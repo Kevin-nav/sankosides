@@ -27,6 +27,8 @@ interface SlideViewerProps {
 
 export function SlideViewer({ sessionId, onExport }: SlideViewerProps) {
     const { data, isLoading, error, refetch } = useGeneratedSlides(sessionId);
+    const elementTreeCanvasEnabled =
+        process.env.NEXT_PUBLIC_ENABLE_ELEMENT_TREE_CANVAS === "true";
     const [currentSlide, setCurrentSlide] = useState(0);
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [patchOpen, setPatchOpen] = useState(false);
@@ -293,7 +295,7 @@ export function SlideViewer({ sessionId, onExport }: SlideViewerProps) {
                                 <div className="w-full h-full flex items-center justify-center p-0">
                                     {/* This wrapper forces a 16:9 max ratio fit within the screen */}
                                     <div className="aspect-video w-full h-full max-h-screen max-w-[177.78vh] bg-white shadow-2xl">
-                                        {slide.element_tree ? (
+                                        {slide.element_tree && elementTreeCanvasEnabled ? (
                                             <SlideCanvas tree={slide.element_tree} />
                                         ) : (
                                             <iframe
@@ -306,7 +308,7 @@ export function SlideViewer({ sessionId, onExport }: SlideViewerProps) {
                                     </div>
                                 </div>
                             ) : (
-                                slide.element_tree ? (
+                                slide.element_tree && elementTreeCanvasEnabled ? (
                                     <SlideCanvas tree={slide.element_tree} />
                                 ) : (
                                     <iframe

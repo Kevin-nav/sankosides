@@ -16,6 +16,7 @@ All flags live in `sanko-backend/app/core/config.py`:
 - `enable_element_tree_canvas`
   - Reserved for frontend canvas exposure controls.
   - Disabled: clients should continue iframe/legacy rendering behavior.
+  - Frontend gate uses `NEXT_PUBLIC_ENABLE_ELEMENT_TREE_CANVAS=true`.
 - `enable_element_tree_export`
   - Enables PPTX/PDF exporters to prefer `element_tree` coordinates.
   - Disabled: exporters use legacy export logic even if `element_tree` is present.
