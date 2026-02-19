@@ -2,6 +2,8 @@ import pytest
 from app.templates.layouts import TitleTemplate, ContentTemplate, TwoColumnTemplate
 from app.themes import MODERN_THEME
 from app.routers.generation.models import EnrichedSlide, CitationMetadata
+from app.templates.html_generator import element_tree_to_html
+from app.models.slide_elements import SlideElementTree, SlideElement, TextContent, TextRun
 
 # Mock slide data
 @pytest.fixture
@@ -211,4 +213,29 @@ def test_thank_you_template_with_config(slide_data):
     assert 'src="https://example.com/logo.png"' in html
     assert "John Doe" in html
     assert "presenter-name" in html
+
+
+def test_element_tree_to_html_renders_absolute_positions():
+    tree = SlideElementTree(
+        slide_id="slide-1",
+        order=1,
+        layout_id="content_bullets",
+        elements=[
+            SlideElement(
+                id="title",
+                type="text",
+                x=5,
+                y=3,
+                width=90,
+                height=12,
+                z_index=1,
+                content=TextContent(type="text", runs=[TextRun(text="Hello", size=40, bold=True)]),
+            ),
+        ],
+    )
+
+    html = element_tree_to_html(tree=tree, theme=MODERN_THEME)
+    assert "position:absolute" in html
+    assert "left:5.0%" in html
+    assert "Hello" in html
 

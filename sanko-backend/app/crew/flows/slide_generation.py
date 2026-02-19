@@ -3330,7 +3330,7 @@ IMPORTANT:
         It queries the database for Jinja2 templates and falls back to
         hardcoded Python templates if not found.
         """
-        from app.templates.html_generator import generate_slide_html_with_db_template
+        from app.templates.html_generator import generate_slide_html_with_db_template, element_tree_to_html
         from app.routers.generation.models import EnrichedSlide
         
         await self.emitter.slide_progress(refined.order, total_slides, "generating")
@@ -3351,16 +3351,20 @@ IMPORTANT:
             formatted_citations=refined.formatted_citations or [],
         )
         
-        # Generate HTML using DATABASE-AWARE template system
-        html = await generate_slide_html_with_db_template(
-            slide=enriched,
-            theme=theme,
-            colors=theme.colors,
-            branding=branding,
-            slide_number=slide_number,
-            total_slides=total_slides,
-            layout_style=layout_style,
-        )
+        # Prefer structured rendering path when the element tree exists.
+        if refined.element_tree is not None:
+            html = element_tree_to_html(tree=refined.element_tree, theme=theme)
+        else:
+            # Generate HTML using DATABASE-AWARE template system
+            html = await generate_slide_html_with_db_template(
+                slide=enriched,
+                theme=theme,
+                colors=theme.colors,
+                branding=branding,
+                slide_number=slide_number,
+                total_slides=total_slides,
+                layout_style=layout_style,
+            )
         
         self.state.slides_completed += 1
         
@@ -3383,7 +3387,7 @@ IMPORTANT:
         total_slides: int,
     ) -> GeneratedSlide:
         """Generate HTML for a single slide using the template system."""
-        from app.templates.html_generator import generate_slide_html_with_branding
+        from app.templates.html_generator import generate_slide_html_with_branding, element_tree_to_html
         from app.routers.generation.models import EnrichedSlide
         
         await self.emitter.slide_progress(refined.order, total_slides, "generating")
@@ -3404,15 +3408,18 @@ IMPORTANT:
             formatted_citations=refined.formatted_citations or [],
         )
         
-        # Generate HTML using template system
-        html = generate_slide_html_with_branding(
-            slide=enriched,
-            theme=theme,
-            colors=theme.colors,
-            branding=branding,
-            slide_number=slide_number,
-            total_slides=total_slides,
-        )
+        if refined.element_tree is not None:
+            html = element_tree_to_html(tree=refined.element_tree, theme=theme)
+        else:
+            # Generate HTML using template system
+            html = generate_slide_html_with_branding(
+                slide=enriched,
+                theme=theme,
+                colors=theme.colors,
+                branding=branding,
+                slide_number=slide_number,
+                total_slides=total_slides,
+            )
         
         self.state.slides_completed += 1
         
