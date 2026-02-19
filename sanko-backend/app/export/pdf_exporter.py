@@ -7,8 +7,9 @@ Leverages existing HTML rendering and MathJax for high-fidelity output.
 
 from typing import List, Optional
 from app.models.schemas import RefinedSlide
-from app.export.render_client import get_render_client
 from app.core.logging import get_logger
+from app.templates.html_generator import element_tree_to_html
+from app.themes import get_theme
 
 logger = get_logger(__name__)
 
@@ -37,6 +38,8 @@ async def export_to_pdf(
     Raises:
         RuntimeError: If PDF generation fails
     """
+    from app.export.render_client import get_render_client
+
     render_client = get_render_client()
     
     # Generate HTML for each slide
@@ -67,6 +70,9 @@ def _generate_slide_html(slide: RefinedSlide, title: str) -> str:
     This is a simplified version - in production, would use
     the full template system with proper styling.
     """
+    if getattr(slide, "element_tree", None) is not None:
+        return element_tree_to_html(tree=slide.element_tree, theme=get_theme("modern"))
+
     # Base styles for slides
     styles = """
         body {
